@@ -41,3 +41,9 @@
 - Imported commit: `ecd48e2f718220a6400ecf49eafd4867a38feb10`
 - Docker commands run: no
 - Ollama commands run: no
+
+### Completion
+
+- Status: Complete
+- Import commit: `ee9bb6f chore: import Open WebUI foundation`
+- Completion note: Open WebUI source is now present in the ArtiChat root. Artivis assets remain under `artivis-ass/logo`. Local runtime setup, non-Ollama provider configuration, branding, and deployment remain future work.
