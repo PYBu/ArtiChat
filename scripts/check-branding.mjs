@@ -23,6 +23,8 @@ const files = [
 	'backend/open_webui/routers/audio.py',
 	'backend/open_webui/routers/openai.py',
 	'backend/open_webui/utils/oauth.py',
+	'docker-compose.yaml',
+	'.env.example',
 	'src/lib/components/workspace/Models.svelte',
 	'src/lib/components/workspace/Prompts.svelte',
 	'src/lib/components/workspace/Tools.svelte',
