@@ -2159,7 +2159,18 @@ async def get_app_latest_release_version(user=Depends(get_verified_user)):
 
 @app.get('/api/changelog')
 async def get_app_changelog():
-    return {key: CHANGELOG[key] for idx, key in enumerate(CHANGELOG) if idx < 5}
+    return {
+        VERSION: {
+            'date': 'ArtiChat build',
+            'changed': [
+                {
+                    'title': 'ArtiChat branding',
+                    'content': 'This deployment uses ArtiChat branding and local release notes.',
+                    'raw': '<li><strong>ArtiChat branding.</strong> This deployment uses ArtiChat branding and local release notes.</li>',
+                }
+            ],
+        }
+    }
 
 
 @app.get('/api/usage')
