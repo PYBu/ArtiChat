@@ -916,7 +916,7 @@
 					await addTerminalConnection(token, {
 						url: event.data.url,
 						key: event.data.key,
-						name: 'Local Open Terminal'
+						name: 'Local Terminal Server'
 					});
 				} else if (event.data.action === 'remove') {
 					await removeTerminalConnection(token, event.data.url);

@@ -64,14 +64,8 @@ const backendEnvInternalCompatibilityAllowlist = new Set([
 	"OTEL_SERVICE_NAME = os.getenv('OTEL_SERVICE_NAME', 'open-webui')"
 ]);
 
-const frontendInternalCompatibilityAllowlist = new Set([
-	"src/routes/+layout.svelte::name: 'Local Open Terminal'"
-]);
-
 const isAllowedInternalCompatibilityLine = (file, line) =>
-	(file === 'backend/open_webui/env.py' &&
-		backendEnvInternalCompatibilityAllowlist.has(line.trim())) ||
-	frontendInternalCompatibilityAllowlist.has(`${file}::${line.trim()}`);
+	file === 'backend/open_webui/env.py' && backendEnvInternalCompatibilityAllowlist.has(line.trim());
 
 const root = process.cwd();
 const missingFiles = [];
