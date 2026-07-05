@@ -138,7 +138,7 @@
 							class={`text-xs ${($settings?.highContrastMode ?? false) ? 'text-gray-800 dark:text-gray-100' : 'text-gray-500'}`}
 						>
 							{$i18n.t(
-								'Connect to Open Terminal instances to browse files and use them as always-on tools. Only one can be active at a time.'
+								'Connect to terminal server instances to browse files and use them as always-on tools. Only one can be active at a time.'
 							)}
 						</div>
 					</div>

@@ -36,12 +36,14 @@ const files = [
 	'src/lib/components/admin/Settings/Events.svelte',
 	'src/lib/components/admin/Settings/ExternalKnowledge.svelte',
 	'src/lib/components/chat/Settings/Connections.svelte',
-	'src/lib/components/chat/Settings/Integrations.svelte'
+	'src/lib/components/chat/Settings/Integrations.svelte',
+	'src/lib/components/chat/Settings/Integrations/Terminals.svelte'
 ];
 
 const forbidden = [
 	'Open WebUI',
 	'OpenWebUI',
+	'Open Terminal',
 	'open-webui',
 	'Open_WebUI',
 	'openwebui.com',
@@ -62,8 +64,14 @@ const backendEnvInternalCompatibilityAllowlist = new Set([
 	"OTEL_SERVICE_NAME = os.getenv('OTEL_SERVICE_NAME', 'open-webui')"
 ]);
 
+const frontendInternalCompatibilityAllowlist = new Set([
+	"src/routes/+layout.svelte::name: 'Local Open Terminal'"
+]);
+
 const isAllowedInternalCompatibilityLine = (file, line) =>
-	file === 'backend/open_webui/env.py' && backendEnvInternalCompatibilityAllowlist.has(line.trim());
+	(file === 'backend/open_webui/env.py' &&
+		backendEnvInternalCompatibilityAllowlist.has(line.trim())) ||
+	frontendInternalCompatibilityAllowlist.has(`${file}::${line.trim()}`);
 
 const root = process.cwd();
 const missingFiles = [];

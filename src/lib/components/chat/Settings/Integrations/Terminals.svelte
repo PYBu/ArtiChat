@@ -43,7 +43,7 @@
 <div>
 	<div class="flex justify-between items-center mb-1">
 		<div class="flex items-center gap-2">
-			<div class="font-medium">{$i18n.t('Open Terminal')}</div>
+			<div class="font-medium">{$i18n.t('Terminal Servers')}</div>
 		</div>
 		<Tooltip content={$i18n.t('Add Connection')}>
 			<button
@@ -72,14 +72,6 @@
 	{#if servers.length === 0}
 		<div class="text-xs text-gray-400 dark:text-gray-500">
 			{$i18n.t('No terminal connections configured.')}
-			<a
-				href="https://github.com/open-webui/open-terminal"
-				target="_blank"
-				rel="noopener noreferrer"
-				class="underline hover:text-gray-700 dark:hover:text-gray-200"
-			>
-				{$i18n.t('Learn more')} ↗
-			</a>
 		</div>
 	{/if}
 </div>
