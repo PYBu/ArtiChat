@@ -4,6 +4,7 @@ import path from 'node:path';
 const files = [
 	'README.md',
 	'TROUBLESHOOTING.md',
+	'docs/SECURITY.md',
 	'Makefile',
 	'scripts/generate-sbom.sh',
 	'src/app.html',
@@ -79,6 +80,7 @@ const files = [
 	'backend/open_webui/retrieval/vector/dbs/pinecone.py',
 	'backend/open_webui/retrieval/vector/dbs/milvus.py',
 	'backend/open_webui/retrieval/vector/dbs/opensearch.py',
+	'backend/open_webui/retrieval/vector/dbs/valkey.py',
 	'backend/start.sh',
 	'backend/open_webui/__init__.py',
 	'backend/open_webui/config.py',
@@ -116,6 +118,7 @@ const forbidden = [
 	'OpenWebUI',
 	'OpenTerminal',
 	'Open Terminal',
+	'Open-WebUI',
 	'open-webui',
 	'Open_WebUI',
 	'openwebui.com',
@@ -191,6 +194,11 @@ assertNotMatches(
 	'backend/open_webui/retrieval/vector/dbs/opensearch.py',
 	/self\.index_prefix\s*=\s*'open_webui'/,
 	'upstream OpenSearch prefix'
+);
+assertNotMatches(
+	'backend/open_webui/retrieval/vector/dbs/valkey.py',
+	/(?:__open_webui_valkey_never_match__|open_webui_vector_store_(?:batch_)?client)/,
+	'upstream Valkey client name'
 );
 
 if (missingFiles.length > 0) {

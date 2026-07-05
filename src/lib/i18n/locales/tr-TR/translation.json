@@ -1668,7 +1668,7 @@
 	"ArtiChat uses faster-whisper internally.": "ArtiChat, dahili olarak faster-whisper kullanır.",
 	"ArtiChat uses SpeechT5 and CMU Arctic speaker embeddings.": "ArtiChat, SpeechT5 ve CMU Arctic konuşmacı gömme kullanır.",
 	"ArtiChat version": "ArtiChat sürümü",
-	"ArtiChat version (v{{ARTICHAT_VERSION}}) is lower than required version (v{{REQUIRED_VERSION}})": "Open-WebUI sürümü (v{{ARTICHAT_VERSION}}) gerekli sürümden (v{{REQUIRED_VERSION}}) düşük",
+	"ArtiChat version (v{{ARTICHAT_VERSION}}) is lower than required version (v{{REQUIRED_VERSION}})": "ArtiChat sürümü (v{{ARTICHAT_VERSION}}) gerekli sürümden (v{{REQUIRED_VERSION}}) düşük",
 	"OpenAI": "OpenAI",
 	"OpenAI API": "OpenAI API",
 	"OpenAI API Base URL": "OpenAI API Temel URL'si",
