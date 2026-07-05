@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { getContext, onMount } from 'svelte';
-	import { models, config, user } from '$lib/stores';
+	import { config, user } from '$lib/stores';
 
 	import { toast } from 'svelte-sonner';
 	import {
@@ -36,30 +36,7 @@
 	};
 
 	const shareChat = async () => {
-		const _chat = chat.chat;
-		console.log('share', _chat);
-
-		toast.success($i18n.t('Redirecting you to Open WebUI Community'));
-		const url = 'https://openwebui.com';
-		// const url = 'http://localhost:5173';
-
-		const tab = await window.open(`${url}/chats/upload`, '_blank');
-		window.addEventListener(
-			'message',
-			(event) => {
-				if (event.origin !== url) return;
-				if (event.data === 'loaded') {
-					tab.postMessage(
-						JSON.stringify({
-							chat: _chat,
-							models: $models.filter((m) => _chat.models.includes(m.id))
-						}),
-						'*'
-					);
-				}
-			},
-			false
-		);
+		toast.info($i18n.t('External sharing is unavailable in this ArtiChat build.'));
 	};
 
 	const loadAccessGrants = async () => {
@@ -174,7 +151,7 @@
 								shareChat();
 							}}
 						>
-							{$i18n.t('Share to Open WebUI Community')}
+							{$i18n.t('Share externally')}
 						</button>
 					{/if}
 
