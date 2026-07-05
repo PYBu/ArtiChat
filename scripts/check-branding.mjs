@@ -53,22 +53,6 @@ const forbidden = [
 	'github.com/open-webui'
 ];
 
-const backendEnvInternalCompatibilityAllowlist = new Set([
-	"PACKAGE_DATA = {'version': importlib.metadata.version('open-webui')}",
-	"REDIS_KEY_PREFIX = os.getenv('REDIS_KEY_PREFIX', 'open-webui')",
-	"FORWARD_USER_INFO_HEADER_USER_NAME = os.getenv('FORWARD_USER_INFO_HEADER_USER_NAME', 'X-OpenWebUI-User-Name')",
-	"FORWARD_USER_INFO_HEADER_USER_ID = os.getenv('FORWARD_USER_INFO_HEADER_USER_ID', 'X-OpenWebUI-User-Id')",
-	"FORWARD_USER_INFO_HEADER_USER_EMAIL = os.getenv('FORWARD_USER_INFO_HEADER_USER_EMAIL', 'X-OpenWebUI-User-Email')",
-	"FORWARD_USER_INFO_HEADER_USER_ROLE = os.getenv('FORWARD_USER_INFO_HEADER_USER_ROLE', 'X-OpenWebUI-User-Role')",
-	"FORWARD_SESSION_INFO_HEADER_MESSAGE_ID = os.getenv('FORWARD_SESSION_INFO_HEADER_MESSAGE_ID', 'X-OpenWebUI-Message-Id')",
-	"FORWARD_SESSION_INFO_HEADER_CHAT_ID = os.getenv('FORWARD_SESSION_INFO_HEADER_CHAT_ID', 'X-OpenWebUI-Chat-Id')",
-	"FORWARD_USER_INFO_HEADER_JWT = os.environ.get('FORWARD_USER_INFO_HEADER_JWT', 'X-OpenWebUI-User-Jwt')",
-	"OTEL_SERVICE_NAME = os.getenv('OTEL_SERVICE_NAME', 'open-webui')"
-]);
-
-const isAllowedInternalCompatibilityLine = (file, line) =>
-	file === 'backend/open_webui/env.py' && backendEnvInternalCompatibilityAllowlist.has(line.trim());
-
 const root = process.cwd();
 const missingFiles = [];
 const findings = [];
@@ -85,7 +69,7 @@ for (const file of files) {
 
 	for (const [index, line] of lines.entries()) {
 		for (const label of forbidden) {
-			if (line.includes(label) && !isAllowedInternalCompatibilityLine(file, line)) {
+			if (line.includes(label)) {
 				findings.push(`${file}:${index + 1}: forbidden ${label}: ${line.trim()}`);
 			}
 		}

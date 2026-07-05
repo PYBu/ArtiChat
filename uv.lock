@@ -2965,7 +2965,7 @@ wheels = [
 ]
 
 [[package]]
-name = "open-webui"
+name = "artichat"
 source = { editable = "." }
 dependencies = [
     { name = "accelerate" },
