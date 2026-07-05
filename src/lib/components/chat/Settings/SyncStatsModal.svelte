@@ -318,9 +318,9 @@
 	<div class="w-full">
 		{#if completed}
 			<div class="px-5.5 py-5">
-				<div class="mb-1 text-xl font-medium">{$i18n.t('Sync Complete!')}</div>
+				<div class="mb-1 text-xl font-medium">{$i18n.t('Export Complete!')}</div>
 				<div class="mb-3 text-xs text-gray-500">
-					{$i18n.t('Your usage stats have been successfully synced.')}
+					{$i18n.t('Your usage stats have been successfully exported.')}
 				</div>
 
 				<Confetti x={[-0.5, 0.5]} y={[0.25, 1]} />
@@ -336,9 +336,9 @@
 			</div>
 		{:else if error}
 			<div class="px-5.5 py-5">
-				<div class="mb-1 text-xl font-medium">{$i18n.t('Sync Failed')}</div>
+				<div class="mb-1 text-xl font-medium">{$i18n.t('Export Failed')}</div>
 				<div class="mb-3 text-xs text-gray-500">
-					{errorMessage || $i18n.t('There was an error syncing your stats. Please try again.')}
+					{errorMessage || $i18n.t('There was an error exporting your stats. Please try again.')}
 				</div>
 
 				<div class="flex justify-end">
@@ -355,7 +355,7 @@
 			</div>
 		{:else}
 			<div class="flex justify-between px-5 pt-4 pb-0.5">
-				<div class="text-lg font-medium self-center">{$i18n.t('Sync Usage Stats')}</div>
+				<div class="text-lg font-medium self-center">{$i18n.t('Export ArtiChat Usage Stats')}</div>
 				<button
 					class="self-center"
 					aria-label={$i18n.t('Close modal')}
@@ -379,7 +379,7 @@
 
 				<div class="mt-3 text-xs text-gray-500">
 					<div class="font-medium text-gray-900 dark:text-gray-100 mb-1">
-						{$i18n.t('What is shared:')}
+						{$i18n.t('What is included:')}
 					</div>
 					<ul class="list-disc list-inside space-y-0.5 ml-1 mb-2">
 						<li>{$i18n.t('ArtiChat version')}</li>
@@ -390,7 +390,7 @@
 					</ul>
 
 					<div class="font-medium text-gray-900 dark:text-gray-100 mb-1">
-						{$i18n.t('What is NOT shared:')}
+						{$i18n.t('What is not included:')}
 					</div>
 					<ul class="list-disc list-inside space-y-0.5 ml-1">
 						<li>{$i18n.t('Your message text or inputs')}</li>
@@ -403,7 +403,7 @@
 					<div class="mt-3">
 						<Tooltip
 							content={$i18n.t(
-								'Syncs only chats with updates after your last sync timestamp. Disable to re-sync all chats.'
+								'Exports only chats with updates after your last export timestamp. Disable to export all chats.'
 							)}
 							placement="top-start"
 						>
@@ -416,7 +416,7 @@
 									class="w-4 h-4 rounded border-gray-300 dark:border-gray-600"
 								/>
 								<span class="text-gray-700 dark:text-gray-300"
-									>{$i18n.t('Only sync new/updated chats')}</span
+									>{$i18n.t('Only export new/updated chats')}</span
 								>
 							</label>
 						</Tooltip>
@@ -427,7 +427,7 @@
 					<div class="mt-3 mx-1.5">
 						<div class="text-xs text-gray-500 mb-1 flex justify-between">
 							<div>
-								{downloading ? $i18n.t('Downloading stats...') : $i18n.t('Syncing stats...')}
+								{downloading ? $i18n.t('Downloading stats...') : $i18n.t('Exporting stats...')}
 							</div>
 							<div>
 								{#if total > 0}
@@ -483,10 +483,10 @@
 						{#if syncing && !downloading}
 							<div class="flex items-center gap-2">
 								<Spinner className="size-3" />
-								<span>{$i18n.t('Syncing...')}</span>
+								<span>{$i18n.t('Exporting...')}</span>
 							</div>
 						{:else}
-							{$i18n.t('Sync')}
+							{$i18n.t('Export')}
 						{/if}
 					</button>
 				</div>
