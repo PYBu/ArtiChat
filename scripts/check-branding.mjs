@@ -2,6 +2,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const files = [
+	'README.md',
+	'TROUBLESHOOTING.md',
+	'Makefile',
+	'scripts/generate-sbom.sh',
 	'src/app.html',
 	'src/lib/constants.ts',
 	'src/routes/+layout.svelte',
@@ -31,7 +35,6 @@ const files = [
 	'src/lib/components/admin/Functions.svelte',
 	'src/lib/components/admin/Evaluations/Feedbacks.svelte',
 	'src/lib/components/chat/ShareChatModal.svelte',
-	'src/lib/components/chat/Settings/SyncStatsModal.svelte',
 	'src/lib/components/workspace/common/ManifestModal.svelte',
 	'src/lib/components/chat/ToolServersModal.svelte',
 	'src/lib/components/admin/Settings/Audio.svelte',
@@ -74,6 +77,8 @@ const files = [
 	'backend/open_webui/utils/headers.py',
 	'backend/open_webui/utils/memory.py',
 	'backend/open_webui/retrieval/vector/dbs/pinecone.py',
+	'backend/open_webui/retrieval/vector/dbs/milvus.py',
+	'backend/open_webui/retrieval/vector/dbs/opensearch.py',
 	'backend/start.sh',
 	'backend/open_webui/__init__.py',
 	'backend/open_webui/config.py',
@@ -123,6 +128,8 @@ addTranslationFiles(path.join(root, 'src/lib/i18n/locales'));
 const missingFiles = [];
 const findings = [];
 
+const fileText = (file) => fs.readFileSync(path.join(root, file), 'utf8');
+
 for (const file of files) {
 	const filePath = path.join(root, file);
 
@@ -141,6 +148,50 @@ for (const file of files) {
 		}
 	}
 }
+
+const assertNotMatches = (file, pattern, label) => {
+	if (!fs.existsSync(path.join(root, file))) {
+		return;
+	}
+
+	const text = fileText(file);
+	const match = text.match(pattern);
+
+	if (match) {
+		findings.push(`${file}: forbidden ${label}: ${match[0].replace(/\s+/g, ' ').trim()}`);
+	}
+};
+
+assertNotMatches(
+	'backend/open_webui/config.py',
+	/ENABLE_COMMUNITY_SHARING\s*=\s*os\.getenv\('ENABLE_COMMUNITY_SHARING',\s*'True'\)/,
+	'community sharing enabled by default'
+);
+assertNotMatches(
+	'src/routes/+layout.svelte',
+	/\$page\.url\.searchParams\.get\('sync'\)\s*===\s*'true'/,
+	'external stats sync auto-open'
+);
+assertNotMatches(
+	'src/lib/components/chat/Settings/SyncStatsModal.svelte',
+	/window\.opener\.postMessage|verify:chat|addEventListener\('message'/,
+	'opener stats sync bridge'
+);
+assertNotMatches(
+	'backend/open_webui/config.py',
+	/os\.getenv\('(?:MILVUS_COLLECTION_PREFIX|OPENSEARCH_INDEX_PREFIX|ELASTICSEARCH_INDEX_PREFIX|VALKEY_COLLECTION_PREFIX)',\s*'open_webui[^']*'\)/,
+	'upstream vector-store prefix'
+);
+assertNotMatches(
+	'backend/open_webui/retrieval/vector/dbs/milvus.py',
+	/self\.collection_prefix\s*=\s*'open_webui'/,
+	'upstream Milvus prefix'
+);
+assertNotMatches(
+	'backend/open_webui/retrieval/vector/dbs/opensearch.py',
+	/self\.index_prefix\s*=\s*'open_webui'/,
+	'upstream OpenSearch prefix'
+);
 
 if (missingFiles.length > 0) {
 	console.error('Missing files:');
