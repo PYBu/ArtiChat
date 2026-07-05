@@ -99,16 +99,11 @@
 									</Tooltip>
 
 									{#if $config?.features?.enable_version_update_check}
-										<a
-											href="https://github.com/open-webui/open-webui/releases/tag/v{version.latest}"
-											target="_blank"
-										>
-											{updateAvailable === null
-												? $i18n.t('Checking for updates...')
-												: updateAvailable
-													? `(v${version.latest} ${$i18n.t('available!')})`
-													: $i18n.t('(latest)')}
-										</a>
+										{updateAvailable === null
+											? $i18n.t('Checking for updates...')
+											: updateAvailable
+												? `(v${version.latest} ${$i18n.t('available!')})`
+												: $i18n.t('(latest)')}
 									{/if}
 								</div>
 
@@ -143,42 +138,9 @@
 								<div class="">
 									{$i18n.t('Help')}
 								</div>
-								<div class=" text-xs text-gray-500">
-									{$i18n.t('Discover how to use Open WebUI and seek support from the community.')}
+								<div class="text-xs text-gray-500">
+									{$i18n.t('Manage ArtiChat system settings for this deployment.')}
 								</div>
-							</div>
-
-							<a
-								class="flex-shrink-0 text-xs font-medium underline"
-								href="https://docs.openwebui.com/"
-								target="_blank"
-							>
-								{$i18n.t('Documentation')}
-							</a>
-						</div>
-
-						<div class="mt-1">
-							<div class="flex space-x-1">
-								<a href="https://discord.gg/5rJgQTnV4s" target="_blank">
-									<img
-										alt="Discord"
-										src="https://img.shields.io/badge/Discord-Open_WebUI-blue?logo=discord&logoColor=white"
-									/>
-								</a>
-
-								<a href="https://twitter.com/OpenWebUI" target="_blank">
-									<img
-										alt="X (formerly Twitter) Follow"
-										src="https://img.shields.io/twitter/follow/OpenWebUI"
-									/>
-								</a>
-
-								<a href="https://github.com/open-webui/open-webui" target="_blank">
-									<img
-										alt="Github Repo"
-										src="https://img.shields.io/github/stars/open-webui/open-webui?style=social&label=Star us on Github"
-									/>
-								</a>
 							</div>
 						</div>
 					</div>
@@ -191,41 +153,28 @@
 								</div>
 
 								{#if $config?.license_metadata}
-									<a
-										href="https://docs.openwebui.com/enterprise"
-										target="_blank"
-										class="text-gray-500 mt-0.5"
-									>
-										<span class=" capitalize text-black dark:text-white"
-											>{$config?.license_metadata?.type}
-											license</span
+									<div class="text-gray-500 mt-0.5">
+										<span class="capitalize text-black dark:text-white"
+											>{$config?.license_metadata?.type} license</span
 										>
 										registered to
-										<span class=" capitalize text-black dark:text-white"
+										<span class="capitalize text-black dark:text-white"
 											>{$config?.license_metadata?.organization_name}</span
 										>
 										for
-										<span class=" font-medium text-black dark:text-white"
+										<span class="font-medium text-black dark:text-white"
 											>{$config?.license_metadata?.seats ?? 'Unlimited'} users.</span
 										>
-									</a>
+									</div>
 									{#if $config?.license_metadata?.html}
 										<div class="mt-0.5">
 											{@html DOMPurify.sanitize($config?.license_metadata?.html)}
 										</div>
 									{/if}
 								{:else}
-									<a
-										class=" text-xs hover:underline"
-										href="https://docs.openwebui.com/enterprise"
-										target="_blank"
-									>
-										<span class="text-gray-500">
-											{$i18n.t(
-												'Upgrade to a licensed plan for enhanced capabilities, including custom theming and branding, and dedicated support.'
-											)}
-										</span>
-									</a>
+									<span class="text-gray-500">
+										{$i18n.t('ArtiChat is ready for your local deployment.')}
+									</span>
 								{/if}
 							</div>
 
@@ -367,7 +316,7 @@
 
 					<div class="mb-2.5 w-full justify-between">
 						<div class="flex w-full justify-between">
-							<div class=" self-center text-xs font-medium">{$i18n.t('WebUI URL')}</div>
+							<div class=" self-center text-xs font-medium">{$i18n.t('Application URL')}</div>
 						</div>
 
 						<div class="flex mt-2 space-x-2">
@@ -381,7 +330,7 @@
 
 						<div class="mt-2 text-xs text-gray-400 dark:text-gray-500">
 							{$i18n.t(
-								'Enter the public URL of your WebUI. This URL will be used to generate links in the notifications.'
+								'Enter the public URL of ArtiChat. This URL will be used to generate links in notifications.'
 							)}
 						</div>
 					</div>
