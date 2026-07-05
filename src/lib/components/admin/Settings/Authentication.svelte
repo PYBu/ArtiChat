@@ -184,13 +184,7 @@
 							/>
 
 							<div class="mt-2 text-xs text-gray-400 dark:text-gray-500">
-								<a
-									href="https://docs.openwebui.com/reference/api-endpoints"
-									target="_blank"
-									class=" text-gray-300 font-medium underline"
-								>
-									{$i18n.t('To learn more about available endpoints, visit our documentation.')}
-								</a>
+								{$i18n.t('Enter one or more API paths that this key can access.')}
 							</div>
 						</div>
 					{/if}
@@ -224,14 +218,7 @@
 							>
 								<div>
 									<span class=" font-medium">{$i18n.t('Warning')}:</span>
-									<span
-										><a
-											href="https://docs.openwebui.com/reference/env-configuration#jwt_expires_in"
-											target="_blank"
-											class=" underline"
-											>{$i18n.t('No expiration can pose security risks.')}
-										</a></span
-									>
+									<span>{$i18n.t('No expiration can pose security risks.')}</span>
 								</div>
 							</div>
 						</div>

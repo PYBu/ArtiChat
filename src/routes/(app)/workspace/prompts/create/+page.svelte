@@ -31,31 +31,6 @@
 	};
 
 	onMount(async () => {
-		window.addEventListener('message', async (event) => {
-			console.log(event);
-			if (
-				!['https://openwebui.com', 'https://www.openwebui.com', 'http://localhost:9999'].includes(
-					event.origin
-				)
-			)
-				return;
-			const _prompt = JSON.parse(event.data);
-			console.log('Received prompt via window message:', _prompt);
-
-			clone = true;
-			prompt = {
-				name: _prompt.name || _prompt.title || 'Prompt',
-				command: _prompt.command,
-				content: _prompt.content,
-				tags: _prompt.tags || [],
-				access_grants: _prompt.access_grants !== undefined ? _prompt.access_grants : []
-			};
-		});
-
-		if (window.opener ?? false) {
-			window.opener.postMessage('loaded', '*');
-		}
-
 		if (sessionStorage.prompt) {
 			const _prompt = JSON.parse(sessionStorage.prompt);
 			sessionStorage.removeItem('prompt');

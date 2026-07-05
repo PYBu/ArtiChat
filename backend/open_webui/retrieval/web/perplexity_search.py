@@ -44,7 +44,7 @@ def search_perplexity_search(
         headers = {
             'Authorization': f'Bearer {api_key}',
             'Content-Type': 'application/json',
-            'X-Pplx-Integration': f'open-webui/{VERSION}',
+            'X-Pplx-Integration': f'artichat/{VERSION}',
         }
 
         # Forward user info headers if user is provided

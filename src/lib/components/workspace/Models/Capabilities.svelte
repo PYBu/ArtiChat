@@ -34,7 +34,7 @@
 		terminal: {
 			label: $i18n.t('Terminal'),
 			description: $i18n.t(
-				'Model can access Open Terminal for command execution and file management'
+				'Model can access local terminal servers for command execution and file management'
 			)
 		},
 		usage: {

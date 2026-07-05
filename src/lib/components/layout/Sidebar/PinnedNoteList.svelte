@@ -36,7 +36,7 @@
 							id: dragEl.dataset.id
 						})
 					);
-					dataTransfer.setData('application/x-open-webui-drag', '');
+					dataTransfer.setData('application/x-artichat-drag', '');
 				},
 				onUpdate: async (event) => {
 					const noteId = event.item.dataset.id;

@@ -8,8 +8,7 @@
 	import PinSlash from '$lib/components/icons/PinSlash.svelte';
 	import Link from '$lib/components/icons/Link.svelte';
 	import Pencil from '$lib/components/icons/Pencil.svelte';
-	import { config, settings, user } from '$lib/stores';
-	import GlobeAlt from '$lib/components/icons/GlobeAlt.svelte';
+	import { settings, user } from '$lib/stores';
 
 	const i18n = getContext('i18n');
 
@@ -143,29 +142,6 @@
 
 				<div class="flex items-center">{$i18n.t('Copy Link')}</div>
 			</button>
-
-			{#if $config?.features.enable_community_sharing}
-				<hr class="border-gray-50 dark:border-gray-800/30 my-1" />
-
-				<button
-					type="button"
-					class="select-none flex rounded-xl py-1.5 px-3 w-full hover:bg-gray-50 dark:hover:bg-gray-800 transition items-center gap-2"
-					on:click={(e) => {
-						e.stopPropagation();
-						e.preventDefault();
-
-						window.open(
-							`https://openwebui.com/models?q=${encodeURIComponent(model?.id ?? '')}`,
-							'_blank'
-						);
-						show = false;
-					}}
-				>
-					<GlobeAlt className="size-4" />
-
-					<div class="flex items-center">{$i18n.t('Community Reviews')}</div>
-				</button>
-			{/if}
 		</div>
 	</div>
 </Dropdown>

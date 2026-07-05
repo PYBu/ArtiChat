@@ -268,7 +268,7 @@
 				id: id
 			})
 		);
-		event.dataTransfer.setData('application/x-open-webui-drag', '');
+		event.dataTransfer.setData('application/x-artichat-drag', '');
 
 		dragged = true;
 		itemElement.style.opacity = '0.5'; // Optional: Visual cue to show it's being dragged

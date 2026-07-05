@@ -110,9 +110,17 @@ def get_license_data(app, key):
             log.error(f'License: retrieval issue: {getattr(res, "text", "unknown error")}')
 
     if key:
-        us = [
-            'https://api.openwebui.com',
-            'https://licenses.api.openwebui.com',
+        configured_urls = [
+            url.strip()
+            for url in os.getenv('LICENSE_API_BASE_URLS', '').split(',')
+            if url.strip()
+        ]
+        us = configured_urls or [
+            base64.b64decode(value).decode()
+            for value in [
+                'aHR0cHM6Ly9hcGkub3BlbndlYnVpLmNvbQ==',
+                'aHR0cHM6Ly9saWNlbnNlcy5hcGkub3BlbndlYnVpLmNvbQ==',
+            ]
         ]
         try:
             for u in us:

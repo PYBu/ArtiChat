@@ -53,7 +53,7 @@
 	export let overlay = false;
 	export let chatId: string | null = null;
 
-	// ── Terminal panel state ────────────────────────────────────────────
+	// 鈹€鈹€ Terminal panel state 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 	let terminalExpanded = false;
 	let terminalHeight = 200; // px, default when expanded
 	let isDraggingHandle = false;
@@ -88,14 +88,14 @@
 		window.addEventListener('mouseup', onMouseUp);
 	};
 
-	// ── Directory state ──────────────────────────────────────────────────
+	// 鈹€鈹€ Directory state 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 	let currentPath = savedPath;
 	let fileRoot: TerminalFileRoot | null = null;
 	let entries: FileEntry[] = [];
 	let loading = false;
 	let error: string | null = null;
 
-	// ── Sort state ──────────────────────────────────────────────────────
+	// 鈹€鈹€ Sort state 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 	type SortMode = 'name' | 'date';
 	let sortBy: SortMode = 'name';
 	let sortAsc = true;
@@ -124,7 +124,7 @@
 		entries = sortEntries(entries);
 	};
 
-	// ── Navigation history ──────────────────────────────────────────────
+	// 鈹€鈹€ Navigation history 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 	type NavEntry = { path: string; file: string | null };
 	let navHistory: NavEntry[] = [];
 	let navIndex = -1;
@@ -172,7 +172,7 @@
 		navigatingHistory = false;
 	};
 
-	// ── File preview state ───────────────────────────────────────────────
+	// 鈹€鈹€ File preview state 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 	let selectedFile: string | null = null;
 	let previewPort: number | null = null;
 	let fileContent: string | null = null;
@@ -184,7 +184,7 @@
 	let fileLoading = false;
 	let filePreviewRef: FilePreview;
 
-	// ── Office preview state ────────────────────────────────────────────
+	// 鈹€鈹€ Office preview state 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 	let fileOfficeHtml: string | null = null;
 	let fileOfficeSlides: string[] | null = null;
 	let currentSlide = 0;
@@ -192,7 +192,7 @@
 	let selectedExcelSheet = '';
 	let excelWorkbook: import('xlsx').WorkBook | null = null;
 
-	// ── File preview toolbar state (bound from FilePreview) ─────────────
+	// 鈹€鈹€ File preview toolbar state (bound from FilePreview) 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 	let editing = false;
 	let showRaw = false;
 	let saving = false;
@@ -214,7 +214,7 @@
 	$: isTextFile =
 		fileContent !== null && fileImageUrl === null && filePdfData === null && !isOfficeFile;
 
-	// ── Upload / folder creation ─────────────────────────────────────────
+	// 鈹€鈹€ Upload / folder creation 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 	let isDragOver = false;
 	let uploading = false;
 	let creatingFolder = false;
@@ -224,12 +224,12 @@
 	let newFileName = '';
 	let newFileInput: HTMLInputElement;
 
-	// ── Delete confirmation ──────────────────────────────────────────────
+	// 鈹€鈹€ Delete confirmation 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 	let deleteTarget: { path: string; name: string } | null = null;
 	let showDeleteConfirm = false;
 	let shiftKey = false;
 
-	// ── Terminal resolution ──────────────────────────────────────────────
+	// 鈹€鈹€ Terminal resolution 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 	let selectedTerminal: { url: string; key: string } | null = null;
 
 	const getTerminal = (): { url: string; key: string } | null => {
@@ -248,7 +248,7 @@
 		return url ? { url, key } : null;
 	};
 
-	// Detect terminal or chat changes — the explicit store references ensure
+	// Detect terminal or chat changes 鈥?the explicit store references ensure
 	// Svelte re-runs this block when any of them update.
 	// The `mounted` flag prevents the initial run from racing with onMount.
 	let prevTerminalUrl = '';
@@ -268,12 +268,12 @@
 
 		if (mounted && terminal) {
 			if (chatChanged && chatId && !oldChatId) {
-				// Chat just got created (null → real ID): persist the current
-				// browsed path as the new session's cwd — don't re-fetch.
+				// Chat just got created (null 鈫?real ID): persist the current
+				// browsed path as the new session's cwd 鈥?don't re-fetch.
 				setCwd(terminal.url, terminal.key, savedPath, chatId);
 			} else if (terminalChanged || chatChanged) {
 				// Terminal switched, new chat started, or switched between
-				// existing chats — re-fetch the session cwd.
+				// existing chats 鈥?re-fetch the session cwd.
 				loading = true;
 				error = null;
 				entries = [];
@@ -290,7 +290,7 @@
 		}
 	}
 
-	// ── Helpers ──────────────────────────────────────────────────────────
+	// 鈹€鈹€ Helpers 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 	const IMAGE_EXTS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'ico', 'avif']);
 	const VIDEO_EXTS = new Set(['mp4', 'webm', 'mov', 'ogv', 'avi', 'mkv']);
 	const AUDIO_EXTS = new Set(['mp3', 'wav', 'ogg', 'oga', 'flac', 'm4a', 'aac', 'wma', 'opus']);
@@ -364,7 +364,7 @@
 		);
 	};
 
-	// ── File preview management ──────────────────────────────────────────
+	// 鈹€鈹€ File preview management 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 	const clearFilePreview = () => {
 		fileContent = null;
 		if (fileImageUrl) {
@@ -389,7 +389,7 @@
 		excelWorkbook = null;
 	};
 
-	// ── Directory operations ─────────────────────────────────────────────
+	// 鈹€鈹€ Directory operations 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 	const loadDir = async (path: string) => {
 		const terminal = selectedTerminal;
 		if (!terminal) return;
@@ -413,7 +413,7 @@
 
 		if (result === null) {
 			error =
-				'Failed to load directory. Check your Terminal connection in Settings → Integrations.';
+				'Failed to load directory. Check your Terminal connection in Settings 鈫?Integrations.';
 			entries = [];
 		} else {
 			entries = sortEntries(result);
@@ -525,7 +525,7 @@
 		const terminal = selectedTerminal;
 		if (!terminal) return;
 
-		// Directories end with '/' — download as ZIP archive
+		// Directories end with '/' 鈥?download as ZIP archive
 		const isDir = path.endsWith('/');
 		const result = isDir
 			? await archiveFromTerminal(terminal.url, terminal.key, [path.replace(/\/$/, '')])
@@ -539,7 +539,7 @@
 		URL.revokeObjectURL(url);
 	};
 
-	// ── Drag-and-drop upload ─────────────────────────────────────────────
+	// 鈹€鈹€ Drag-and-drop upload 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 	const handleDragOver = (e: DragEvent) => {
 		if (selectedFile) return;
 		if (!e.dataTransfer?.types.includes('Files')) return;
@@ -579,7 +579,7 @@
 		await loadDir(currentPath);
 	};
 
-	// ── Folder creation ──────────────────────────────────────────────────
+	// 鈹€鈹€ Folder creation 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 	const startNewFolder = async () => {
 		creatingFolder = true;
 		newFolderName = '';
@@ -608,7 +608,7 @@
 		await loadDir(currentPath);
 	};
 
-	// ── File creation ────────────────────────────────────────────────────
+	// 鈹€鈹€ File creation 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 	const startNewFile = async () => {
 		creatingFile = true;
 		newFileName = '';
@@ -631,7 +631,7 @@
 		await loadDir(currentPath);
 	};
 
-	// ── Delete ───────────────────────────────────────────────────────────
+	// 鈹€鈹€ Delete 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 	const handleDelete = async (path: string, name: string) => {
 		const terminal = selectedTerminal;
 		if (!terminal) return;
@@ -648,7 +648,7 @@
 		showDeleteConfirm = true;
 	};
 
-	// ── Move (drag-and-drop) ────────────────────────────────────────────
+	// 鈹€鈹€ Move (drag-and-drop) 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 	const handleMove = async (source: string, destFolder: string) => {
 		const terminal = selectedTerminal;
 		if (!terminal) return;
@@ -677,7 +677,7 @@
 		await loadDir(currentPath);
 	};
 
-	// ── Rename ──────────────────────────────────────────────────────────
+	// 鈹€鈹€ Rename 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 	const handleRename = async (oldPath: string, newName: string) => {
 		const terminal = selectedTerminal;
 		if (!terminal || !newName) return;
@@ -702,7 +702,7 @@
 		await loadDir(currentPath);
 	};
 
-	// ── Multi-select ────────────────────────────────────────────────────
+	// 鈹€鈹€ Multi-select 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 	let selectedEntries: Set<string> = new Set();
 	let lastClickedIndex: number | null = null;
 	let selectionMode = false;
@@ -732,7 +732,7 @@
 		const idx = entries.indexOf(entry);
 
 		if (event.shiftKey && lastClickedIndex !== null) {
-			// Range select — replaces current selection with range
+			// Range select 鈥?replaces current selection with range
 			const start = Math.min(lastClickedIndex, idx);
 			const end = Math.max(lastClickedIndex, idx);
 			const newSet = new Set<string>();
@@ -790,7 +790,7 @@
 		const paths = [...selectedEntries].map((p) => p.replace(/\/$/, ''));
 		if (paths.length === 0) return;
 
-		// Single file (not dir) — use the regular downloadFile path
+		// Single file (not dir) 鈥?use the regular downloadFile path
 		if (paths.length === 1 && ![...selectedEntries][0].endsWith('/')) {
 			await downloadFile([...selectedEntries][0]);
 			return;
@@ -822,7 +822,7 @@
 		}
 	};
 
-	// ── Lifecycle ────────────────────────────────────────────────────────
+	// 鈹€鈹€ Lifecycle 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 	onMount(async () => {
 		const terminal = getTerminal();
 		if (!terminal) return;
@@ -956,7 +956,7 @@
 			{$i18n.t('No Terminal connection configured.')}
 		</div>
 		<div class="text-[10px] text-gray-400 dark:text-gray-500">
-			{$i18n.t('Add your Open Terminal URL and API key in Settings → Integrations.')}
+			{$i18n.t('Add your local terminal server URL and API key in Settings > Integrations.')}
 		</div>
 	</div>
 {:else}

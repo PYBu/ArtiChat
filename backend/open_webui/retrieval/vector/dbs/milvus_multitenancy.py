@@ -43,7 +43,7 @@ MILVUS_TEXT_MAX_LENGTH = 65535
 
 # Milvus expressions are SQL-like strings with no parameterized-query API;
 # values get interpolated into single-quoted literals. Reject anything that
-# can't be a legitimate Open WebUI collection name.
+# can't be a legitimate ArtiChat collection name.
 _SAFE_RESOURCE_ID_RE = re.compile(r'^[A-Za-z0-9_-]{1,255}$')
 _SAFE_METADATA_KEY_RE = re.compile(r'^[A-Za-z_][A-Za-z0-9_]{0,63}$')
 
@@ -95,8 +95,8 @@ class MilvusClient(VectorDBBase):
         """
         Maps the traditional collection name to multi-tenant collection and resource ID.
 
-        WARNING: This mapping relies on current Open WebUI naming conventions for
-        collection names. If Open WebUI changes how it generates collection names
+        WARNING: This mapping relies on current ArtiChat naming conventions for
+        collection names. If ArtiChat changes how it generates collection names
         (e.g., "user-memory-" prefix, "file-" prefix, web search patterns, or hash
         formats), this mapping will break and route data to incorrect collections.
         POTENTIALLY CAUSING HUGE DATA CORRUPTION, DATA CONSISTENCY ISSUES AND INCORRECT

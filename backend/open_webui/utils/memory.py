@@ -565,7 +565,7 @@ Conversation:
             'messages': [
                 {
                     'role': 'system',
-                    'content': "You are Open WebUI's private memory reviewer. Return only valid JSON.",
+                    'content': "You are ArtiChat's private memory reviewer. Return only valid JSON.",
                 },
                 {'role': 'user', 'content': review_prompt},
             ],

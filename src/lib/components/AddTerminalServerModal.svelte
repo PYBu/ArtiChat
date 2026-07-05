@@ -495,7 +495,7 @@
 											class={`w-full flex-1 text-sm bg-transparent font-mono ${($settings?.highContrastMode ?? false) ? 'placeholder:text-gray-700 dark:placeholder:text-gray-100' : 'outline-hidden placeholder:text-gray-300 dark:placeholder:text-gray-700'}`}
 											type="text"
 											bind:value={policyImage}
-											placeholder="ghcr.io/open-webui/open-terminal:latest"
+											placeholder="artichat/local-terminal:latest"
 											autocomplete="off"
 										/>
 									</div>

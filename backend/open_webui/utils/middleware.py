@@ -1034,7 +1034,7 @@ async def terminal_event_handler(
     tool_result,
     event_emitter,
 ):
-    """Emit terminal:* events for Open Terminal tools.
+    """Emit terminal:* events for Local Terminal Server tools.
 
     - display_file  → emits 'terminal:display_file' to open the file preview.
     - write_file / replace_file_content → emits 'terminal:write_file' to refresh.

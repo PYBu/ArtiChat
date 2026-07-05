@@ -182,15 +182,16 @@ CACHE_DIR.mkdir(parents=True, exist_ok=True)
 ####################################
 
 CUSTOM_NAME = os.getenv('CUSTOM_NAME', '')
+CUSTOM_BRANDING_API_BASE_URL = os.getenv('CUSTOM_BRANDING_API_BASE_URL', '').rstrip('/')
 
-if CUSTOM_NAME:
+if CUSTOM_NAME and CUSTOM_BRANDING_API_BASE_URL:
     try:
-        r = requests.get(f'https://api.openwebui.com/api/v1/custom/{CUSTOM_NAME}')
+        r = requests.get(f'{CUSTOM_BRANDING_API_BASE_URL}/api/v1/custom/{CUSTOM_NAME}')
         data = r.json()
         if r.ok:
             if 'logo' in data:
                 WEBUI_FAVICON_URL = url = (
-                    f'https://api.openwebui.com{data["logo"]}' if data['logo'][0] == '/' else data['logo']
+                    f'{CUSTOM_BRANDING_API_BASE_URL}{data["logo"]}' if data['logo'][0] == '/' else data['logo']
                 )
 
                 r = requests.get(url, stream=True)
@@ -200,7 +201,7 @@ if CUSTOM_NAME:
                         shutil.copyfileobj(r.raw, f)
 
             if 'splash' in data:
-                url = f'https://api.openwebui.com{data["splash"]}' if data['splash'][0] == '/' else data['splash']
+                url = f'{CUSTOM_BRANDING_API_BASE_URL}{data["splash"]}' if data['splash'][0] == '/' else data['splash']
 
                 r = requests.get(url, stream=True)
                 if r.status_code == 200:
@@ -243,13 +244,13 @@ if OLLAMA_BASE_URL == '' and OLLAMA_API_BASE_URL != '':
 if ENV == 'prod':
     if OLLAMA_BASE_URL == '/ollama' and not K8S_FLAG:
         if USE_OLLAMA_DOCKER.lower() == 'true':
-            # if you use all-in-one docker container (Open WebUI + Ollama)
+            # If you use the all-in-one Docker container with Ollama.
             # with the docker build arg USE_OLLAMA=true (--build-arg="USE_OLLAMA=true") this only works with http://localhost:11434
             OLLAMA_BASE_URL = 'http://localhost:11434'
         else:
             OLLAMA_BASE_URL = 'http://host.docker.internal:11434'
     elif K8S_FLAG:
-        OLLAMA_BASE_URL = 'http://ollama-service.open-webui.svc.cluster.local:11434'
+        OLLAMA_BASE_URL = 'http://ollama-service.artichat.svc.cluster.local:11434'
 
 
 def _resolve_ollama_base_url(url: str) -> str:
@@ -607,7 +608,7 @@ QDRANT_GRPC_PORT = int(os.getenv('QDRANT_GRPC_PORT', '6334'))
 QDRANT_TIMEOUT = int(os.getenv('QDRANT_TIMEOUT', '5'))
 QDRANT_HNSW_M = int(os.getenv('QDRANT_HNSW_M', '16'))
 ENABLE_QDRANT_MULTITENANCY_MODE = os.getenv('ENABLE_QDRANT_MULTITENANCY_MODE', 'true').lower() == 'true'
-QDRANT_COLLECTION_PREFIX = os.getenv('QDRANT_COLLECTION_PREFIX', 'open-webui')
+QDRANT_COLLECTION_PREFIX = os.getenv('QDRANT_COLLECTION_PREFIX', 'artichat')
 
 WEAVIATE_HTTP_HOST = os.getenv('WEAVIATE_HTTP_HOST', '')
 WEAVIATE_GRPC_HOST = os.getenv('WEAVIATE_GRPC_HOST', '')
@@ -777,7 +778,7 @@ else:
 # Pinecone
 PINECONE_API_KEY = os.getenv('PINECONE_API_KEY', None)
 PINECONE_ENVIRONMENT = os.getenv('PINECONE_ENVIRONMENT', None)
-PINECONE_INDEX_NAME = os.getenv('PINECONE_INDEX_NAME', 'open-webui-index')
+PINECONE_INDEX_NAME = os.getenv('PINECONE_INDEX_NAME', 'artichat-index')
 PINECONE_DIMENSION = int(os.getenv('PINECONE_DIMENSION', 1536))  # or 3072, 1024, 768
 PINECONE_METRIC = os.getenv('PINECONE_METRIC', 'cosine')
 PINECONE_CLOUD = os.getenv('PINECONE_CLOUD', 'aws')  # or "gcp" or "azure"
@@ -2393,7 +2394,7 @@ JWT_EXPIRES_IN = os.getenv('JWT_EXPIRES_IN', '4w')
 if JWT_EXPIRES_IN == '-1':
     log.warning(
         "⚠️  SECURITY WARNING: JWT_EXPIRES_IN is set to '-1'\n"
-        '    See: https://docs.openwebui.com/reference/env-configuration\n'
+        '    See the ArtiChat environment configuration reference.\n'
     )
 
 ####################################

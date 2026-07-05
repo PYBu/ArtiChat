@@ -5,11 +5,12 @@
 - Replaced user-facing product identity with ArtiChat across app shell metadata, settings, about/help surfaces, update/changelog responses, share/community helpers, notifications, manifests, OpenSearch metadata, and static logo/favicon/splash assets.
 - Replaced Docker operator-facing names with ArtiChat: compose service `artichat`, container `artichat`, image `artichat:main`, port variable `ARTICHAT_PORT`, and data volume `artichat_data`.
 - Replaced package/operator metadata and defaults with ArtiChat, including npm package name, Python project metadata, CLI entry name, default forwarded header names, Redis key prefix, OTel service name, and data archive name.
-- Added `npm run test:branding` as a focused guard for user-visible and operator-visible branding regressions.
+- Removed remaining upstream community import/review/link surfaces, model attribution links, terminal integration references, external search user-agent identifiers, backend default prefixes, and translation entries.
+- Added `npm run test:branding` as a focused guard for user-visible, operator-visible, backend outbound, and locale branding regressions.
 
 ## Verification
 
-- `npm run test:branding`: passed, scanning 38 files. The npm script banner now reports `artichat@0.10.2`.
+- `npm run test:branding`: passed, scanning 148 files. The npm script banner now reports `artichat@0.10.2`.
 - `npm run build`: passed.
 - Build output scan for old branding terms: passed.
 - `docker compose -p artichat build --build-arg USE_SLIM=true artichat`: passed.
@@ -20,6 +21,7 @@
 - `/api/changelog`: 200, returns a neutral ArtiChat release note.
 - Runtime scan of `/`, `/manifest.json`, `/static/site.webmanifest`, `/static/favicon.svg`, `/api/config`, and `/api/changelog`: no old branding terms found.
 - Recent `artichat` container logs: no old branding terms found.
+- Wide source scan across `src`, `backend`, `static`, package metadata, and compose files found no old branding terms outside excluded legal/history static files.
 
 ## Cleanup
 

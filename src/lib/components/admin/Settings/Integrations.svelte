@@ -216,7 +216,7 @@
 
 					<div class="mt-4 mb-2.5 flex flex-col w-full">
 						<div class="flex justify-between items-center mb-1">
-							<div class="font-medium">{$i18n.t('Open Terminal')}</div>
+							<div class="font-medium">{$i18n.t('Local Terminal Server')}</div>
 
 							<Tooltip content={$i18n.t('Add Connection')}>
 								<button
@@ -297,15 +297,8 @@
 						<div class="mt-1.5">
 							<div class="text-xs text-gray-500">
 								{$i18n.t(
-									'Connect to Open Terminal instances. All users will have access to file browsing and terminal tools through these servers.'
+									'Connect to local terminal servers. All users will have access to file browsing and terminal tools through these servers.'
 								)}
-							</div>
-							<div class="text-xs text-gray-600 dark:text-gray-300 mt-1">
-								<a
-									class="underline"
-									href="https://github.com/open-webui/open-terminal"
-									target="_blank">{$i18n.t('Learn more about Open Terminal')} ↗</a
-								>
 							</div>
 						</div>
 					</div>

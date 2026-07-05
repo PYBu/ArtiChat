@@ -12,7 +12,7 @@ the inner task. That `CancelledError` then propagates into whatever
 the inner task was doing, including in-flight DB queries, embedding
 calls and disk I/O.
 
-In Open WebUI this surfaces as:
+In ArtiChat this surfaces as:
 
 * SQLAlchemy logging multi-page `NotImplementedError:
   terminate_force_close()` tracebacks at ERROR every time a request is
@@ -132,9 +132,9 @@ class AuthTokenMiddleware:
 
     The header used for API-key transport is controlled by the
     ``CUSTOM_API_KEY_HEADER`` environment variable (default ``x-api-key``).
-    This is useful when Open WebUI sits behind a reverse proxy that
+    This is useful when ArtiChat sits behind a reverse proxy that
     consumes the ``Authorization`` header for its own authentication —
-    set the env var to a unique header (e.g. ``X-OpenWebUI-Key``) so
+    set the env var to a unique header (e.g. ``X-ArtiChat-Key``) so
     the middleware checks that instead and avoids the 401 short-circuit.
 
     Routes that depend on `get_verified_user` etc. read this state.

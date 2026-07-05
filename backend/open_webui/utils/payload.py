@@ -71,13 +71,13 @@ def apply_model_params_to_body(params: dict, form_data: dict, mappings: dict[str
 
 def remove_open_webui_params(params: dict) -> dict:
     """
-    Removes OpenWebUI specific parameters from the provided dictionary.
+    Removes ArtiChat specific parameters from the provided dictionary.
 
     Args:
         params (dict): The dictionary containing parameters.
 
     Returns:
-        dict: The modified dictionary with OpenWebUI parameters removed.
+        dict: The modified dictionary with ArtiChat parameters removed.
     """
     open_webui_params = {
         'stream_response': bool,

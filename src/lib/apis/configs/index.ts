@@ -231,7 +231,7 @@ export const setTerminalServerConnections = async (token: string, connections: o
 
 /**
  * Detect whether a terminal server URL points to an Orchestrator or a direct
- * Open Terminal instance.
+ * Local terminal server instance.
  *
  * - GET {url}/api/v1/policies → 200 → "orchestrator"
  * - GET {url}/api/config      → 200 → "terminal"
@@ -268,7 +268,7 @@ export const detectTerminalServerType = async (
 
 /**
  * Create or update a policy on the orchestrator.
- * Proxied through the Open WebUI backend to keep API keys server-side.
+ * Proxied through the ArtiChat backend to keep API keys server-side.
  */
 export const putOrchestratorPolicy = async (
 	token: string,

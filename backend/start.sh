@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # ---------------------------------------------------------------------------
-# Container entry point for Open WebUI.
+# Container entry point for ArtiChat.
 # Handles secret key generation, optional Ollama/CUDA/Playwright setup,
 # HuggingFace Space deployment, and launches the uvicorn server.
 # ---------------------------------------------------------------------------
