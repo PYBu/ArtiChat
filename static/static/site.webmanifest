@@ -1,6 +1,6 @@
 {
-  "name": "Open WebUI",
-  "short_name": "WebUI",
+  "name": "ArtiChat",
+  "short_name": "ArtiChat",
   "icons": [
     {
       "src": "/static/web-app-manifest-192x192.png",

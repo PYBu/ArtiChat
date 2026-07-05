@@ -62,7 +62,7 @@
 		removeTerminalConnection
 	} from '$lib/utils/connections';
 
-	import { WEBUI_API_BASE_URL, WEBUI_BASE_URL, WEBUI_HOSTNAME } from '$lib/constants';
+	import { APP_NAME, WEBUI_API_BASE_URL, WEBUI_BASE_URL, WEBUI_HOSTNAME } from '$lib/constants';
 	import {
 		bestMatchingLanguage,
 		cleanText,
@@ -506,7 +506,7 @@
 
 			if ($isLastActiveTab) {
 				if ($settings?.notificationEnabled ?? false) {
-					new Notification(`${data.title} • Open WebUI`, {
+					new Notification(`${data.title} • ${$WEBUI_NAME || APP_NAME}`, {
 						body: timeStr,
 						icon: `${WEBUI_BASE_URL}/static/favicon.png`
 					});
@@ -638,7 +638,7 @@
 
 					if ($isLastActiveTab) {
 						if ($settings?.notificationEnabled ?? false) {
-							new Notification(`${displayTitle} • Open WebUI`, {
+							new Notification(`${displayTitle} • ${$WEBUI_NAME || APP_NAME}`, {
 								body: contentPreview,
 								icon: `${WEBUI_BASE_URL}/static/favicon.png`
 							});
@@ -746,7 +746,7 @@
 
 				if ($isLastActiveTab) {
 					if ($settings?.notificationEnabled ?? false) {
-						new Notification(`${title} • Open WebUI`, {
+						new Notification(`${title} • ${$WEBUI_NAME || APP_NAME}`, {
 							body: data?.content,
 							icon: `${WEBUI_API_BASE_URL}/users/${data?.user?.id}/profile/image`
 						});
@@ -938,11 +938,7 @@
 	};
 
 	const windowMessageEventHandler = async (event) => {
-		if (
-			!['https://openwebui.com', 'https://www.openwebui.com', 'http://localhost:9999'].includes(
-				event.origin
-			)
-		) {
+		if (!['http://localhost:9999'].includes(event.origin)) {
 			return;
 		}
 
