@@ -6,6 +6,7 @@ from open_webui.internal.db import get_async_session
 from open_webui.models.models import ModelForm, Models
 from open_webui.models.subscriptions import (
     FREE_TIER,
+    GiftCardGrants,
     RedemptionCodes,
     SubscriptionLedgers,
     SubscriptionPlans,
@@ -54,6 +55,7 @@ class BillingAddressForm(BaseModel):
 
 
 class AdminCodeCreateForm(BaseModel):
+    code: str | None = None
     mode: str
     quantity: int = 1
     max_uses: int = 1
@@ -91,9 +93,27 @@ class AdminUserSubscriptionUpdateForm(BaseModel):
     notes: str | None = None
 
 
+class GiftCardCreateForm(BaseModel):
+    user_ids: list[str] = []
+    all_users: bool = False
+    mode: str = 'single_use'
+    tier: str | None = None
+    duration_days: int | None = None
+    plan_chatpoint: str | int = 0
+    check_chatpoint: str | int = 0
+    expires_at: int | None = None
+    memo: str | None = None
+
+
 @router.get('/me')
 async def get_my_subscription(user=Depends(get_verified_subscription_user), db: AsyncSession = Depends(get_async_session)):
     return await ensure_subscription_current(user.id, db=db)
+
+
+@router.get('/plans')
+async def get_subscription_plans(user=Depends(get_verified_subscription_user), db: AsyncSession = Depends(get_async_session)):
+    await SubscriptionPlans.seed_defaults(db=db)
+    return [plan for plan in await SubscriptionPlans.get_plans(db=db) if plan.is_active]
 
 
 @router.get('/usage')
@@ -119,6 +139,23 @@ async def redeem_subscription_code(
 @router.get('/records')
 async def get_my_records(user=Depends(get_verified_subscription_user), db: AsyncSession = Depends(get_async_session)):
     return {'ledger': await SubscriptionLedgers.get_recent_for_user(user.id, limit=100, db=db)}
+
+
+@router.get('/gift-cards/pending')
+async def get_pending_gift_cards(user=Depends(get_verified_subscription_user), db: AsyncSession = Depends(get_async_session)):
+    return {'items': await GiftCardGrants.list_pending_for_user(user.id, db=db)}
+
+
+@router.post('/gift-cards/{grant_id}/claim')
+async def claim_gift_card(
+    grant_id: str,
+    user=Depends(get_verified_subscription_user),
+    db: AsyncSession = Depends(get_async_session),
+):
+    try:
+        return await GiftCardGrants.claim(grant_id, user_id=user.id, db=db)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.put('/billing-address')
@@ -221,6 +258,7 @@ async def create_admin_codes(
         expires_at=form_data.expires_at,
         memo=form_data.memo,
         created_by=user.id,
+        custom_code=form_data.code,
         db=db,
     )
 
@@ -243,6 +281,77 @@ async def update_admin_code(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
+@router.delete('/admin/codes/{code_id}')
+async def delete_admin_code(
+    code_id: str,
+    user=Depends(get_admin_subscription_user),
+    db: AsyncSession = Depends(get_async_session),
+):
+    try:
+        return await RedemptionCodes.delete_code(code_id, db=db)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get('/admin/gift-cards')
+async def get_admin_gift_cards(
+    batch_id: str | None = None,
+    user_id: str | None = None,
+    limit: int = 100,
+    offset: int = 0,
+    user=Depends(get_admin_subscription_user),
+    db: AsyncSession = Depends(get_async_session),
+):
+    return {'items': await GiftCardGrants.list_grants(batch_id=batch_id, user_id=user_id, limit=limit, offset=offset, db=db)}
+
+
+@router.post('/admin/gift-cards')
+async def create_admin_gift_cards(
+    form_data: GiftCardCreateForm,
+    user=Depends(get_admin_subscription_user),
+    db: AsyncSession = Depends(get_async_session),
+):
+    try:
+        if form_data.all_users:
+            return await GiftCardGrants.issue_for_all_current_users(
+                mode=form_data.mode,
+                tier=form_data.tier,
+                duration_days=form_data.duration_days,
+                plan_chatpoint_micros=chatpoint_to_micros(form_data.plan_chatpoint),
+                check_chatpoint_micros=chatpoint_to_micros(form_data.check_chatpoint),
+                expires_at=form_data.expires_at,
+                memo=form_data.memo,
+                created_by=user.id,
+                db=db,
+            )
+        return await GiftCardGrants.issue_grants(
+            user_ids=form_data.user_ids,
+            mode=form_data.mode,
+            tier=form_data.tier,
+            duration_days=form_data.duration_days,
+            plan_chatpoint_micros=chatpoint_to_micros(form_data.plan_chatpoint),
+            check_chatpoint_micros=chatpoint_to_micros(form_data.check_chatpoint),
+            expires_at=form_data.expires_at,
+            memo=form_data.memo,
+            created_by=user.id,
+            db=db,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.delete('/admin/gift-cards/{grant_id}')
+async def revoke_admin_gift_card(
+    grant_id: str,
+    user=Depends(get_admin_subscription_user),
+    db: AsyncSession = Depends(get_async_session),
+):
+    try:
+        return await GiftCardGrants.revoke(grant_id, db=db)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @router.get('/admin/users')
 async def get_admin_user_subscriptions(
     query: str | None = None,
@@ -251,7 +360,7 @@ async def get_admin_user_subscriptions(
     user=Depends(get_admin_subscription_user),
     db: AsyncSession = Depends(get_async_session),
 ):
-    return {'items': await UserSubscriptions.list_subscriptions(query=query, limit=limit, offset=offset, db=db)}
+    return {'items': await UserSubscriptions.list_subscriptions_with_users(query=query, limit=limit, offset=offset, db=db)}
 
 
 @router.patch('/admin/users/{user_id}')
@@ -332,6 +441,7 @@ async def get_admin_usage(
         end_at=end_at,
         limit=limit,
         offset=offset,
+        include_user=True,
         db=db,
     )
 
@@ -351,6 +461,7 @@ async def get_admin_ledger(
             event_type=event_type,
             limit=limit,
             offset=offset,
+            include_user=True,
             db=db,
         )
     }

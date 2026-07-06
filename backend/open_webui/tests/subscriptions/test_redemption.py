@@ -88,5 +88,57 @@ async def test_lower_tier_code_does_not_downgrade_higher_subscription(db_session
     result = await redeem_code('user-1', created.raw_codes[0], now=1_720_000_000, db=db_session)
 
     assert result.subscription.tier == CHATPOWER_TIER
-    assert result.subscription.plan_balance_micros == chatpoint_to_micros(503)
+    assert result.subscription.plan_balance_micros == chatpoint_to_micros(10003)
     assert result.subscription.check_balance_micros == chatpoint_to_micros(4)
+
+
+@pytest.mark.asyncio
+async def test_admin_can_create_custom_code_and_list_full_code(db_session):
+    await SubscriptionPlans.seed_defaults(db=db_session)
+
+    created = await RedemptionCodes.create_codes(
+        mode='single_use',
+        quantity=1,
+        max_uses=1,
+        tier=PLUS_TIER,
+        duration_days=30,
+        plan_chatpoint_micros=chatpoint_to_micros(12),
+        check_chatpoint_micros=0,
+        expires_at=None,
+        memo='custom launch code',
+        created_by='admin',
+        custom_code='LAUNCH-PLUS-001',
+        now=1_720_000_000,
+        db=db_session,
+    )
+
+    listed = await RedemptionCodes.list_codes(limit=10, offset=0, db=db_session)
+
+    assert created.raw_codes == ['LAUNCH-PLUS-001']
+    assert listed[0].code == 'LAUNCH-PLUS-001'
+    assert listed[0].code_preview == 'LAUN--001'
+
+
+@pytest.mark.asyncio
+async def test_deleted_redemption_code_cannot_be_redeemed(db_session):
+    await SubscriptionPlans.seed_defaults(db=db_session)
+    created = await RedemptionCodes.create_codes(
+        mode='single_use',
+        quantity=1,
+        max_uses=1,
+        tier=None,
+        duration_days=None,
+        plan_chatpoint_micros=0,
+        check_chatpoint_micros=chatpoint_to_micros(5),
+        expires_at=None,
+        memo='delete me',
+        created_by='admin',
+        custom_code='DELETE-ME-001',
+        now=1_720_000_000,
+        db=db_session,
+    )
+
+    await RedemptionCodes.delete_code(created.code_ids[0], db=db_session)
+
+    with pytest.raises(ValueError, match='REDEMPTION_CODE_INVALID'):
+        await redeem_code('user-1', 'DELETE-ME-001', now=1_720_000_100, db=db_session)

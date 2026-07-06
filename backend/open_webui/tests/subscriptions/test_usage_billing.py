@@ -14,7 +14,7 @@ async def test_metered_usage_debits_plan_before_check(db_session):
     await ensure_subscription_current('user-1', now=1_720_000_000, db=db_session)
     await UserSubscriptions.adjust_balances(
         'user-1',
-        plan_delta_micros=-chatpoint_to_micros(9),
+        plan_delta_micros=-chatpoint_to_micros(99),
         check_delta_micros=chatpoint_to_micros(2),
         event_type='admin_adjustment',
         created_by='admin',
@@ -45,7 +45,7 @@ async def test_request_can_make_balance_negative_then_next_metered_request_is_bl
     await ensure_subscription_current('user-2', now=1_720_000_000, db=db_session)
     await UserSubscriptions.adjust_balances(
         'user-2',
-        plan_delta_micros=-chatpoint_to_micros(9),
+        plan_delta_micros=-chatpoint_to_micros(99),
         check_delta_micros=0,
         event_type='admin_adjustment',
         created_by='admin',

@@ -9,8 +9,9 @@ from decimal import Decimal, ROUND_CEILING
 from typing import Any, AsyncIterator
 
 from open_webui.internal.db import Base, get_async_db_context
+from open_webui.models.users import User
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import BigInteger, Boolean, Column, Index, Integer, JSON, Text, select
+from sqlalchemy import BigInteger, Boolean, Column, Index, Integer, JSON, Text, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 CHATPOINT_MICROS = 1_000_000
@@ -20,7 +21,8 @@ FREE_TIER = 'free'
 PLUS_TIER = 'plus'
 CHATPOWER_TIER = 'chatpower'
 TIER_RANKS = {FREE_TIER: 0, PLUS_TIER: 1, CHATPOWER_TIER: 2}
-DEFAULT_PLAN_CHATPOINTS = {FREE_TIER: Decimal('10'), PLUS_TIER: Decimal('100'), CHATPOWER_TIER: Decimal('500')}
+DEFAULT_PLAN_CHATPOINTS = {FREE_TIER: Decimal('100'), PLUS_TIER: Decimal('3000'), CHATPOWER_TIER: Decimal('10000')}
+LEGACY_PLAN_CHATPOINTS = {FREE_TIER: [Decimal('10')], PLUS_TIER: [Decimal('100')], CHATPOWER_TIER: [Decimal('500')]}
 DEFAULT_PERIOD_DAYS = 30
 _SKIP_JSON_VALUE = object()
 
@@ -200,6 +202,7 @@ class RedemptionCode(Base):
     __tablename__ = 'redemption_code'
 
     id = Column(Text, primary_key=True)
+    code = Column(Text, nullable=True)
     code_hash = Column(Text, nullable=False, unique=True, index=True)
     code_preview = Column(Text, nullable=False)
     mode = Column(Text, nullable=False)
@@ -233,6 +236,23 @@ class RedemptionRecord(Base):
     created_at = Column(BigInteger, nullable=False)
 
     __table_args__ = (Index('redemption_record_code_user_idx', 'redemption_code_id', 'user_id', unique=True),)
+
+
+class GiftCardGrant(Base):
+    __tablename__ = 'gift_card_grant'
+
+    id = Column(Text, primary_key=True)
+    redemption_code_id = Column(Text, nullable=False, index=True)
+    user_id = Column(Text, nullable=False, index=True)
+    status = Column(Text, nullable=False, default='pending')
+    batch_id = Column(Text, nullable=False, index=True)
+    claimed_at = Column(BigInteger, nullable=True)
+    memo = Column(Text, nullable=True)
+    created_by = Column(Text, nullable=False)
+    created_at = Column(BigInteger, nullable=False)
+    updated_at = Column(BigInteger, nullable=False)
+
+    __table_args__ = (Index('gift_card_grant_user_status_idx', 'user_id', 'status'),)
 
 
 class SubscriptionUsage(Base):
@@ -283,31 +303,80 @@ class SubscriptionPlansTable:
             timestamp = now_ts()
 
             defaults = [
-                (FREE_TIER, '免费版', 0, DEFAULT_PLAN_CHATPOINTS[FREE_TIER], '基础模型访问额度。'),
-                (PLUS_TIER, 'Plus', 1, DEFAULT_PLAN_CHATPOINTS[PLUS_TIER], '更多模型访问权限和更高用量。'),
+                (
+                    FREE_TIER,
+                    'Free',
+                    0,
+                    DEFAULT_PLAN_CHATPOINTS[FREE_TIER],
+                    '基础模型访问额度。',
+                    {
+                        'icon': 'sparkles',
+                        'subtitle': '基础体验',
+                        'highlights': ['每月 100 Chatpoint', '可访问基础模型'],
+                        'model_summary': '适合轻量对话和试用模型。',
+                        'cta_label': '当前计划',
+                    },
+                ),
+                (
+                    PLUS_TIER,
+                    'Plus',
+                    1,
+                    DEFAULT_PLAN_CHATPOINTS[PLUS_TIER],
+                    '更多模型访问权限和更高用量。',
+                    {
+                        'icon': 'badge',
+                        'subtitle': '进阶体验',
+                        'highlights': ['每月 3000 Chatpoint', '可访问 Plus 模型'],
+                        'model_summary': '适合日常高频使用和更强模型。',
+                        'cta_label': '购买',
+                    },
+                ),
                 (
                     CHATPOWER_TIER,
                     'ChatPower',
                     2,
                     DEFAULT_PLAN_CHATPOINTS[CHATPOWER_TIER],
                     '最高用量和完整模型访问档位。',
+                    {
+                        'icon': 'zap',
+                        'subtitle': '高阶体验',
+                        'highlights': ['每月 10000 Chatpoint', '可访问完整高级模型'],
+                        'model_summary': '适合重度创作、研究和高频工作流。',
+                        'cta_label': '购买',
+                    },
                 ),
             ]
             legacy_defaults = {
-                FREE_TIER: ('Free', 'Starter access for basic models.'),
-                PLUS_TIER: ('Plus', 'Expanded access and higher usage.'),
-                CHATPOWER_TIER: ('ChatPower', 'Highest ArtiChat usage tier.'),
+                FREE_TIER: (
+                    {'Free', '免费版'},
+                    {'Starter access for basic models.', '基础模型访问额度。'},
+                ),
+                PLUS_TIER: (
+                    {'Plus'},
+                    {'Expanded access and higher usage.', '更多模型访问权限和更高用量。'},
+                ),
+                CHATPOWER_TIER: (
+                    {'ChatPower'},
+                    {'Highest ArtiChat usage tier.', '最高用量和完整模型访问档位。'},
+                ),
             }
-            for plan_id, display_name, rank, allowance, description in defaults:
+            for plan_id, display_name, rank, allowance, description, features in defaults:
                 if plan_id in existing_plans:
                     plan = existing_plans[plan_id]
-                    legacy_name, legacy_description = legacy_defaults[plan_id]
+                    legacy_names, legacy_descriptions = legacy_defaults[plan_id]
                     changed = False
-                    if plan.display_name == legacy_name:
+                    if plan.display_name in legacy_names:
                         plan.display_name = display_name
                         changed = True
-                    if plan.description == legacy_description:
+                    if plan.description in legacy_descriptions:
                         plan.description = description
+                        changed = True
+                    legacy_allowances = {chatpoint_to_micros(item) for item in LEGACY_PLAN_CHATPOINTS[plan_id]}
+                    if plan.plan_chatpoint_allowance_micros in legacy_allowances:
+                        plan.plan_chatpoint_allowance_micros = chatpoint_to_micros(allowance)
+                        changed = True
+                    if plan.features in (None, [], {}):
+                        plan.features = features
                         changed = True
                     if changed:
                         plan.updated_at = timestamp
@@ -320,7 +389,7 @@ class SubscriptionPlansTable:
                         period_days=DEFAULT_PERIOD_DAYS,
                         plan_chatpoint_allowance_micros=chatpoint_to_micros(allowance),
                         description=description,
-                        features=[],
+                        features=features,
                         is_active=True,
                         sort_order=rank,
                         created_at=timestamp,
@@ -418,6 +487,19 @@ class SubscriptionLedgerModel(BaseModel):
     created_at: int
 
 
+class UserSummaryModel(BaseModel):
+    id: str
+    email: str | None = None
+    username: str | None = None
+    name: str | None = None
+
+
+def user_summary(user: User | None) -> dict | None:
+    if user is None:
+        return None
+    return UserSummaryModel.model_validate(user, from_attributes=True).model_dump()
+
+
 def new_id(prefix: str) -> str:
     return f'{prefix}_{secrets.token_urlsafe(18)}'
 
@@ -482,15 +564,29 @@ class SubscriptionLedgersTable:
         event_type: str | None = None,
         limit: int = 100,
         offset: int = 0,
+        include_user: bool = False,
         db: AsyncSession | None = None,
-    ) -> list[SubscriptionLedgerModel]:
+    ) -> list[SubscriptionLedgerModel] | list[dict]:
         async with get_subscription_db_context(db) as session:
-            stmt = select(SubscriptionLedger).order_by(SubscriptionLedger.created_at.desc()).limit(limit).offset(offset)
+            if include_user:
+                stmt = select(SubscriptionLedger, User).outerjoin(User, User.id == SubscriptionLedger.user_id)
+            else:
+                stmt = select(SubscriptionLedger)
             if user_id:
                 stmt = stmt.filter(SubscriptionLedger.user_id == user_id)
             if event_type:
                 stmt = stmt.filter(SubscriptionLedger.event_type == event_type)
+            stmt = stmt.order_by(SubscriptionLedger.created_at.desc()).limit(limit).offset(offset)
             result = await session.execute(stmt)
+            if include_user:
+                return [
+                    {
+                        'ledger': SubscriptionLedgerModel.model_validate(ledger),
+                        'user': user_summary(user),
+                        **SubscriptionLedgerModel.model_validate(ledger).model_dump(by_alias=True),
+                    }
+                    for ledger, user in result.all()
+                ]
             return [SubscriptionLedgerModel.model_validate(row) for row in result.scalars().all()]
 
 
@@ -614,16 +710,50 @@ class UserSubscriptionsTable:
             result = await session.execute(stmt)
             return [UserSubscriptionModel.model_validate(row) for row in result.scalars().all()]
 
+    async def list_subscriptions_with_users(
+        self,
+        *,
+        query: str | None = None,
+        limit: int = 100,
+        offset: int = 0,
+        db: AsyncSession | None = None,
+    ) -> list[dict]:
+        async with get_subscription_db_context(db) as session:
+            stmt = select(UserSubscription, User).outerjoin(User, User.id == UserSubscription.user_id)
+            if query:
+                pattern = f'%{query}%'
+                stmt = stmt.filter(
+                    or_(
+                        UserSubscription.user_id.like(pattern),
+                        User.email.like(pattern),
+                        User.username.like(pattern),
+                        User.name.like(pattern),
+                    )
+                )
+            stmt = stmt.order_by(UserSubscription.updated_at.desc()).limit(limit).offset(offset)
+            result = await session.execute(stmt)
+            return [
+                {
+                    'subscription': UserSubscriptionModel.model_validate(subscription),
+                    'user': user_summary(user),
+                }
+                for subscription, user in result.all()
+            ]
+
 
 UserSubscriptions = UserSubscriptionsTable()
 
 
 def hash_redemption_code(code: str) -> str:
-    return hashlib.sha256(code.strip().upper().encode('utf-8')).hexdigest()
+    return hashlib.sha256(normalize_redemption_code(code).encode('utf-8')).hexdigest()
+
+
+def normalize_redemption_code(code: str) -> str:
+    return code.strip().upper()
 
 
 def preview_redemption_code(code: str) -> str:
-    normalized = code.strip().upper()
+    normalized = normalize_redemption_code(code)
     return f'{normalized[:4]}-{normalized[-4:]}'
 
 
@@ -640,6 +770,7 @@ class RedemptionCodeModel(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: str
+    code: str | None = None
     code_hash: str
     code_preview: str
     mode: str
@@ -687,6 +818,8 @@ class RedemptionCodesTable:
         expires_at: int | None,
         memo: str | None,
         created_by: str,
+        custom_code: str | None = None,
+        batch_id: str | None = None,
         now: int | None = None,
         db: AsyncSession | None = None,
     ) -> RedemptionCodeCreateResult:
@@ -698,19 +831,27 @@ class RedemptionCodesTable:
             raise ValueError('max_uses must be greater than 0')
         if mode == 'multi_use' and quantity != 1:
             raise ValueError('multi_use creation creates exactly one code')
+        if custom_code and quantity != 1:
+            raise ValueError('custom_code can only create one code at a time')
 
         timestamp = now or now_ts()
-        batch_id = new_id('batch')
+        resolved_batch_id = batch_id or new_id('batch')
         raw_codes = []
         code_ids = []
 
         async with get_subscription_db_context(db) as session:
             for _ in range(quantity):
-                raw_code = generate_redemption_code()
+                raw_code = normalize_redemption_code(custom_code) if custom_code else generate_redemption_code()
+                existing = await session.execute(
+                    select(RedemptionCode).filter(RedemptionCode.code_hash == hash_redemption_code(raw_code))
+                )
+                if existing.scalar_one_or_none() is not None:
+                    raise ValueError('REDEMPTION_CODE_DUPLICATE')
                 code_id = new_id('code')
                 session.add(
                     RedemptionCode(
                         id=code_id,
+                        code=raw_code,
                         code_hash=hash_redemption_code(raw_code),
                         code_preview=preview_redemption_code(raw_code),
                         mode=mode,
@@ -722,7 +863,7 @@ class RedemptionCodesTable:
                         check_chatpoint_micros=check_chatpoint_micros,
                         expires_at=expires_at,
                         is_active=True,
-                        batch_id=batch_id,
+                        batch_id=resolved_batch_id,
                         memo=memo,
                         created_by=created_by,
                         created_at=timestamp,
@@ -778,6 +919,20 @@ class RedemptionCodesTable:
                 code.is_active = is_active
             if memo is not None:
                 code.memo = memo
+            code.updated_at = now_ts()
+            await session.commit()
+            await session.refresh(code)
+            return RedemptionCodeModel.model_validate(code)
+
+    async def delete_code(self, code_id: str, db: AsyncSession | None = None) -> RedemptionCodeModel:
+        async with get_subscription_db_context(db) as session:
+            code = await session.get(RedemptionCode, code_id)
+            if code is None:
+                raise ValueError('REDEMPTION_CODE_NOT_FOUND')
+            if code.is_active:
+                code.is_active = False
+            if code.code_hash and not code.code_hash.startswith('deleted:'):
+                code.code_hash = f'deleted:{code.id}:{code.code_hash}'
             code.updated_at = now_ts()
             await session.commit()
             await session.refresh(code)
@@ -846,6 +1001,241 @@ class RedemptionRecordsTable:
 
 
 RedemptionRecords = RedemptionRecordsTable()
+
+
+class GiftCardGrantModel(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    redemption_code_id: str
+    user_id: str
+    status: str
+    batch_id: str
+    claimed_at: int | None = None
+    memo: str | None = None
+    created_by: str
+    created_at: int
+    updated_at: int
+
+
+class GiftCardIssueResult(BaseModel):
+    batch_id: str
+    grants: list[GiftCardGrantModel]
+    raw_codes: list[str]
+
+
+class GiftCardClaimResult(BaseModel):
+    subscription: UserSubscriptionModel
+    grant: GiftCardGrantModel
+    tier_before: str | None
+    tier_after: str | None
+    plan_delta_micros: int
+    check_delta_micros: int
+
+
+class GiftCardGrantsTable:
+    async def issue_grants(
+        self,
+        *,
+        user_ids: list[str],
+        mode: str,
+        tier: str | None,
+        duration_days: int | None,
+        plan_chatpoint_micros: int,
+        check_chatpoint_micros: int,
+        expires_at: int | None,
+        memo: str | None,
+        created_by: str,
+        now: int | None = None,
+        db: AsyncSession | None = None,
+    ) -> GiftCardIssueResult:
+        unique_user_ids = list(dict.fromkeys([item for item in user_ids if item]))
+        if not unique_user_ids:
+            raise ValueError('GIFT_CARD_USERS_REQUIRED')
+        if mode not in {'single_use', 'multi_use'}:
+            raise ValueError('redemption mode must be single_use or multi_use')
+
+        timestamp = now or now_ts()
+        batch_id = new_id('giftbatch')
+        raw_codes: list[str] = []
+
+        async with get_subscription_db_context(db) as session:
+            for user_id in unique_user_ids:
+                raw_code = generate_redemption_code()
+                code_id = new_id('code')
+                grant_id = new_id('gift')
+                session.add(
+                    RedemptionCode(
+                        id=code_id,
+                        code=raw_code,
+                        code_hash=hash_redemption_code(raw_code),
+                        code_preview=preview_redemption_code(raw_code),
+                        mode='single_use',
+                        max_uses=1,
+                        used_count=0,
+                        tier=tier,
+                        duration_days=duration_days,
+                        plan_chatpoint_micros=plan_chatpoint_micros,
+                        check_chatpoint_micros=check_chatpoint_micros,
+                        expires_at=expires_at,
+                        is_active=True,
+                        batch_id=batch_id,
+                        memo=memo,
+                        created_by=created_by,
+                        created_at=timestamp,
+                        updated_at=timestamp,
+                    )
+                )
+                session.add(
+                    GiftCardGrant(
+                        id=grant_id,
+                        redemption_code_id=code_id,
+                        user_id=user_id,
+                        status='pending',
+                        batch_id=batch_id,
+                        claimed_at=None,
+                        memo=memo,
+                        created_by=created_by,
+                        created_at=timestamp,
+                        updated_at=timestamp,
+                    )
+                )
+                raw_codes.append(raw_code)
+            await session.commit()
+            result = await session.execute(
+                select(GiftCardGrant)
+                .filter(GiftCardGrant.batch_id == batch_id)
+                .order_by(GiftCardGrant.created_at.asc())
+            )
+            grants = [GiftCardGrantModel.model_validate(row) for row in result.scalars().all()]
+        return GiftCardIssueResult(batch_id=batch_id, grants=grants, raw_codes=raw_codes)
+
+    async def issue_for_all_current_users(
+        self,
+        *,
+        mode: str,
+        tier: str | None,
+        duration_days: int | None,
+        plan_chatpoint_micros: int,
+        check_chatpoint_micros: int,
+        expires_at: int | None,
+        memo: str | None,
+        created_by: str,
+        now: int | None = None,
+        db: AsyncSession | None = None,
+    ) -> GiftCardIssueResult:
+        async with get_subscription_db_context(db) as session:
+            result = await session.execute(select(User.id).filter(User.role.in_(['user', 'admin'])))
+            user_ids = list(result.scalars().all())
+            return await self.issue_grants(
+                user_ids=user_ids,
+                mode=mode,
+                tier=tier,
+                duration_days=duration_days,
+                plan_chatpoint_micros=plan_chatpoint_micros,
+                check_chatpoint_micros=check_chatpoint_micros,
+                expires_at=expires_at,
+                memo=memo,
+                created_by=created_by,
+                now=now,
+                db=session,
+            )
+
+    async def list_pending_for_user(
+        self, user_id: str, *, db: AsyncSession | None = None
+    ) -> list[GiftCardGrantModel]:
+        async with get_subscription_db_context(db) as session:
+            result = await session.execute(
+                select(GiftCardGrant)
+                .filter(GiftCardGrant.user_id == user_id, GiftCardGrant.status == 'pending')
+                .order_by(GiftCardGrant.created_at.desc())
+            )
+            return [GiftCardGrantModel.model_validate(row) for row in result.scalars().all()]
+
+    async def list_grants(
+        self,
+        *,
+        batch_id: str | None = None,
+        user_id: str | None = None,
+        limit: int = 100,
+        offset: int = 0,
+        db: AsyncSession | None = None,
+    ) -> list[dict]:
+        async with get_subscription_db_context(db) as session:
+            stmt = (
+                select(GiftCardGrant, RedemptionCode, User)
+                .outerjoin(RedemptionCode, RedemptionCode.id == GiftCardGrant.redemption_code_id)
+                .outerjoin(User, User.id == GiftCardGrant.user_id)
+            )
+            if batch_id:
+                stmt = stmt.filter(GiftCardGrant.batch_id == batch_id)
+            if user_id:
+                stmt = stmt.filter(GiftCardGrant.user_id == user_id)
+            stmt = stmt.order_by(GiftCardGrant.created_at.desc()).limit(limit).offset(offset)
+            result = await session.execute(stmt)
+            return [
+                {
+                    'grant': GiftCardGrantModel.model_validate(grant),
+                    'code': RedemptionCodeModel.model_validate(code) if code else None,
+                    'user': user_summary(user),
+                }
+                for grant, code, user in result.all()
+            ]
+
+    async def claim(
+        self, grant_id: str, *, user_id: str, now: int | None = None, db: AsyncSession | None = None
+    ) -> GiftCardClaimResult:
+        from open_webui.utils.subscriptions import redeem_code
+
+        current_time = now or now_ts()
+        async with get_subscription_db_context(db) as session:
+            grant = await session.get(GiftCardGrant, grant_id)
+            if grant is None or grant.user_id != user_id:
+                raise ValueError('GIFT_CARD_NOT_FOUND')
+            if grant.status == 'claimed':
+                raise ValueError('GIFT_CARD_ALREADY_CLAIMED')
+            if grant.status != 'pending':
+                raise ValueError('GIFT_CARD_NOT_PENDING')
+            code = await session.get(RedemptionCode, grant.redemption_code_id)
+            if code is None or not code.code:
+                raise ValueError('GIFT_CARD_CODE_MISSING')
+
+            redemption = await redeem_code(user_id, code.code, now=current_time, db=session)
+            grant = await session.get(GiftCardGrant, grant_id)
+            grant.status = 'claimed'
+            grant.claimed_at = current_time
+            grant.updated_at = current_time
+            await session.commit()
+            await session.refresh(grant)
+            model = GiftCardGrantModel.model_validate(grant)
+            return GiftCardClaimResult(
+                subscription=redemption.subscription,
+                grant=model,
+                tier_before=redemption.tier_before,
+                tier_after=redemption.tier_after,
+                plan_delta_micros=redemption.plan_delta_micros,
+                check_delta_micros=redemption.check_delta_micros,
+            )
+
+    async def revoke(self, grant_id: str, db: AsyncSession | None = None) -> GiftCardGrantModel:
+        async with get_subscription_db_context(db) as session:
+            grant = await session.get(GiftCardGrant, grant_id)
+            if grant is None:
+                raise ValueError('GIFT_CARD_NOT_FOUND')
+            if grant.status == 'claimed':
+                raise ValueError('GIFT_CARD_ALREADY_CLAIMED')
+            grant.status = 'revoked'
+            grant.updated_at = now_ts()
+            code = await session.get(RedemptionCode, grant.redemption_code_id)
+            if code is not None:
+                code.is_active = False
+                code.updated_at = grant.updated_at
+            await session.commit()
+            await session.refresh(grant)
+            return GiftCardGrantModel.model_validate(grant)
+
+
+GiftCardGrants = GiftCardGrantsTable()
 
 
 class SubscriptionUsageModel(BaseModel):
@@ -932,10 +1322,14 @@ class SubscriptionUsagesTable:
         end_at: int | None = None,
         limit: int = 100,
         offset: int = 0,
+        include_user: bool = False,
         db: AsyncSession | None = None,
     ) -> dict:
         async with get_subscription_db_context(db) as session:
-            stmt = select(SubscriptionUsage)
+            if include_user:
+                stmt = select(SubscriptionUsage, User).outerjoin(User, User.id == SubscriptionUsage.user_id)
+            else:
+                stmt = select(SubscriptionUsage)
             if user_id:
                 stmt = stmt.filter(SubscriptionUsage.user_id == user_id)
             if model_id:
@@ -947,12 +1341,24 @@ class SubscriptionUsagesTable:
             result = await session.execute(
                 stmt.order_by(SubscriptionUsage.created_at.desc()).limit(limit).offset(offset)
             )
-            items = [SubscriptionUsageModel.model_validate(row) for row in result.scalars().all()]
+            if include_user:
+                items = [
+                    {
+                        'usage': SubscriptionUsageModel.model_validate(usage),
+                        'user': user_summary(user),
+                        **SubscriptionUsageModel.model_validate(usage).model_dump(by_alias=True),
+                    }
+                    for usage, user in result.all()
+                ]
+                usage_models = [item['usage'] for item in items]
+            else:
+                usage_models = [SubscriptionUsageModel.model_validate(row) for row in result.scalars().all()]
+                items = usage_models
             return {
                 'items': items,
-                'total_cost_micros': sum(item.cost_micros for item in items),
-                'total_input_tokens': sum(item.input_tokens for item in items),
-                'total_output_tokens': sum(item.output_tokens for item in items),
+                'total_cost_micros': sum(item.cost_micros for item in usage_models),
+                'total_input_tokens': sum(item.input_tokens for item in usage_models),
+                'total_output_tokens': sum(item.output_tokens for item in usage_models),
             }
 
 
