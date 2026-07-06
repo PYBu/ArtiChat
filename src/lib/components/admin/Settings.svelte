@@ -18,6 +18,7 @@
 	import Connections from './Settings/Connections.svelte';
 	import Documents from './Settings/Documents.svelte';
 	import WebSearch from './Settings/WebSearch.svelte';
+	import Subscriptions from './Settings/Subscriptions.svelte';
 
 	import Evaluations from './Settings/Evaluations.svelte';
 	import CodeExecution from './Settings/CodeExecution.svelte';
@@ -50,6 +51,7 @@
 			'audio',
 			'images',
 			'pipelines',
+			'subscriptions',
 			'db'
 		].includes(tabFromPath)
 			? tabFromPath
@@ -273,6 +275,12 @@
 			keywords: ['pipelines', 'workflows', 'filters', 'valves', 'middleware']
 		},
 		{
+			id: 'subscriptions',
+			title: 'Subscriptions',
+			route: '/admin/settings/subscriptions',
+			keywords: ['subscriptions', 'plans', 'chatpoint', 'redeem', 'codes', 'usage', 'ledger']
+		},
+		{
 			id: 'db',
 			title: 'Database',
 			route: '/admin/settings/db',
@@ -354,6 +362,7 @@
 		<!-- {$i18n.t('Audio')} -->
 		<!-- {$i18n.t('Images')} -->
 		<!-- {$i18n.t('Pipelines')} -->
+		<!-- {$i18n.t('Subscriptions')} -->
 		<!-- {$i18n.t('Database')} -->
 		{#each filteredSettings as tab (tab.id)}
 			<a
@@ -529,6 +538,8 @@
 								d="m10.933 19.231-7.668-4.13-1.37.739a.75.75 0 0 0 0 1.32l9.75 5.25c.221.12.489.12.71 0l9.75-5.25a.75.75 0 0 0 0-1.32l-1.37-.738-7.668 4.13a2.25 2.25 0 0 1-2.134-.001Z"
 							/>
 						</svg>
+					{:else if tab.id === 'subscriptions'}
+						<ChartBar />
 					{:else if tab.id === 'db'}
 						<svg
 							xmlns="http://www.w3.org/2000/svg"
@@ -634,6 +645,8 @@
 					toast.success($i18n.t('Settings saved successfully!'));
 				}}
 			/>
+		{:else if selectedTab === 'subscriptions'}
+			<Subscriptions />
 		{/if}
 	</div>
 </div>

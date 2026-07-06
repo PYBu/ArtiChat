@@ -13,5 +13,6 @@ def test_router_exposes_user_and_admin_paths():
     assert '/admin/models' in paths
     assert '/admin/codes' in paths
     assert '/admin/users' in paths
+    assert '/admin/users/{user_id}' in paths
     assert '/admin/usage' in paths
     assert '/admin/ledger' in paths

@@ -31,6 +31,7 @@
 	import PromptSuggestions from './PromptSuggestions.svelte';
 	import TerminalSelector from './TerminalSelector.svelte';
 	import TTSVoiceInput from './TTSVoiceInput.svelte';
+	import SubscriptionPolicy from './SubscriptionPolicy.svelte';
 	import AccessControlModal from '../common/AccessControlModal.svelte';
 	import LockClosed from '$lib/components/icons/LockClosed.svelte';
 
@@ -43,6 +44,12 @@
 	export let edit = false;
 
 	export let preset = true;
+
+	const DEFAULT_SUBSCRIPTION_POLICY = {
+		allowed_tiers: ['free', 'plus', 'chatpower'],
+		quota_mode: 'metered',
+		usage_multiplier: '1'
+	};
 
 	let loading = false;
 	let success = false;
@@ -83,6 +90,7 @@
 			profile_image_url: `${WEBUI_BASE_URL}/static/favicon.png`,
 			description: '',
 			suggestion_prompts: null,
+			subscription: { ...DEFAULT_SUBSCRIPTION_POLICY },
 			tags: []
 		},
 		params: {
@@ -186,6 +194,7 @@
 
 		info.access_grants = accessGrants;
 		info.meta.capabilities = capabilities;
+		info.meta.subscription = info.meta.subscription ?? { ...DEFAULT_SUBSCRIPTION_POLICY };
 
 		if (enableDescription) {
 			info.meta.description = info.meta.description.trim() === '' ? null : info.meta.description;
@@ -409,6 +418,11 @@
 
 			console.log(model);
 		}
+
+		info.meta.subscription = {
+			...DEFAULT_SUBSCRIPTION_POLICY,
+			...(info.meta.subscription ?? {})
+		};
 
 		loaded = true;
 	});
@@ -862,6 +876,10 @@
 
 					<div class="my-4">
 						<Capabilities bind:capabilities />
+					</div>
+
+					<div class="my-4">
+						<SubscriptionPolicy bind:policy={info.meta.subscription} />
 					</div>
 
 					{#if Object.keys(capabilities).filter((key) => capabilities[key]).length > 0}

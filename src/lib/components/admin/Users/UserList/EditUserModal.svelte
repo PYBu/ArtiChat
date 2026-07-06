@@ -134,6 +134,16 @@
 										</div>
 									{/if}
 
+									<div class="flex justify-start">
+										<button
+											type="button"
+											class="text-xs underline text-gray-500 hover:text-gray-900 dark:hover:text-gray-100"
+											on:click={() => goto(`/admin/settings/subscriptions?user=${selectedUser.id}`)}
+										>
+											Manage Subscription
+										</button>
+									</div>
+
 									<div class="flex flex-col w-full">
 										<div class=" mb-1 text-xs text-gray-500">{$i18n.t('Role')}</div>
 

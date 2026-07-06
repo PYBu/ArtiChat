@@ -60,6 +60,17 @@ for (const marker of ['Usage', 'Plan Chatpoint', 'Check Chatpoint', 'exhausted',
 	if (!ring.includes(marker)) failures.push(`Quota ring missing ${marker}`);
 }
 
+const adminSettings = read('src/lib/components/admin/Settings.svelte');
+for (const marker of ['Subscriptions', "selectedTab === 'subscriptions'", '<Subscriptions']) {
+	if (!adminSettings.includes(marker)) failures.push(`Admin settings missing ${marker}`);
+}
+
+const modelEditor = read('src/lib/components/workspace/Models/ModelEditor.svelte');
+if (!modelEditor.includes('SubscriptionPolicy')) failures.push('ModelEditor must include SubscriptionPolicy');
+
+const editUser = read('src/lib/components/admin/Users/UserList/EditUserModal.svelte');
+if (!editUser.includes('Manage Subscription')) failures.push('EditUserModal must link to subscription management');
+
 if (failures.length > 0) {
 	for (const failure of failures) console.error(failure);
 	process.exit(1);

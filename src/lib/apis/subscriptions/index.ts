@@ -93,6 +93,17 @@ export const getAdminUserSubscriptions = async (token: string, query = '') => {
 	return jsonFetch(`${WEBUI_API_BASE_URL}/subscriptions/admin/users?${params.toString()}`, token);
 };
 
+export const updateAdminUserSubscription = async (
+	token: string,
+	userId: string,
+	payload: Record<string, unknown>
+) => {
+	return jsonFetch(`${WEBUI_API_BASE_URL}/subscriptions/admin/users/${encodeURIComponent(userId)}`, token, {
+		method: 'PATCH',
+		body: JSON.stringify(payload)
+	});
+};
+
 export const getAdminSubscriptionUsage = async (token: string) => {
 	return jsonFetch(`${WEBUI_API_BASE_URL}/subscriptions/admin/usage`, token);
 };
