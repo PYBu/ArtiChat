@@ -51,6 +51,12 @@
   - `pytest backend/open_webui/tests/subscriptions -q`: 42 passed, 1 warning.
   - `npm run test:subscriptions`: passed.
   - `npm run build`: passed with existing Svelte/Vite warnings.
+- Docker deployment for this addition:
+  - `docker compose -p artichat build artichat`: passed, rebuilt `artichat:main`.
+  - Recreated container `artichat` with `artichat_data` preserved.
+  - `/health`: 200, `{"status":true}`.
+  - Runtime status: `artichat` is healthy on port `3000`.
+  - `docker image prune -f`: completed, reclaimed `0B`.
 
 ## Cleanup
 
