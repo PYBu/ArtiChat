@@ -16,6 +16,7 @@
 	import Textarea from '$lib/components/common/Textarea.svelte';
 	import User from '$lib/components/icons/User.svelte';
 	import UserProfileImage from './Account/UserProfileImage.svelte';
+	import BillingAddress from './Account/BillingAddress.svelte';
 
 	const i18n = getContext('i18n');
 
@@ -245,6 +246,8 @@
 				</div>
 			</div>
 		{/if}
+
+		<BillingAddress />
 
 		<hr class="border-gray-50 dark:border-gray-850/30 my-4" />
 

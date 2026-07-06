@@ -13,6 +13,9 @@
 	import Interface from './Settings/Interface.svelte';
 	import Audio from './Settings/Audio.svelte';
 	import DataControls from './Settings/DataControls.svelte';
+	import Subscription from './Settings/Subscription.svelte';
+	import RedeemCode from './Settings/RedeemCode.svelte';
+	import Usage from './Settings/Usage.svelte';
 	import Personalization from './Settings/Personalization.svelte';
 	import Search from '../icons/Search.svelte';
 	import XMark from '../icons/XMark.svelte';
@@ -427,6 +430,21 @@
 			]
 		},
 		{
+			id: 'subscription',
+			title: 'Subscription',
+			keywords: ['subscription', 'plan', 'plus', 'chatpower', 'chatpoint', 'billing']
+		},
+		{
+			id: 'redeem_code',
+			title: 'Redeem Code',
+			keywords: ['redeem', 'code', 'voucher', 'chatpoint']
+		},
+		{
+			id: 'usage',
+			title: 'Usage',
+			keywords: ['usage', 'quota', 'chatpoint', 'tokens', 'plan', 'check']
+		},
+		{
 			id: 'about',
 			title: 'About',
 			keywords: [
@@ -803,6 +821,78 @@
 								</div>
 								<div class=" self-center">{$i18n.t('Data Controls')}</div>
 							</button>
+						{:else if tabId === 'subscription'}
+							<button
+								role="tab"
+								aria-controls="tab-subscription"
+								aria-selected={selectedTab === 'subscription'}
+								class={`px-0.5 md:px-2.5 py-1 min-w-fit rounded-xl flex-1 md:flex-none flex text-left transition
+								${
+									selectedTab === 'subscription'
+										? ($settings?.highContrastMode ?? false)
+											? 'dark:bg-gray-800 bg-gray-200'
+											: ''
+										: ($settings?.highContrastMode ?? false)
+											? 'hover:bg-gray-200 dark:hover:bg-gray-800'
+											: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'
+								}`}
+								on:click={() => {
+									selectedTab = 'subscription';
+								}}
+							>
+								<div class=" self-center mr-2">
+									<UserBadgeCheck strokeWidth="2" />
+								</div>
+								<div class=" self-center">Subscription</div>
+							</button>
+						{:else if tabId === 'redeem_code'}
+							<button
+								role="tab"
+								aria-controls="tab-redeem-code"
+								aria-selected={selectedTab === 'redeem_code'}
+								class={`px-0.5 md:px-2.5 py-1 min-w-fit rounded-xl flex-1 md:flex-none flex text-left transition
+								${
+									selectedTab === 'redeem_code'
+										? ($settings?.highContrastMode ?? false)
+											? 'dark:bg-gray-800 bg-gray-200'
+											: ''
+										: ($settings?.highContrastMode ?? false)
+											? 'hover:bg-gray-200 dark:hover:bg-gray-800'
+											: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'
+								}`}
+								on:click={() => {
+									selectedTab = 'redeem_code';
+								}}
+							>
+								<div class=" self-center mr-2">
+									<Link strokeWidth="2" />
+								</div>
+								<div class=" self-center">Redeem Code</div>
+							</button>
+						{:else if tabId === 'usage'}
+							<button
+								role="tab"
+								aria-controls="tab-usage"
+								aria-selected={selectedTab === 'usage'}
+								class={`px-0.5 md:px-2.5 py-1 min-w-fit rounded-xl flex-1 md:flex-none flex text-left transition
+								${
+									selectedTab === 'usage'
+										? ($settings?.highContrastMode ?? false)
+											? 'dark:bg-gray-800 bg-gray-200'
+											: ''
+										: ($settings?.highContrastMode ?? false)
+											? 'hover:bg-gray-200 dark:hover:bg-gray-800'
+											: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'
+								}`}
+								on:click={() => {
+									selectedTab = 'usage';
+								}}
+							>
+								<div class=" self-center mr-2">
+									<DatabaseSettings strokeWidth="2" />
+								</div>
+								<div class=" self-center">Usage</div>
+							</button>
 						{:else if tabId === 'account'}
 							<button
 								role="tab"
@@ -926,6 +1016,20 @@
 					/>
 				{:else if selectedTab === 'data_controls'}
 					<DataControls {saveSettings} />
+				{:else if selectedTab === 'subscription'}
+					<Subscription
+						on:redeem={() => {
+							selectedTab = 'redeem_code';
+						}}
+					/>
+				{:else if selectedTab === 'redeem_code'}
+					<RedeemCode
+						on:redeemed={() => {
+							selectedTab = 'subscription';
+						}}
+					/>
+				{:else if selectedTab === 'usage'}
+					<Usage />
 				{:else if selectedTab === 'account'}
 					<Account
 						{saveSettings}

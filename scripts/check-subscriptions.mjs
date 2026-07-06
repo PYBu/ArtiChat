@@ -34,6 +34,24 @@ if (exists('src/lib/apis/subscriptions/index.ts')) {
 	}
 }
 
+const settingsModal = read('src/lib/components/chat/SettingsModal.svelte');
+for (const marker of [
+	"import Subscription from './Settings/Subscription.svelte'",
+	"import RedeemCode from './Settings/RedeemCode.svelte'",
+	"import Usage from './Settings/Usage.svelte'",
+	"id: 'subscription'",
+	"id: 'redeem_code'",
+	"id: 'usage'",
+	'<Subscription',
+	'<RedeemCode',
+	'<Usage'
+]) {
+	if (!settingsModal.includes(marker)) failures.push(`Settings modal missing ${marker}`);
+}
+
+const account = read('src/lib/components/chat/Settings/Account.svelte');
+if (!account.includes('BillingAddress')) failures.push('Account settings must include BillingAddress');
+
 if (failures.length > 0) {
 	for (const failure of failures) console.error(failure);
 	process.exit(1);
