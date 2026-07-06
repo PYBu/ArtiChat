@@ -23,6 +23,12 @@
 	const fromDateTimeLocal = (value: string) => {
 		return value ? Math.floor(new Date(value).getTime() / 1000) : null;
 	};
+	const statusLabel = (status?: string) => {
+		if (status === 'active') return '有效';
+		if (status === 'expired') return '已过期';
+		if (status === 'inactive') return '未启用';
+		return status || '-';
+	};
 
 	const normalize = (subscription: any) => ({
 		...subscription,
@@ -57,7 +63,7 @@
 
 		if (updated) {
 			Object.assign(row, normalize(updated));
-			toast.success('User subscription saved.');
+			toast.success('用户订阅已保存。');
 		}
 	};
 
@@ -71,21 +77,21 @@
 
 <div class="flex flex-col gap-3">
 	<div>
-		<div class="text-base font-medium">User Subscriptions</div>
-		<div class="text-xs text-gray-500">Edit a user tier, expiry, and remaining Plan/Check Chatpoint.</div>
+		<div class="text-base font-medium">用户订阅</div>
+		<div class="text-xs text-gray-500">编辑用户订阅档位、到期时间以及剩余周期/充值 Chatpoint。</div>
 	</div>
 
 	<div class="flex gap-2">
-		<input class="w-full rounded-lg border border-gray-100 bg-transparent px-3 py-2 dark:border-gray-850" placeholder="Search by user id" bind:value={query} />
+		<input class="w-full rounded-lg border border-gray-100 bg-transparent px-3 py-2 dark:border-gray-850" placeholder="按用户 ID 搜索" bind:value={query} />
 		<button type="button" class="rounded-full bg-black px-3 py-1.5 text-white dark:bg-white dark:text-black" on:click={load}>
-			Search
+			搜索
 		</button>
 	</div>
 
 	{#if loading}
-		<div class="text-gray-500">Loading...</div>
+		<div class="text-gray-500">加载中...</div>
 	{:else if rows.length === 0}
-		<div class="rounded-lg border border-gray-100 p-3 text-gray-500 dark:border-gray-850">No user subscriptions.</div>
+		<div class="rounded-lg border border-gray-100 p-3 text-gray-500 dark:border-gray-850">暂无用户订阅。</div>
 	{:else}
 		<div class="flex flex-col gap-2">
 			{#each rows as row (row.user_id)}
@@ -93,40 +99,44 @@
 					<div class="mb-2 flex items-center justify-between gap-2">
 						<div class="min-w-0">
 							<div class="truncate font-medium">{row.user_id}</div>
-							<div class="text-xs text-gray-500">Next reset: {row.next_reset_at ? new Date(row.next_reset_at * 1000).toLocaleString() : '-'}</div>
+							<div class="text-xs text-gray-500">下次重置：{row.next_reset_at ? new Date(row.next_reset_at * 1000).toLocaleString() : '-'}</div>
 						</div>
 						<button type="button" class="rounded-full bg-black px-3 py-1.5 text-white dark:bg-white dark:text-black" on:click={() => save(row)}>
-							Save
+							保存
 						</button>
 					</div>
 
 					<div class="grid gap-2 md:grid-cols-3">
 						<label class="flex flex-col gap-1">
-							<span class="text-xs text-gray-500">Tier</span>
+							<span class="text-xs text-gray-500">订阅档位</span>
 							<select class="rounded-lg border border-gray-100 bg-transparent px-2 py-1 dark:border-gray-850" bind:value={row.tier}>
-								<option value="free">Free</option>
+								<option value="free">免费版</option>
 								<option value="plus">Plus</option>
 								<option value="chatpower">ChatPower</option>
 							</select>
 						</label>
 						<label class="flex flex-col gap-1">
-							<span class="text-xs text-gray-500">Status</span>
-							<input class="rounded-lg border border-gray-100 bg-transparent px-2 py-1 dark:border-gray-850" bind:value={row.status} />
+							<span class="text-xs text-gray-500">状态</span>
+							<select class="rounded-lg border border-gray-100 bg-transparent px-2 py-1 dark:border-gray-850" bind:value={row.status}>
+								<option value="active">{statusLabel('active')}</option>
+								<option value="expired">{statusLabel('expired')}</option>
+								<option value="inactive">{statusLabel('inactive')}</option>
+							</select>
 						</label>
 						<label class="flex flex-col gap-1">
-							<span class="text-xs text-gray-500">Expires At</span>
+							<span class="text-xs text-gray-500">到期时间</span>
 							<input type="datetime-local" class="rounded-lg border border-gray-100 bg-transparent px-2 py-1 dark:border-gray-850" bind:value={row.expires_at_input} />
 						</label>
 						<label class="flex flex-col gap-1">
-							<span class="text-xs text-gray-500">Plan Chatpoint</span>
+							<span class="text-xs text-gray-500">周期 Chatpoint</span>
 							<input class="rounded-lg border border-gray-100 bg-transparent px-2 py-1 dark:border-gray-850" bind:value={row.plan_chatpoint} />
 						</label>
 						<label class="flex flex-col gap-1">
-							<span class="text-xs text-gray-500">Check Chatpoint</span>
+							<span class="text-xs text-gray-500">充值 Chatpoint</span>
 							<input class="rounded-lg border border-gray-100 bg-transparent px-2 py-1 dark:border-gray-850" bind:value={row.check_chatpoint} />
 						</label>
 						<label class="flex flex-col gap-1">
-							<span class="text-xs text-gray-500">Notes</span>
+							<span class="text-xs text-gray-500">备注</span>
 							<input class="rounded-lg border border-gray-100 bg-transparent px-2 py-1 dark:border-gray-850" bind:value={row.notes} />
 						</label>
 					</div>

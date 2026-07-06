@@ -21,7 +21,7 @@
 		try {
 			result = await redeemSubscriptionCode(localStorage.token, code.trim());
 			code = '';
-			toast.success('Code redeemed.');
+			toast.success('兑换成功。');
 			dispatch('redeemed');
 		} catch (err) {
 			error = `${err}`;
@@ -32,11 +32,11 @@
 </script>
 
 <div id="tab-redeem-code" class="flex h-full flex-col gap-4 text-sm">
-	<div class="text-base font-medium">Redeem Code</div>
+	<div class="text-base font-medium">兑换码</div>
 	<div class="flex gap-2">
-		<input class="w-full rounded-lg border border-gray-100 bg-transparent px-3 py-2 outline-hidden dark:border-gray-850" bind:value={code} />
+		<input class="w-full rounded-lg border border-gray-100 bg-transparent px-3 py-2 outline-hidden dark:border-gray-850" placeholder="输入兑换码" bind:value={code} />
 		<button class="rounded-full bg-black px-4 py-2 text-white dark:bg-white dark:text-black" type="button" on:click={redeem}>
-			{loading ? 'Redeeming' : 'Redeem'}
+			{loading ? '兑换中' : '兑换'}
 		</button>
 	</div>
 
@@ -48,9 +48,9 @@
 		<div class="rounded-lg border border-gray-100 p-3 dark:border-gray-850">
 			<div class="font-medium">{result.tier_after ?? result.subscription?.tier}</div>
 			<div class="mt-2 grid grid-cols-2 gap-2 text-xs text-gray-600 dark:text-gray-300">
-				<div>Plan Chatpoint</div>
+				<div>周期 Chatpoint</div>
 				<div class="text-right">{formatChatpoint(result.plan_delta_micros)}</div>
-				<div>Check Chatpoint</div>
+				<div>充值 Chatpoint</div>
 				<div class="text-right">{formatChatpoint(result.check_delta_micros)}</div>
 			</div>
 		</div>

@@ -77,6 +77,19 @@ def assert_model_subscription_access(model: dict, *, tier: str, is_admin: bool) 
     return policy
 
 
+def ensure_metered_stream_usage_options(payload: dict, metadata: dict | None) -> None:
+    policy = (metadata or {}).get('subscription_policy') or {}
+    if not policy or policy.get('quota_mode') != 'metered' or not payload.get('stream'):
+        return
+
+    stream_options = payload.get('stream_options')
+    if not isinstance(stream_options, dict):
+        stream_options = {}
+
+    stream_options['include_usage'] = True
+    payload['stream_options'] = stream_options
+
+
 def filter_models_for_subscription(models: list[dict], *, tier: str, is_admin: bool) -> list[dict]:
     if is_admin:
         return models

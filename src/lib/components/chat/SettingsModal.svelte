@@ -431,17 +431,17 @@
 		},
 		{
 			id: 'subscription',
-			title: 'Subscription',
+			title: '订阅',
 			keywords: ['subscription', 'plan', 'plus', 'chatpower', 'chatpoint', 'billing']
 		},
 		{
 			id: 'redeem_code',
-			title: 'Redeem Code',
+			title: '兑换码',
 			keywords: ['redeem', 'code', 'voucher', 'chatpoint']
 		},
 		{
 			id: 'usage',
-			title: 'Usage',
+			title: '用量',
 			keywords: ['usage', 'quota', 'chatpoint', 'tokens', 'plan', 'check']
 		},
 		{
@@ -843,7 +843,7 @@
 								<div class=" self-center mr-2">
 									<UserBadgeCheck strokeWidth="2" />
 								</div>
-								<div class=" self-center">Subscription</div>
+								<div class=" self-center">订阅</div>
 							</button>
 						{:else if tabId === 'redeem_code'}
 							<button
@@ -867,7 +867,7 @@
 								<div class=" self-center mr-2">
 									<Link strokeWidth="2" />
 								</div>
-								<div class=" self-center">Redeem Code</div>
+								<div class=" self-center">兑换码</div>
 							</button>
 						{:else if tabId === 'usage'}
 							<button
@@ -891,7 +891,7 @@
 								<div class=" self-center mr-2">
 									<DatabaseSettings strokeWidth="2" />
 								</div>
-								<div class=" self-center">Usage</div>
+								<div class=" self-center">用量</div>
 							</button>
 						{:else if tabId === 'account'}
 							<button

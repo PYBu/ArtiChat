@@ -24,6 +24,13 @@
 		return new Date(value * 1000).toLocaleDateString();
 	};
 
+	const tierLabel = (tier?: string, displayName?: string) => {
+		if (tier === 'free') return '免费版';
+		if (tier === 'plus') return 'Plus';
+		if (tier === 'chatpower') return 'ChatPower';
+		return displayName || tier || '免费版';
+	};
+
 	onMount(async () => {
 		subscription = await getMySubscription(localStorage.token).catch(() => null);
 		loading = false;
@@ -43,7 +50,7 @@
 	$: checkPercent = checkTotal > 0 ? clampPercent((positive(checkRemaining) / checkTotal) * 100) : 0;
 	$: exhausted = !loading && totalRemaining <= 0;
 	$: low = !exhausted && remainingPercent <= 20;
-	$: tier = subscription?.display_name ?? subscription?.tier ?? 'Free';
+	$: tier = tierLabel(subscription?.tier, subscription?.display_name);
 </script>
 
 <button
@@ -51,10 +58,10 @@
 	class="group relative flex items-center gap-2 rounded-xl px-1.5 py-1 text-left transition hover:bg-gray-100 dark:hover:bg-gray-800"
 	type="button"
 	on:click|stopPropagation={() => dispatch('openUsage')}
-	aria-label="Usage"
+	aria-label="用量"
 >
 	<span class="relative flex size-8 items-center justify-center">
-		<svg class="size-8 -rotate-90" viewBox="0 0 36 36" aria-label="Usage">
+		<svg class="size-8 -rotate-90" viewBox="0 0 36 36" aria-label="用量">
 			<circle
 				class="text-gray-200 dark:text-gray-800"
 				stroke="currentColor"
@@ -95,7 +102,7 @@
 		class="pointer-events-none absolute bottom-full right-0 z-50 mb-2 hidden w-64 rounded-xl border border-gray-100 bg-white p-3 text-xs shadow-lg group-hover:block group-focus-visible:block dark:border-gray-800 dark:bg-gray-900"
 	>
 		<div class="mb-2 flex items-center justify-between gap-2">
-			<div class="font-medium text-gray-900 dark:text-gray-100">Usage</div>
+			<div class="font-medium text-gray-900 dark:text-gray-100">用量</div>
 			<div
 				class="rounded-full px-2 py-0.5 {exhausted
 					? 'bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-300'
@@ -108,7 +115,7 @@
 		<div class="space-y-2">
 			<div>
 				<div class="mb-1 flex justify-between gap-2">
-					<span>Plan Chatpoint</span>
+					<span>周期 Chatpoint</span>
 					<span>{formatChatpoint(planRemaining)}/{formatChatpoint(planTotal)}</span>
 				</div>
 				<div class="h-1.5 overflow-hidden rounded-full bg-gray-100 dark:bg-gray-800">
@@ -121,7 +128,7 @@
 
 			<div>
 				<div class="mb-1 flex justify-between gap-2">
-					<span>Check Chatpoint</span>
+					<span>充值 Chatpoint</span>
 					<span>{formatChatpoint(checkRemaining)}/{formatChatpoint(checkTotal)}</span>
 				</div>
 				<div class="h-1.5 overflow-hidden rounded-full bg-gray-100 dark:bg-gray-800">
@@ -133,6 +140,6 @@
 			</div>
 		</div>
 
-		<div class="mt-2 text-[11px] text-gray-500">Next reset: {formatDate(subscription?.next_reset_at)}</div>
+		<div class="mt-2 text-[11px] text-gray-500">下次重置：{formatDate(subscription?.next_reset_at)}</div>
 	</div>
 </button>

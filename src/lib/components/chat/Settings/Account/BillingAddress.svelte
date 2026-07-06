@@ -18,7 +18,7 @@
 
 	const save = async () => {
 		await updateBillingAddress(localStorage.token, billingAddress)
-			.then(() => toast.success('Billing address saved.'))
+			.then(() => toast.success('账单地址已保存。'))
 			.catch((error) => toast.error(`${error}`));
 	};
 
@@ -26,16 +26,16 @@
 </script>
 
 <div class="mt-4">
-	<div class="mb-2 text-sm font-medium">Billing Address</div>
+	<div class="mb-2 text-sm font-medium">账单地址</div>
 	<div class="flex flex-col gap-2 text-sm">
-		<input class="bg-transparent outline-hidden" aria-label="Name or company" bind:value={billingAddress.name} />
-		<input class="bg-transparent outline-hidden" aria-label="Country / region" bind:value={billingAddress.country} />
-		<input class="bg-transparent outline-hidden" aria-label="Address" bind:value={billingAddress.address} />
-		<input class="bg-transparent outline-hidden" aria-label="Postal code" bind:value={billingAddress.postal_code} />
-		<input class="bg-transparent outline-hidden" aria-label="Tax ID or notes" bind:value={billingAddress.tax_id_or_notes} />
+		<input class="bg-transparent outline-hidden" aria-label="姓名或公司" placeholder="姓名或公司" bind:value={billingAddress.name} />
+		<input class="bg-transparent outline-hidden" aria-label="国家或地区" placeholder="国家或地区" bind:value={billingAddress.country} />
+		<input class="bg-transparent outline-hidden" aria-label="地址" placeholder="地址" bind:value={billingAddress.address} />
+		<input class="bg-transparent outline-hidden" aria-label="邮政编码" placeholder="邮政编码" bind:value={billingAddress.postal_code} />
+		<input class="bg-transparent outline-hidden" aria-label="税号或备注" placeholder="税号或备注" bind:value={billingAddress.tax_id_or_notes} />
 		<div>
 			<button type="button" class="rounded-full bg-black px-3 py-1.5 text-white dark:bg-white dark:text-black" on:click={save}>
-				Save Billing Address
+				保存账单地址
 			</button>
 		</div>
 	</div>

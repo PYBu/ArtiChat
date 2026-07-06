@@ -56,12 +56,12 @@ const userMenu = read('src/lib/components/layout/Sidebar/UserMenu.svelte');
 if (!userMenu.includes('SubscriptionQuotaRing')) failures.push('UserMenu must include SubscriptionQuotaRing');
 
 const ring = read('src/lib/components/layout/Sidebar/SubscriptionQuotaRing.svelte');
-for (const marker of ['Usage', 'Plan Chatpoint', 'Check Chatpoint', 'exhausted', 'stroke-red']) {
+for (const marker of ['用量', '周期 Chatpoint', '充值 Chatpoint', 'exhausted', 'stroke-red']) {
 	if (!ring.includes(marker)) failures.push(`Quota ring missing ${marker}`);
 }
 
 const adminSettings = read('src/lib/components/admin/Settings.svelte');
-for (const marker of ['Subscriptions', "selectedTab === 'subscriptions'", '<Subscriptions']) {
+for (const marker of ['订阅管理', "selectedTab === 'subscriptions'", '<Subscriptions']) {
 	if (!adminSettings.includes(marker)) failures.push(`Admin settings missing ${marker}`);
 }
 
@@ -69,7 +69,7 @@ const modelEditor = read('src/lib/components/workspace/Models/ModelEditor.svelte
 if (!modelEditor.includes('SubscriptionPolicy')) failures.push('ModelEditor must include SubscriptionPolicy');
 
 const editUser = read('src/lib/components/admin/Users/UserList/EditUserModal.svelte');
-if (!editUser.includes('Manage Subscription')) failures.push('EditUserModal must link to subscription management');
+if (!editUser.includes('管理订阅')) failures.push('EditUserModal must link to subscription management');
 
 if (failures.length > 0) {
 	for (const failure of failures) console.error(failure);

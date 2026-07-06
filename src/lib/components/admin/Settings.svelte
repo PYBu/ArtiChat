@@ -276,7 +276,7 @@
 		},
 		{
 			id: 'subscriptions',
-			title: 'Subscriptions',
+			title: '订阅管理',
 			route: '/admin/settings/subscriptions',
 			keywords: ['subscriptions', 'plans', 'chatpoint', 'redeem', 'codes', 'usage', 'ledger']
 		},

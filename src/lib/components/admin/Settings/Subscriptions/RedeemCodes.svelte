@@ -21,6 +21,18 @@
 
 	const formatChatpoint = (micros?: number | null) => ((micros ?? 0) / 1_000_000).toLocaleString();
 	const formatDate = (value?: number | null) => (value ? new Date(value * 1000).toLocaleString() : '-');
+	const modeLabel = (mode?: string) => {
+		if (mode === 'single_use') return '单次使用';
+		if (mode === 'multi_use') return '多次使用';
+		return mode || '-';
+	};
+	const tierLabel = (tier?: string | null) => {
+		if (!tier) return '不变更订阅';
+		if (tier === 'free') return '免费版';
+		if (tier === 'plus') return 'Plus';
+		if (tier === 'chatpower') return 'ChatPower';
+		return tier;
+	};
 
 	const load = async () => {
 		loading = true;
@@ -51,7 +63,7 @@
 
 		if (created) {
 			generatedCodes = created.raw_codes ?? [];
-			toast.success('Redeem code created.');
+			toast.success('兑换码已创建。');
 			await load();
 		}
 		creating = false;
@@ -62,63 +74,63 @@
 
 <div class="flex flex-col gap-4">
 	<div>
-		<div class="text-base font-medium">Redeem Codes</div>
-		<div class="text-xs text-gray-500">Generate codes for subscription time and Chatpoint grants.</div>
+		<div class="text-base font-medium">兑换码</div>
+		<div class="text-xs text-gray-500">生成用于开通订阅时长和发放 Chatpoint 的兑换码。</div>
 	</div>
 
 	<div class="rounded-lg border border-gray-100 p-3 dark:border-gray-850">
 		<div class="grid gap-2 md:grid-cols-4">
 			<label class="flex flex-col gap-1">
-				<span class="text-xs text-gray-500">Mode</span>
+				<span class="text-xs text-gray-500">模式</span>
 				<select class="rounded-lg border border-gray-100 bg-transparent px-2 py-1 dark:border-gray-850" bind:value={form.mode}>
-					<option value="single_use">Single Use</option>
-					<option value="multi_use">Multi Use</option>
+					<option value="single_use">单次使用</option>
+					<option value="multi_use">多次使用</option>
 				</select>
 			</label>
 			<label class="flex flex-col gap-1">
-				<span class="text-xs text-gray-500">Quantity</span>
+				<span class="text-xs text-gray-500">生成数量</span>
 				<input type="number" min="1" class="rounded-lg border border-gray-100 bg-transparent px-2 py-1 disabled:text-gray-400 dark:border-gray-850" disabled={form.mode === 'multi_use'} bind:value={form.quantity} />
 			</label>
 			<label class="flex flex-col gap-1">
-				<span class="text-xs text-gray-500">Max Uses</span>
+				<span class="text-xs text-gray-500">最大使用次数</span>
 				<input type="number" min="1" class="rounded-lg border border-gray-100 bg-transparent px-2 py-1 dark:border-gray-850" bind:value={form.max_uses} />
 			</label>
 			<label class="flex flex-col gap-1">
-				<span class="text-xs text-gray-500">Tier</span>
+				<span class="text-xs text-gray-500">订阅档位</span>
 				<select class="rounded-lg border border-gray-100 bg-transparent px-2 py-1 dark:border-gray-850" bind:value={form.tier}>
-					<option value="">No Tier Change</option>
-					<option value="free">Free</option>
+					<option value="">不变更订阅</option>
+					<option value="free">免费版</option>
 					<option value="plus">Plus</option>
 					<option value="chatpower">ChatPower</option>
 				</select>
 			</label>
 			<label class="flex flex-col gap-1">
-				<span class="text-xs text-gray-500">Duration Days</span>
+				<span class="text-xs text-gray-500">订阅天数</span>
 				<input type="number" min="0" class="rounded-lg border border-gray-100 bg-transparent px-2 py-1 dark:border-gray-850" bind:value={form.duration_days} />
 			</label>
 			<label class="flex flex-col gap-1">
-				<span class="text-xs text-gray-500">Plan Chatpoint</span>
+				<span class="text-xs text-gray-500">周期 Chatpoint</span>
 				<input class="rounded-lg border border-gray-100 bg-transparent px-2 py-1 dark:border-gray-850" bind:value={form.plan_chatpoint} />
 			</label>
 			<label class="flex flex-col gap-1">
-				<span class="text-xs text-gray-500">Check Chatpoint</span>
+				<span class="text-xs text-gray-500">充值 Chatpoint</span>
 				<input class="rounded-lg border border-gray-100 bg-transparent px-2 py-1 dark:border-gray-850" bind:value={form.check_chatpoint} />
 			</label>
 			<label class="flex flex-col gap-1">
-				<span class="text-xs text-gray-500">Memo</span>
+				<span class="text-xs text-gray-500">备注</span>
 				<input class="rounded-lg border border-gray-100 bg-transparent px-2 py-1 dark:border-gray-850" bind:value={form.memo} />
 			</label>
 		</div>
 		<div class="mt-3 flex justify-end">
 			<button type="button" class="rounded-full bg-black px-3 py-1.5 text-white dark:bg-white dark:text-black" disabled={creating} on:click={createCodes}>
-				{creating ? 'Creating' : 'Create Codes'}
+				{creating ? '创建中' : '创建兑换码'}
 			</button>
 		</div>
 	</div>
 
 	{#if generatedCodes.length > 0}
 		<div class="rounded-lg border border-green-200 p-3 text-xs dark:border-green-900">
-			<div class="mb-2 font-medium">Generated Codes</div>
+			<div class="mb-2 font-medium">本次生成的兑换码</div>
 			<div class="grid gap-1 font-mono">
 				{#each generatedCodes as code}
 					<div>{code}</div>
@@ -128,9 +140,9 @@
 	{/if}
 
 	{#if loading}
-		<div class="text-gray-500">Loading...</div>
+		<div class="text-gray-500">加载中...</div>
 	{:else if codes.length === 0}
-		<div class="rounded-lg border border-gray-100 p-3 text-gray-500 dark:border-gray-850">No redeem codes.</div>
+		<div class="rounded-lg border border-gray-100 p-3 text-gray-500 dark:border-gray-850">暂无兑换码。</div>
 	{:else}
 		<div class="flex flex-col divide-y divide-gray-100 rounded-lg border border-gray-100 dark:divide-gray-850 dark:border-gray-850">
 			{#each codes as code}
@@ -139,11 +151,11 @@
 						<div class="font-mono font-medium">{code.code_preview}</div>
 						<div class="text-gray-500">{code.memo ?? '-'}</div>
 					</div>
-					<div>{code.mode}</div>
+					<div>{modeLabel(code.mode)}</div>
 					<div>{code.used_count}/{code.max_uses}</div>
-					<div>{code.tier ?? 'No tier'} · {code.duration_days ?? 0}d</div>
+					<div>{tierLabel(code.tier)}，{code.duration_days ?? 0} 天</div>
 					<div>{formatChatpoint(code.plan_chatpoint_micros + code.check_chatpoint_micros)} CP</div>
-					<div class="md:col-span-5 text-gray-500">Expires: {formatDate(code.expires_at)}</div>
+					<div class="md:col-span-5 text-gray-500">过期时间：{formatDate(code.expires_at)}</div>
 				</div>
 			{/each}
 		</div>

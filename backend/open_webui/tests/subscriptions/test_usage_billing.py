@@ -106,3 +106,44 @@ async def test_admin_usage_records_bypass_without_debit(db_session):
 
     assert usage.status == 'admin_bypass'
     assert usage.cost_micros == 0
+
+
+@pytest.mark.asyncio
+async def test_usage_metadata_filters_runtime_values_before_insert(db_session):
+    await SubscriptionPlans.seed_defaults(db=db_session)
+
+    def runtime_callback():
+        return None
+
+    class RuntimeObject:
+        pass
+
+    usage = await bill_model_usage(
+        user_id='user-json',
+        model_id='metered-model',
+        quota_mode='metered',
+        usage_multiplier='1',
+        usage={'total_tokens': 10_000},
+        metadata={
+            'chat_id': 'chat-json',
+            'message_id': 'msg-json',
+            'callable': runtime_callback,
+            'nested': {
+                'safe': 'value',
+                'callable': runtime_callback,
+                'object': RuntimeObject(),
+            },
+            'items': [1, runtime_callback, {'safe': True, 'object': RuntimeObject()}],
+        },
+        is_admin=False,
+        now=1_720_000_000,
+        db=db_session,
+    )
+
+    assert usage.status == 'billed'
+    assert usage.metadata == {
+        'chat_id': 'chat-json',
+        'message_id': 'msg-json',
+        'nested': {'safe': 'value'},
+        'items': [1, {'safe': True}],
+    }

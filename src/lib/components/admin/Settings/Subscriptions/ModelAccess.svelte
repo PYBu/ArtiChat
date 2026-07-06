@@ -6,7 +6,11 @@
 		updateAdminModelSubscriptionPolicy
 	} from '$lib/apis/subscriptions';
 
-	const tiers = ['free', 'plus', 'chatpower'];
+	const tiers = [
+		{ id: 'free', label: '免费版' },
+		{ id: 'plus', label: 'Plus' },
+		{ id: 'chatpower', label: 'ChatPower' }
+	];
 
 	let rows: any[] = [];
 	let loading = true;
@@ -40,7 +44,7 @@
 		} else {
 			allowed.add(tier);
 		}
-		row.subscription.allowed_tiers = tiers.filter((item) => allowed.has(item));
+		row.subscription.allowed_tiers = tiers.map((item) => item.id).filter((item) => allowed.has(item));
 	};
 
 	const save = async (row: any) => {
@@ -50,7 +54,7 @@
 				return null;
 			}
 		);
-		if (updated) toast.success('Model policy saved.');
+		if (updated) toast.success('模型订阅策略已保存。');
 	};
 
 	onMount(load);
@@ -58,14 +62,14 @@
 
 <div class="flex flex-col gap-3">
 	<div>
-		<div class="text-base font-medium">Model Access</div>
-		<div class="text-xs text-gray-500">Control model visibility, quota mode, and Chatpoint multiplier.</div>
+		<div class="text-base font-medium">模型权限</div>
+		<div class="text-xs text-gray-500">控制模型可见范围、扣费模式和 Chatpoint 扣费倍率。</div>
 	</div>
 
 	{#if loading}
-		<div class="text-gray-500">Loading...</div>
+		<div class="text-gray-500">加载中...</div>
 	{:else if rows.length === 0}
-		<div class="rounded-lg border border-gray-100 p-3 text-gray-500 dark:border-gray-850">No models.</div>
+		<div class="rounded-lg border border-gray-100 p-3 text-gray-500 dark:border-gray-850">暂无模型。</div>
 	{:else}
 		<div class="flex flex-col divide-y divide-gray-100 rounded-lg border border-gray-100 dark:divide-gray-850 dark:border-gray-850">
 			{#each rows as row (row.id)}
@@ -80,17 +84,17 @@
 							<label class="flex items-center gap-1 rounded-full bg-gray-50 px-2 py-1 text-xs dark:bg-gray-900">
 								<input
 									type="checkbox"
-									checked={(row.subscription.allowed_tiers ?? []).includes(tier)}
-									on:change={() => toggleTier(row, tier)}
+									checked={(row.subscription.allowed_tiers ?? []).includes(tier.id)}
+									on:change={() => toggleTier(row, tier.id)}
 								/>
-								<span class="capitalize">{tier}</span>
+								<span>{tier.label}</span>
 							</label>
 						{/each}
 					</div>
 
 					<select class="rounded-lg border border-gray-100 bg-transparent px-2 py-1 dark:border-gray-850" bind:value={row.subscription.quota_mode}>
-						<option value="metered">Metered</option>
-						<option value="unlimited">Unlimited</option>
+						<option value="metered">按量扣费</option>
+						<option value="unlimited">无限使用</option>
 					</select>
 
 					<input
@@ -100,7 +104,7 @@
 					/>
 
 					<button type="button" class="rounded-full bg-black px-3 py-1.5 text-white dark:bg-white dark:text-black" on:click={() => save(row)}>
-						Save
+						保存
 					</button>
 				</div>
 			{/each}

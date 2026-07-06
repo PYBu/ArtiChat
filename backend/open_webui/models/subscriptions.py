@@ -6,7 +6,7 @@ import secrets
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from decimal import Decimal, ROUND_CEILING
-from typing import AsyncIterator
+from typing import Any, AsyncIterator
 
 from open_webui.internal.db import Base, get_async_db_context
 from pydantic import BaseModel, ConfigDict, Field
@@ -22,6 +22,7 @@ CHATPOWER_TIER = 'chatpower'
 TIER_RANKS = {FREE_TIER: 0, PLUS_TIER: 1, CHATPOWER_TIER: 2}
 DEFAULT_PLAN_CHATPOINTS = {FREE_TIER: Decimal('10'), PLUS_TIER: Decimal('100'), CHATPOWER_TIER: Decimal('500')}
 DEFAULT_PERIOD_DAYS = 30
+_SKIP_JSON_VALUE = object()
 
 
 @dataclass(frozen=True)
@@ -75,6 +76,54 @@ def debit_balances(plan_balance_micros: int, check_balance_micros: int, cost_mic
         plan_balance_after_micros=plan_balance_micros - plan_cost,
         check_balance_after_micros=check_balance_micros - check_cost,
     )
+
+
+def _json_safe_value(value: Any, *, depth: int = 0, seen: set[int] | None = None) -> Any:
+    if value is None or isinstance(value, (str, int, bool)):
+        return value
+    if isinstance(value, float):
+        return value
+    if isinstance(value, Decimal):
+        return str(value)
+    if callable(value) or depth > 8:
+        return _SKIP_JSON_VALUE
+
+    seen = seen or set()
+
+    if isinstance(value, dict):
+        value_id = id(value)
+        if value_id in seen:
+            return _SKIP_JSON_VALUE
+        seen.add(value_id)
+        result = {}
+        for key, item in value.items():
+            safe_item = _json_safe_value(item, depth=depth + 1, seen=seen)
+            if safe_item is not _SKIP_JSON_VALUE:
+                result[str(key)] = safe_item
+        seen.remove(value_id)
+        return result
+
+    if isinstance(value, (list, tuple, set)):
+        value_id = id(value)
+        if value_id in seen:
+            return _SKIP_JSON_VALUE
+        seen.add(value_id)
+        result = []
+        for item in value:
+            safe_item = _json_safe_value(item, depth=depth + 1, seen=seen)
+            if safe_item is not _SKIP_JSON_VALUE:
+                result.append(safe_item)
+        seen.remove(value_id)
+        return result
+
+    return _SKIP_JSON_VALUE
+
+
+def json_safe_metadata(metadata: dict | None) -> dict | None:
+    if metadata is None:
+        return None
+    safe = _json_safe_value(metadata)
+    return safe if isinstance(safe, dict) else None
 
 
 @asynccontextmanager
@@ -229,23 +278,39 @@ class SubscriptionPlanModel(BaseModel):
 class SubscriptionPlansTable:
     async def seed_defaults(self, db: AsyncSession | None = None) -> None:
         async with get_subscription_db_context(db) as session:
-            existing = await session.execute(select(SubscriptionPlan.id))
-            existing_ids = set(existing.scalars().all())
+            existing = await session.execute(select(SubscriptionPlan))
+            existing_plans = {plan.id: plan for plan in existing.scalars().all()}
             timestamp = now_ts()
 
             defaults = [
-                (FREE_TIER, 'Free', 0, DEFAULT_PLAN_CHATPOINTS[FREE_TIER], 'Starter access for basic models.'),
-                (PLUS_TIER, 'Plus', 1, DEFAULT_PLAN_CHATPOINTS[PLUS_TIER], 'Expanded access and higher usage.'),
+                (FREE_TIER, '免费版', 0, DEFAULT_PLAN_CHATPOINTS[FREE_TIER], '基础模型访问额度。'),
+                (PLUS_TIER, 'Plus', 1, DEFAULT_PLAN_CHATPOINTS[PLUS_TIER], '更多模型访问权限和更高用量。'),
                 (
                     CHATPOWER_TIER,
                     'ChatPower',
                     2,
                     DEFAULT_PLAN_CHATPOINTS[CHATPOWER_TIER],
-                    'Highest ArtiChat usage tier.',
+                    '最高用量和完整模型访问档位。',
                 ),
             ]
+            legacy_defaults = {
+                FREE_TIER: ('Free', 'Starter access for basic models.'),
+                PLUS_TIER: ('Plus', 'Expanded access and higher usage.'),
+                CHATPOWER_TIER: ('ChatPower', 'Highest ArtiChat usage tier.'),
+            }
             for plan_id, display_name, rank, allowance, description in defaults:
-                if plan_id in existing_ids:
+                if plan_id in existing_plans:
+                    plan = existing_plans[plan_id]
+                    legacy_name, legacy_description = legacy_defaults[plan_id]
+                    changed = False
+                    if plan.display_name == legacy_name:
+                        plan.display_name = display_name
+                        changed = True
+                    if plan.description == legacy_description:
+                        plan.description = description
+                        changed = True
+                    if changed:
+                        plan.updated_at = timestamp
                     continue
                 session.add(
                     SubscriptionPlan(
@@ -389,7 +454,7 @@ class SubscriptionLedgersTable:
                 check_balance_after_micros=check_balance_after_micros,
                 reference_type=reference_type,
                 reference_id=reference_id,
-                meta=metadata,
+                meta=json_safe_metadata(metadata),
                 created_by=created_by,
                 created_at=created_at or now_ts(),
             )
@@ -850,7 +915,7 @@ class SubscriptionUsagesTable:
                 plan_balance_after_micros=plan_balance_after_micros,
                 check_balance_after_micros=check_balance_after_micros,
                 status=status,
-                meta=metadata,
+                meta=json_safe_metadata(metadata),
                 created_at=created_at,
             )
             session.add(row)

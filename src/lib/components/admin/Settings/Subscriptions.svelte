@@ -10,11 +10,11 @@
 	let appliedUserQuery = '';
 
 	const tabs = [
-		{ id: 'plans', label: 'Plans' },
-		{ id: 'model-access', label: 'Model Access' },
-		{ id: 'redeem-codes', label: 'Redeem Codes' },
-		{ id: 'user-subscriptions', label: 'User Subscriptions' },
-		{ id: 'usage-ledger', label: 'Usage Ledger' }
+		{ id: 'plans', label: '订阅计划' },
+		{ id: 'model-access', label: '模型权限' },
+		{ id: 'redeem-codes', label: '兑换码' },
+		{ id: 'user-subscriptions', label: '用户订阅' },
+		{ id: 'usage-ledger', label: '用量账本' }
 	];
 
 	$: requestedUser = $page.url.searchParams.get('user') ?? '';

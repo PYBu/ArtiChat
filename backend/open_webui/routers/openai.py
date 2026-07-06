@@ -56,6 +56,7 @@ from open_webui.utils.session_pool import (
     get_session,
     stream_wrapper,
 )
+from open_webui.utils.subscriptions import ensure_metered_stream_usage_options
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -1202,6 +1203,8 @@ async def generate_chat_completion(
     headers, cookies = await get_headers_and_cookies(request, url, key, api_config, metadata, user=user)
 
     is_responses = api_config.get('api_type') == 'responses'
+    if not is_responses:
+        ensure_metered_stream_usage_options(payload, metadata)
 
     if api_config.get('azure') or api_config.get('provider') == 'azure':
         # Only set api-key header if not using Azure Entra ID authentication

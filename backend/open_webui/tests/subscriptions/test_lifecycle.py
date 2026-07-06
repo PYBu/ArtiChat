@@ -4,6 +4,7 @@ from open_webui.models.subscriptions import (
     CHATPOWER_TIER,
     FREE_TIER,
     PLUS_TIER,
+    SubscriptionPlan,
     SubscriptionLedgers,
     SubscriptionPlans,
     UserSubscriptions,
@@ -34,6 +35,27 @@ async def test_seed_default_plans_is_idempotent(db_session):
     plans = await SubscriptionPlans.get_plans(db=db_session)
 
     assert len(plans) == 3
+
+
+@pytest.mark.asyncio
+async def test_seed_default_plans_localizes_legacy_defaults_without_overwriting_custom_names(db_session):
+    await SubscriptionPlans.seed_defaults(db=db_session)
+
+    free_plan = await db_session.get(SubscriptionPlan, FREE_TIER)
+    plus_plan = await db_session.get(SubscriptionPlan, PLUS_TIER)
+    free_plan.display_name = 'Free'
+    free_plan.description = 'Starter access for basic models.'
+    plus_plan.display_name = '自定义 Plus'
+    plus_plan.description = '自定义说明'
+    await db_session.commit()
+
+    await SubscriptionPlans.seed_defaults(db=db_session)
+    plans = {plan.id: plan for plan in await SubscriptionPlans.get_plans(db=db_session)}
+
+    assert plans[FREE_TIER].display_name == '免费版'
+    assert plans[FREE_TIER].description == '基础模型访问额度。'
+    assert plans[PLUS_TIER].display_name == '自定义 Plus'
+    assert plans[PLUS_TIER].description == '自定义说明'
 
 
 @pytest.mark.asyncio
