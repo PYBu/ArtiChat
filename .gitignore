@@ -314,3 +314,6 @@ cypress/screenshots
 
 # Local isolated worktrees
 .worktrees/
+
+# Local deployment backups
+deploy-backups/
