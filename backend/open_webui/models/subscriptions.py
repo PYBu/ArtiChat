@@ -274,6 +274,36 @@ class SubscriptionPlansTable:
             plan = await session.get(SubscriptionPlan, plan_id)
             return SubscriptionPlanModel.model_validate(plan) if plan else None
 
+    async def update_plan(
+        self,
+        plan_id: str,
+        *,
+        display_name: str | None = None,
+        plan_chatpoint_allowance_micros: int | None = None,
+        period_days: int | None = None,
+        features: dict | list | None = None,
+        is_active: bool | None = None,
+        db: AsyncSession | None = None,
+    ) -> SubscriptionPlanModel:
+        async with get_subscription_db_context(db) as session:
+            plan = await session.get(SubscriptionPlan, plan_id)
+            if plan is None:
+                raise ValueError('SUBSCRIPTION_PLAN_NOT_FOUND')
+            if display_name is not None:
+                plan.display_name = display_name
+            if plan_chatpoint_allowance_micros is not None:
+                plan.plan_chatpoint_allowance_micros = plan_chatpoint_allowance_micros
+            if period_days is not None:
+                plan.period_days = period_days
+            if features is not None:
+                plan.features = features
+            if is_active is not None:
+                plan.is_active = is_active
+            plan.updated_at = now_ts()
+            await session.commit()
+            await session.refresh(plan)
+            return SubscriptionPlanModel.model_validate(plan)
+
 
 SubscriptionPlans = SubscriptionPlansTable()
 
@@ -378,6 +408,24 @@ class SubscriptionLedgersTable:
                 .order_by(SubscriptionLedger.created_at.desc())
                 .limit(limit)
             )
+            return [SubscriptionLedgerModel.model_validate(row) for row in result.scalars().all()]
+
+    async def search(
+        self,
+        *,
+        user_id: str | None = None,
+        event_type: str | None = None,
+        limit: int = 100,
+        offset: int = 0,
+        db: AsyncSession | None = None,
+    ) -> list[SubscriptionLedgerModel]:
+        async with get_subscription_db_context(db) as session:
+            stmt = select(SubscriptionLedger).order_by(SubscriptionLedger.created_at.desc()).limit(limit).offset(offset)
+            if user_id:
+                stmt = stmt.filter(SubscriptionLedger.user_id == user_id)
+            if event_type:
+                stmt = stmt.filter(SubscriptionLedger.event_type == event_type)
+            result = await session.execute(stmt)
             return [SubscriptionLedgerModel.model_validate(row) for row in result.scalars().all()]
 
 
@@ -485,6 +533,21 @@ class UserSubscriptionsTable:
                 db=session,
             )
             return model
+
+    async def list_subscriptions(
+        self,
+        *,
+        query: str | None = None,
+        limit: int = 100,
+        offset: int = 0,
+        db: AsyncSession | None = None,
+    ) -> list[UserSubscriptionModel]:
+        async with get_subscription_db_context(db) as session:
+            stmt = select(UserSubscription).order_by(UserSubscription.updated_at.desc()).limit(limit).offset(offset)
+            if query:
+                stmt = stmt.filter(UserSubscription.user_id.contains(query))
+            result = await session.execute(stmt)
+            return [UserSubscriptionModel.model_validate(row) for row in result.scalars().all()]
 
 
 UserSubscriptions = UserSubscriptionsTable()
@@ -625,6 +688,36 @@ class RedemptionCodesTable:
             await session.refresh(row)
             return RedemptionCodeModel.model_validate(row)
 
+    async def list_codes(
+        self, *, limit: int = 100, offset: int = 0, db: AsyncSession | None = None
+    ) -> list[RedemptionCodeModel]:
+        async with get_subscription_db_context(db) as session:
+            result = await session.execute(
+                select(RedemptionCode).order_by(RedemptionCode.created_at.desc()).limit(limit).offset(offset)
+            )
+            return [RedemptionCodeModel.model_validate(row) for row in result.scalars().all()]
+
+    async def update_code(
+        self,
+        code_id: str,
+        *,
+        is_active: bool | None = None,
+        memo: str | None = None,
+        db: AsyncSession | None = None,
+    ) -> RedemptionCodeModel:
+        async with get_subscription_db_context(db) as session:
+            code = await session.get(RedemptionCode, code_id)
+            if code is None:
+                raise ValueError('REDEMPTION_CODE_NOT_FOUND')
+            if is_active is not None:
+                code.is_active = is_active
+            if memo is not None:
+                code.memo = memo
+            code.updated_at = now_ts()
+            await session.commit()
+            await session.refresh(code)
+            return RedemptionCodeModel.model_validate(code)
+
 
 RedemptionCodes = RedemptionCodesTable()
 
@@ -674,6 +767,17 @@ class RedemptionRecordsTable:
             await session.commit()
             await session.refresh(row)
             return RedemptionRecordModel.model_validate(row)
+
+    async def list_for_code(
+        self, code_id: str, *, db: AsyncSession | None = None
+    ) -> list[RedemptionRecordModel]:
+        async with get_subscription_db_context(db) as session:
+            result = await session.execute(
+                select(RedemptionRecord)
+                .filter(RedemptionRecord.redemption_code_id == code_id)
+                .order_by(RedemptionRecord.created_at.desc())
+            )
+            return [RedemptionRecordModel.model_validate(row) for row in result.scalars().all()]
 
 
 RedemptionRecords = RedemptionRecordsTable()
@@ -753,6 +857,38 @@ class SubscriptionUsagesTable:
             await session.commit()
             await session.refresh(row)
             return SubscriptionUsageModel.model_validate(row)
+
+    async def get_usage_summary(
+        self,
+        *,
+        user_id: str | None = None,
+        model_id: str | None = None,
+        start_at: int | None = None,
+        end_at: int | None = None,
+        limit: int = 100,
+        offset: int = 0,
+        db: AsyncSession | None = None,
+    ) -> dict:
+        async with get_subscription_db_context(db) as session:
+            stmt = select(SubscriptionUsage)
+            if user_id:
+                stmt = stmt.filter(SubscriptionUsage.user_id == user_id)
+            if model_id:
+                stmt = stmt.filter(SubscriptionUsage.model_id == model_id)
+            if start_at is not None:
+                stmt = stmt.filter(SubscriptionUsage.created_at >= start_at)
+            if end_at is not None:
+                stmt = stmt.filter(SubscriptionUsage.created_at <= end_at)
+            result = await session.execute(
+                stmt.order_by(SubscriptionUsage.created_at.desc()).limit(limit).offset(offset)
+            )
+            items = [SubscriptionUsageModel.model_validate(row) for row in result.scalars().all()]
+            return {
+                'items': items,
+                'total_cost_micros': sum(item.cost_micros for item in items),
+                'total_input_tokens': sum(item.input_tokens for item in items),
+                'total_output_tokens': sum(item.output_tokens for item in items),
+            }
 
 
 SubscriptionUsages = SubscriptionUsagesTable()
