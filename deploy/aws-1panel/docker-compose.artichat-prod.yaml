@@ -5,14 +5,10 @@ services:
     ports:
       - "${ARTICHAT_PORT:-13000}:8080"
     volumes:
-      - artichat-prod-data:/app/backend/data
+      - /data/artichat-prod/data:/app/backend/data
     environment:
       - "OLLAMA_BASE_URL=http://host.docker.internal:11434"
-      - "WEBUI_SECRET_KEY="
+      - "WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY}"
     extra_hosts:
       - host.docker.internal:host-gateway
     restart: unless-stopped
-
-volumes:
-  artichat-prod-data:
-    name: artichat_prod_data

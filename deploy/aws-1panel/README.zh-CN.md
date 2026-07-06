@@ -7,7 +7,7 @@
 ## 不影响现有服务的约定
 
 - 使用独立容器名：`artichat-prod`。
-- 使用独立数据卷：`artichat_prod_data`。
+- 使用独立数据目录：`/data/artichat-prod/data`。
 - 默认宿主机端口：`13000`，避免占用 `80`、`443`、`3000`。
 - 不修改 1Panel 已有应用、数据库、反向代理站点或现有 Docker 数据卷。
 - 初次部署先用 `http://服务器IP:13000` 验证，确认无误后再在 1Panel 中配置域名反向代理。
@@ -44,7 +44,7 @@ docker compose -p artichat-prod build artichat
 3. 确认镜像存在：
 
 ```bash
-docker images | grep artichat
+sudo docker images | grep artichat
 ```
 
 ### 方式 B：本地导出镜像再上传
@@ -60,33 +60,42 @@ docker save artichat:main -o deploy-backups\artichat-main-image.tar
 上传到服务器后导入：
 
 ```bash
-docker load -i artichat-main-image.tar
+sudo docker load -i artichat-main-image.tar
 ```
 
 这种方式文件会比较大，但服务器不需要重新构建镜像。
 
-## 恢复数据卷
+## 恢复数据目录
 
 上传本地备份文件到服务器，例如：
 
 ```text
-/opt/artichat/artichat_data_20260706-185102.tar.gz
+/data/artichat-prod/artichat_data_20260706-185102.tar.gz
 ```
 
-创建独立数据卷：
+创建独立数据目录：
 
 ```bash
-docker volume create artichat_prod_data
+sudo mkdir -p /data/artichat-prod/data
+sudo chown -R "$(id -u):$(id -g)" /data/artichat-prod
 ```
+
+创建 `.env` 并写入本地迁移过来的 `WEBUI_SECRET_KEY`：
+
+```bash
+cd /data/artichat-prod
+printf "WEBUI_SECRET_KEY=%s\nARTICHAT_PORT=13000\n" "$(cat webui_secret_key.local)" > .env
+chmod 600 .env
+rm -f webui_secret_key.local
+```
+
+`WEBUI_SECRET_KEY` 必须使用本地 ArtiChat 的原值，避免加密配置、OAuth 会话或登录令牌相关数据不一致。
 
 恢复备份：
 
 ```bash
-docker run --rm \
-  -v artichat_prod_data:/to \
-  -v /opt/artichat:/backup \
-  alpine:3.20 \
-  sh -c "cd /to && tar -xzf /backup/artichat_data_20260706-185102.tar.gz"
+cd /data/artichat-prod/data
+tar -xzf /data/artichat-prod/artichat_data_20260706-185102.tar.gz
 ```
 
 ## 启动服务
@@ -94,20 +103,20 @@ docker run --rm \
 把 `docker-compose.artichat-prod.yaml` 上传到服务器，例如：
 
 ```text
-/opt/artichat/docker-compose.yaml
+/data/artichat-prod/docker-compose.yaml
 ```
 
 启动：
 
 ```bash
-cd /opt/artichat
-ARTICHAT_PORT=13000 docker compose -p artichat-prod up -d
+cd /data/artichat-prod
+sudo docker compose -p artichat-prod up -d
 ```
 
 检查容器：
 
 ```bash
-docker ps --filter name=artichat-prod
+sudo docker ps --filter name=artichat-prod
 ```
 
 检查健康状态：
@@ -139,13 +148,13 @@ http://127.0.0.1:13000
 如果新部署异常，直接停止并删除新容器，不会影响其他服务：
 
 ```bash
-docker rm -f artichat-prod
+sudo docker rm -f artichat-prod
 ```
 
-如果确认不再需要新部署的数据卷，再删除：
+如果确认不再需要新部署的数据目录，再删除：
 
 ```bash
-docker volume rm artichat_prod_data
+sudo rm -rf /data/artichat-prod
 ```
 
 不要删除其他 1Panel 创建的数据卷。
