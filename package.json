@@ -20,6 +20,7 @@
 		"cy:open": "cypress open",
 		"test:frontend": "vitest --passWithNoTests",
 		"test:branding": "node scripts/check-branding.mjs",
+		"test:subscriptions": "node scripts/check-subscriptions.mjs",
 		"pyodide:fetch": "node scripts/prepare-pyodide.js"
 	},
 	"devDependencies": {
