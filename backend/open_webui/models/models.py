@@ -37,6 +37,7 @@ class ModelMeta(BaseModel):
     profile_image_url: str | None = None
     description: str | None = Field(default=None, description='User-facing description of the model.')
     capabilities: dict | None = None
+    subscription: dict | None = None
 
     model_config = ConfigDict(extra='allow')
 

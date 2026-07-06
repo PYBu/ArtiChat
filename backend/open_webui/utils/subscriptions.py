@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+from decimal import Decimal, InvalidOperation
+
 from open_webui.models.subscriptions import (
+    CHATPOWER_TIER,
     FREE_TIER,
+    PLUS_TIER,
     RedemptionCodes,
     RedemptionRecords,
     SubscriptionLedgers,
@@ -10,7 +14,7 @@ from open_webui.models.subscriptions import (
     UserSubscriptions,
     now_ts,
 )
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 SECONDS_PER_DAY = 24 * 60 * 60
@@ -18,6 +22,69 @@ SECONDS_PER_DAY = 24 * 60 * 60
 
 def period_seconds(period_days: int) -> int:
     return period_days * SECONDS_PER_DAY
+
+
+class ModelSubscriptionPolicy(BaseModel):
+    model_config = ConfigDict(extra='ignore')
+
+    allowed_tiers: list[str] = Field(default_factory=lambda: [FREE_TIER, PLUS_TIER, CHATPOWER_TIER])
+    quota_mode: str = 'metered'
+    usage_multiplier: str = '1'
+
+    @field_validator('allowed_tiers')
+    @classmethod
+    def validate_allowed_tiers(cls, value: list[str]) -> list[str]:
+        allowed = {FREE_TIER, PLUS_TIER, CHATPOWER_TIER}
+        normalized = [tier for tier in value if tier in allowed]
+        if not normalized:
+            raise ValueError('MODEL_SUBSCRIPTION_POLICY_INVALID: allowed_tiers must include at least one tier')
+        return normalized
+
+    @field_validator('quota_mode')
+    @classmethod
+    def validate_quota_mode(cls, value: str) -> str:
+        if value not in {'unlimited', 'metered'}:
+            raise ValueError('MODEL_SUBSCRIPTION_POLICY_INVALID: quota_mode must be unlimited or metered')
+        return value
+
+    @field_validator('usage_multiplier')
+    @classmethod
+    def validate_usage_multiplier(cls, value: str) -> str:
+        try:
+            multiplier = Decimal(str(value))
+        except InvalidOperation as exc:
+            raise ValueError('MODEL_SUBSCRIPTION_POLICY_INVALID: usage_multiplier must be numeric') from exc
+        if multiplier < 0:
+            raise ValueError('MODEL_SUBSCRIPTION_POLICY_INVALID: usage_multiplier must be >= 0')
+        return str(value)
+
+
+def get_model_subscription_policy(model: dict) -> ModelSubscriptionPolicy:
+    meta = (model.get('info') or {}).get('meta') or model.get('meta') or {}
+    raw_policy = meta.get('subscription') or {}
+    return ModelSubscriptionPolicy.model_validate(raw_policy)
+
+
+def assert_model_subscription_access(model: dict, *, tier: str, is_admin: bool) -> ModelSubscriptionPolicy:
+    policy = get_model_subscription_policy(model)
+    if is_admin:
+        return policy
+    if tier not in policy.allowed_tiers:
+        raise PermissionError('SUBSCRIPTION_TIER_REQUIRED')
+    return policy
+
+
+def filter_models_for_subscription(models: list[dict], *, tier: str, is_admin: bool) -> list[dict]:
+    if is_admin:
+        return models
+    filtered = []
+    for item in models:
+        try:
+            assert_model_subscription_access(item, tier=tier, is_admin=False)
+            filtered.append(item)
+        except PermissionError:
+            continue
+    return filtered
 
 
 async def ensure_subscription_current(
