@@ -92,7 +92,7 @@ export const sidebarWidth = writable(260);
 
 export const showSidebar = writable(false);
 export const showSearch = writable(false);
-export const showSettings = writable(false);
+export const showSettings: Writable<boolean | string> = writable(false);
 export const showShortcuts = writable(false);
 export const showArchivedChats = writable(false);
 export const showChangelog = writable(false);

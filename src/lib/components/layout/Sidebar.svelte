@@ -62,6 +62,7 @@
 
 	import ArchivedChatsModal from './ArchivedChatsModal.svelte';
 	import UserMenu from './Sidebar/UserMenu.svelte';
+	import SubscriptionQuotaRing from './Sidebar/SubscriptionQuotaRing.svelte';
 	import ChatItem from './Sidebar/ChatItem.svelte';
 	import Spinner from '../common/Spinner.svelte';
 	import Loader from '../common/Loader.svelte';
@@ -1619,8 +1620,7 @@
 								}
 							}}
 						>
-							<button
-								type="button"
+							<div
 								class=" flex items-center rounded-2xl py-2 px-1.5 w-full hover:bg-gray-100/50 dark:hover:bg-gray-900/50 transition"
 								aria-label={$i18n.t('User menu')}
 							>
@@ -1644,8 +1644,28 @@
 										</div>
 									{/if}
 								</div>
-								<div class=" self-center font-medium truncate">{$user?.name}</div>
-							</button>
+								<div class=" self-center font-medium truncate flex-1 text-left">{$user?.name}</div>
+
+								{#if $user?.role === 'admin'}
+									<div
+										class="ml-2 shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600 dark:bg-gray-850 dark:text-gray-200"
+									>
+										Admin
+									</div>
+								{:else}
+									<div class="ml-2 shrink-0">
+										<SubscriptionQuotaRing
+											on:openUsage={async () => {
+												await showSettings.set('usage');
+												if ($mobile) {
+													await tick();
+													showSidebar.set(false);
+												}
+											}}
+										/>
+									</div>
+								{/if}
+							</div>
 						</UserMenu>
 					{/if}
 				</div>

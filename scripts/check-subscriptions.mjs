@@ -52,6 +52,14 @@ for (const marker of [
 const account = read('src/lib/components/chat/Settings/Account.svelte');
 if (!account.includes('BillingAddress')) failures.push('Account settings must include BillingAddress');
 
+const userMenu = read('src/lib/components/layout/Sidebar/UserMenu.svelte');
+if (!userMenu.includes('SubscriptionQuotaRing')) failures.push('UserMenu must include SubscriptionQuotaRing');
+
+const ring = read('src/lib/components/layout/Sidebar/SubscriptionQuotaRing.svelte');
+for (const marker of ['Usage', 'Plan Chatpoint', 'Check Chatpoint', 'exhausted', 'stroke-red']) {
+	if (!ring.includes(marker)) failures.push(`Quota ring missing ${marker}`);
+}
+
 if (failures.length > 0) {
 	for (const failure of failures) console.error(failure);
 	process.exit(1);

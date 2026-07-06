@@ -37,6 +37,7 @@
 	import PinSlash from '$lib/components/icons/PinSlash.svelte';
 	import { updateUserStatus, updateUserSettings } from '$lib/apis/users';
 	import { toast } from 'svelte-sonner';
+	import SubscriptionQuotaRing from './SubscriptionQuotaRing.svelte';
 
 	const i18n = getContext('i18n');
 
@@ -132,9 +133,26 @@
 						/>
 					</div>
 
-					<div class=" flex flex-col w-full flex-1">
-						<div class="font-medium line-clamp-1 pr-2">
-							{$user.name}
+					<div class=" flex flex-col w-full flex-1 min-w-0">
+						<div class="flex items-center justify-between gap-2 pr-1">
+							<div class="font-medium line-clamp-1">
+								{$user?.name}
+							</div>
+
+							{#if role === 'admin'}
+								<div
+									class="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-200"
+								>
+									Admin
+								</div>
+							{:else}
+								<SubscriptionQuotaRing
+									on:openUsage={async () => {
+										show = false;
+										await showSettings.set('usage');
+									}}
+								/>
+							{/if}
 						</div>
 
 						<div class=" flex items-center gap-2">
