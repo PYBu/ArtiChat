@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import time
 import secrets
 from contextlib import asynccontextmanager
@@ -487,3 +488,192 @@ class UserSubscriptionsTable:
 
 
 UserSubscriptions = UserSubscriptionsTable()
+
+
+def hash_redemption_code(code: str) -> str:
+    return hashlib.sha256(code.strip().upper().encode('utf-8')).hexdigest()
+
+
+def preview_redemption_code(code: str) -> str:
+    normalized = code.strip().upper()
+    return f'{normalized[:4]}-{normalized[-4:]}'
+
+
+def generate_redemption_code() -> str:
+    return f'ARTI-{secrets.token_urlsafe(6).upper()}-{secrets.token_urlsafe(6).upper()}'
+
+
+class RedemptionCodeCreateResult(BaseModel):
+    raw_codes: list[str]
+    code_ids: list[str]
+
+
+class RedemptionCodeModel(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    code_hash: str
+    code_preview: str
+    mode: str
+    max_uses: int
+    used_count: int
+    tier: str | None = None
+    duration_days: int | None = None
+    plan_chatpoint_micros: int
+    check_chatpoint_micros: int
+    expires_at: int | None = None
+    is_active: bool
+    batch_id: str | None = None
+    memo: str | None = None
+    created_by: str
+    created_at: int
+    updated_at: int
+
+
+class RedemptionRecordModel(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    redemption_code_id: str
+    user_id: str
+    tier_before: str | None = None
+    tier_after: str | None = None
+    plan_delta_micros: int
+    check_delta_micros: int
+    subscription_expires_at_before: int | None = None
+    subscription_expires_at_after: int | None = None
+    created_at: int
+
+
+class RedemptionCodesTable:
+    async def create_codes(
+        self,
+        *,
+        mode: str,
+        quantity: int,
+        max_uses: int,
+        tier: str | None,
+        duration_days: int | None,
+        plan_chatpoint_micros: int,
+        check_chatpoint_micros: int,
+        expires_at: int | None,
+        memo: str | None,
+        created_by: str,
+        now: int | None = None,
+        db: AsyncSession | None = None,
+    ) -> RedemptionCodeCreateResult:
+        if mode not in {'single_use', 'multi_use'}:
+            raise ValueError('redemption mode must be single_use or multi_use')
+        if quantity < 1:
+            raise ValueError('quantity must be greater than 0')
+        if max_uses < 1:
+            raise ValueError('max_uses must be greater than 0')
+        if mode == 'multi_use' and quantity != 1:
+            raise ValueError('multi_use creation creates exactly one code')
+
+        timestamp = now or now_ts()
+        batch_id = new_id('batch')
+        raw_codes = []
+        code_ids = []
+
+        async with get_subscription_db_context(db) as session:
+            for _ in range(quantity):
+                raw_code = generate_redemption_code()
+                code_id = new_id('code')
+                session.add(
+                    RedemptionCode(
+                        id=code_id,
+                        code_hash=hash_redemption_code(raw_code),
+                        code_preview=preview_redemption_code(raw_code),
+                        mode=mode,
+                        max_uses=max_uses,
+                        used_count=0,
+                        tier=tier,
+                        duration_days=duration_days,
+                        plan_chatpoint_micros=plan_chatpoint_micros,
+                        check_chatpoint_micros=check_chatpoint_micros,
+                        expires_at=expires_at,
+                        is_active=True,
+                        batch_id=batch_id,
+                        memo=memo,
+                        created_by=created_by,
+                        created_at=timestamp,
+                        updated_at=timestamp,
+                    )
+                )
+                raw_codes.append(raw_code)
+                code_ids.append(code_id)
+            await session.commit()
+        return RedemptionCodeCreateResult(raw_codes=raw_codes, code_ids=code_ids)
+
+    async def get_by_raw_code(self, code: str, db: AsyncSession | None = None) -> RedemptionCodeModel | None:
+        async with get_subscription_db_context(db) as session:
+            result = await session.execute(
+                select(RedemptionCode).filter(RedemptionCode.code_hash == hash_redemption_code(code))
+            )
+            row = result.scalar_one_or_none()
+            return RedemptionCodeModel.model_validate(row) if row else None
+
+    async def increment_used_count(self, code_id: str, db: AsyncSession | None = None) -> RedemptionCodeModel:
+        async with get_subscription_db_context(db) as session:
+            row = await session.get(RedemptionCode, code_id)
+            if not row:
+                raise ValueError('REDEMPTION_CODE_INVALID')
+            row.used_count += 1
+            row.updated_at = now_ts()
+            await session.commit()
+            await session.refresh(row)
+            return RedemptionCodeModel.model_validate(row)
+
+
+RedemptionCodes = RedemptionCodesTable()
+
+
+class RedemptionRecordsTable:
+    async def get_by_code_and_user(
+        self, code_id: str, user_id: str, db: AsyncSession | None = None
+    ) -> RedemptionRecordModel | None:
+        async with get_subscription_db_context(db) as session:
+            result = await session.execute(
+                select(RedemptionRecord).filter(
+                    RedemptionRecord.redemption_code_id == code_id,
+                    RedemptionRecord.user_id == user_id,
+                )
+            )
+            row = result.scalar_one_or_none()
+            return RedemptionRecordModel.model_validate(row) if row else None
+
+    async def insert(
+        self,
+        *,
+        redemption_code_id: str,
+        user_id: str,
+        tier_before: str | None,
+        tier_after: str | None,
+        plan_delta_micros: int,
+        check_delta_micros: int,
+        subscription_expires_at_before: int | None,
+        subscription_expires_at_after: int | None,
+        created_at: int,
+        db: AsyncSession | None = None,
+    ) -> RedemptionRecordModel:
+        async with get_subscription_db_context(db) as session:
+            row = RedemptionRecord(
+                id=new_id('redeem'),
+                redemption_code_id=redemption_code_id,
+                user_id=user_id,
+                tier_before=tier_before,
+                tier_after=tier_after,
+                plan_delta_micros=plan_delta_micros,
+                check_delta_micros=check_delta_micros,
+                subscription_expires_at_before=subscription_expires_at_before,
+                subscription_expires_at_after=subscription_expires_at_after,
+                created_at=created_at,
+            )
+            session.add(row)
+            await session.commit()
+            await session.refresh(row)
+            return RedemptionRecordModel.model_validate(row)
+
+
+RedemptionRecords = RedemptionRecordsTable()
