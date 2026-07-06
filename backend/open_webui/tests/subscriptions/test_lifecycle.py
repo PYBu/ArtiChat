@@ -4,9 +4,12 @@ from open_webui.models.subscriptions import (
     CHATPOWER_TIER,
     FREE_TIER,
     PLUS_TIER,
+    SubscriptionLedgers,
     SubscriptionPlans,
+    UserSubscriptions,
     chatpoint_to_micros,
 )
+from open_webui.utils.subscriptions import ensure_subscription_current
 
 
 @pytest.mark.asyncio
@@ -31,3 +34,59 @@ async def test_seed_default_plans_is_idempotent(db_session):
     plans = await SubscriptionPlans.get_plans(db=db_session)
 
     assert len(plans) == 3
+
+
+@pytest.mark.asyncio
+async def test_new_user_gets_free_subscription(db_session):
+    await SubscriptionPlans.seed_defaults(db=db_session)
+
+    subscription = await ensure_subscription_current('user-1', now=1_720_000_000, db=db_session)
+
+    assert subscription.user_id == 'user-1'
+    assert subscription.tier == FREE_TIER
+    assert subscription.plan_balance_micros == chatpoint_to_micros(10)
+    assert subscription.check_balance_micros == 0
+    assert subscription.period_end_at == 1_720_000_000 + 30 * 24 * 60 * 60
+
+
+@pytest.mark.asyncio
+async def test_period_reset_preserves_check_balance(db_session):
+    await SubscriptionPlans.seed_defaults(db=db_session)
+    subscription = await ensure_subscription_current('user-2', now=1_720_000_000, db=db_session)
+    await UserSubscriptions.adjust_balances(
+        'user-2',
+        plan_delta_micros=-chatpoint_to_micros(7),
+        check_delta_micros=chatpoint_to_micros(25),
+        event_type='admin_adjustment',
+        created_by='admin',
+        db=db_session,
+    )
+
+    reset = await ensure_subscription_current('user-2', now=subscription.period_end_at + 10, db=db_session)
+
+    assert reset.plan_balance_micros == chatpoint_to_micros(10)
+    assert reset.check_balance_micros == chatpoint_to_micros(25)
+    assert reset.period_start_at == subscription.period_end_at
+
+
+@pytest.mark.asyncio
+async def test_expired_plus_auto_downgrades_to_free_before_reset(db_session):
+    await SubscriptionPlans.seed_defaults(db=db_session)
+    start = 1_720_000_000
+    await UserSubscriptions.create_from_plan(
+        user_id='user-3',
+        plan_id=PLUS_TIER,
+        starts_at=start,
+        expires_at=start + 30 * 24 * 60 * 60,
+        source='redemption',
+        db=db_session,
+    )
+
+    subscription = await ensure_subscription_current('user-3', now=start + 31 * 24 * 60 * 60, db=db_session)
+
+    assert subscription.tier == FREE_TIER
+    assert subscription.plan_chatpoint_allowance_micros == chatpoint_to_micros(10)
+    assert subscription.plan_balance_micros == chatpoint_to_micros(10)
+
+    ledger = await SubscriptionLedgers.get_recent_for_user('user-3', limit=5, db=db_session)
+    assert any(entry.event_type == 'auto_downgrade' for entry in ledger)

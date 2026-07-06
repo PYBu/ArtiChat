@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import time
+import secrets
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from decimal import Decimal, ROUND_CEILING
 from typing import AsyncIterator
 
 from open_webui.internal.db import Base, get_async_db_context
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import BigInteger, Boolean, Column, Index, Integer, JSON, Text, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -274,3 +275,215 @@ class SubscriptionPlansTable:
 
 
 SubscriptionPlans = SubscriptionPlansTable()
+
+
+class UserSubscriptionModel(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    user_id: str
+    tier: str
+    tier_rank: int
+    display_name: str
+    period_days: int
+    plan_chatpoint_allowance_micros: int
+    plan_balance_micros: int
+    check_balance_micros: int
+    starts_at: int
+    expires_at: int | None = None
+    period_start_at: int
+    period_end_at: int
+    next_reset_at: int
+    status: str
+    source: str
+    snapshot: dict | None = None
+    billing_address: dict | None = None
+    notes: str | None = None
+    created_at: int
+    updated_at: int
+
+
+class SubscriptionLedgerModel(BaseModel):
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+    id: str
+    user_id: str
+    event_type: str
+    tier_before: str | None = None
+    tier_after: str | None = None
+    plan_delta_micros: int
+    check_delta_micros: int
+    plan_balance_after_micros: int
+    check_balance_after_micros: int
+    reference_type: str | None = None
+    reference_id: str | None = None
+    metadata: dict | None = Field(default=None, alias='meta')
+    created_by: str | None = None
+    created_at: int
+
+
+def new_id(prefix: str) -> str:
+    return f'{prefix}_{secrets.token_urlsafe(18)}'
+
+
+class SubscriptionLedgersTable:
+    async def insert(
+        self,
+        *,
+        user_id: str,
+        event_type: str,
+        tier_before: str | None,
+        tier_after: str | None,
+        plan_delta_micros: int,
+        check_delta_micros: int,
+        plan_balance_after_micros: int,
+        check_balance_after_micros: int,
+        reference_type: str | None = None,
+        reference_id: str | None = None,
+        metadata: dict | None = None,
+        created_by: str | None = None,
+        created_at: int | None = None,
+        db: AsyncSession | None = None,
+    ) -> SubscriptionLedgerModel:
+        async with get_subscription_db_context(db) as session:
+            row = SubscriptionLedger(
+                id=new_id('ledger'),
+                user_id=user_id,
+                event_type=event_type,
+                tier_before=tier_before,
+                tier_after=tier_after,
+                plan_delta_micros=plan_delta_micros,
+                check_delta_micros=check_delta_micros,
+                plan_balance_after_micros=plan_balance_after_micros,
+                check_balance_after_micros=check_balance_after_micros,
+                reference_type=reference_type,
+                reference_id=reference_id,
+                meta=metadata,
+                created_by=created_by,
+                created_at=created_at or now_ts(),
+            )
+            session.add(row)
+            await session.commit()
+            await session.refresh(row)
+            return SubscriptionLedgerModel.model_validate(row)
+
+    async def get_recent_for_user(
+        self, user_id: str, limit: int = 50, db: AsyncSession | None = None
+    ) -> list[SubscriptionLedgerModel]:
+        async with get_subscription_db_context(db) as session:
+            result = await session.execute(
+                select(SubscriptionLedger)
+                .filter(SubscriptionLedger.user_id == user_id)
+                .order_by(SubscriptionLedger.created_at.desc())
+                .limit(limit)
+            )
+            return [SubscriptionLedgerModel.model_validate(row) for row in result.scalars().all()]
+
+
+SubscriptionLedgers = SubscriptionLedgersTable()
+
+
+class UserSubscriptionsTable:
+    async def get_by_user_id(self, user_id: str, db: AsyncSession | None = None) -> UserSubscriptionModel | None:
+        async with get_subscription_db_context(db) as session:
+            result = await session.execute(select(UserSubscription).filter(UserSubscription.user_id == user_id))
+            row = result.scalar_one_or_none()
+            return UserSubscriptionModel.model_validate(row) if row else None
+
+    async def create_from_plan(
+        self,
+        *,
+        user_id: str,
+        plan_id: str,
+        starts_at: int,
+        expires_at: int | None,
+        source: str,
+        db: AsyncSession | None = None,
+    ) -> UserSubscriptionModel:
+        async with get_subscription_db_context(db) as session:
+            plan = await SubscriptionPlans.get_plan_by_id(plan_id, db=session)
+            if not plan:
+                raise ValueError(f'subscription plan not found: {plan_id}')
+
+            period_end = starts_at + plan.period_days * 24 * 60 * 60
+            existing = await session.execute(select(UserSubscription).filter(UserSubscription.user_id == user_id))
+            existing_row = existing.scalar_one_or_none()
+            check_balance = existing_row.check_balance_micros if existing_row else 0
+            row = existing_row or UserSubscription(id=new_id('sub'), user_id=user_id, created_at=starts_at)
+            row.tier = plan.id
+            row.tier_rank = plan.tier_rank
+            row.display_name = plan.display_name
+            row.period_days = plan.period_days
+            row.plan_chatpoint_allowance_micros = plan.plan_chatpoint_allowance_micros
+            row.plan_balance_micros = plan.plan_chatpoint_allowance_micros
+            row.check_balance_micros = check_balance
+            row.starts_at = starts_at
+            row.expires_at = expires_at
+            row.period_start_at = starts_at
+            row.period_end_at = period_end
+            row.next_reset_at = period_end
+            row.status = 'free' if plan.id == FREE_TIER else 'active'
+            row.source = source
+            row.snapshot = plan.model_dump()
+            row.updated_at = starts_at
+            session.add(row)
+            await session.commit()
+            await session.refresh(row)
+            return UserSubscriptionModel.model_validate(row)
+
+    async def save(self, subscription: UserSubscriptionModel, db: AsyncSession | None = None) -> UserSubscriptionModel:
+        async with get_subscription_db_context(db) as session:
+            row = await session.get(UserSubscription, subscription.id)
+            if row is None:
+                raise ValueError(f'user subscription not found: {subscription.id}')
+            for key, value in subscription.model_dump().items():
+                setattr(row, key, value)
+            await session.commit()
+            await session.refresh(row)
+            return UserSubscriptionModel.model_validate(row)
+
+    async def adjust_balances(
+        self,
+        user_id: str,
+        *,
+        plan_delta_micros: int = 0,
+        check_delta_micros: int = 0,
+        event_type: str,
+        created_by: str | None,
+        db: AsyncSession | None = None,
+    ) -> UserSubscriptionModel:
+        async with get_subscription_db_context(db) as session:
+            sub = await self.get_by_user_id(user_id, db=session)
+            if not sub:
+                sub = await self.create_from_plan(
+                    user_id=user_id,
+                    plan_id=FREE_TIER,
+                    starts_at=now_ts(),
+                    expires_at=None,
+                    source='default',
+                    db=session,
+                )
+
+            row = await session.get(UserSubscription, sub.id)
+            row.plan_balance_micros = sub.plan_balance_micros + plan_delta_micros
+            row.check_balance_micros = sub.check_balance_micros + check_delta_micros
+            row.updated_at = now_ts()
+            await session.commit()
+            await session.refresh(row)
+            model = UserSubscriptionModel.model_validate(row)
+            await SubscriptionLedgers.insert(
+                user_id=user_id,
+                event_type=event_type,
+                tier_before=sub.tier,
+                tier_after=model.tier,
+                plan_delta_micros=plan_delta_micros,
+                check_delta_micros=check_delta_micros,
+                plan_balance_after_micros=model.plan_balance_micros,
+                check_balance_after_micros=model.check_balance_micros,
+                created_by=created_by,
+                db=session,
+            )
+            return model
+
+
+UserSubscriptions = UserSubscriptionsTable()
