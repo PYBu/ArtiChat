@@ -39,6 +39,19 @@
 - Recreated container `artichat` with the existing `artichat_data` data volume preserved.
 - Current runtime status: `artichat` is healthy on port `3000`.
 
+## Prompt Context and Platform Knowledge
+
+- Added design and implementation plan for ArtiChat system prompt context variables.
+- Added server-controlled subscription prompt variables for model system prompts, including current tier, display name, status, expiry, period dates, Plan Chatpoint allowance/balance/used, Check Chatpoint balance, total balance, and exhausted state.
+- Added `{{ARTICHAT_SUBSCRIPTION_CONTEXT}}` as a compact multi-line user subscription context block.
+- Added `{{ARTICHAT_PLATFORM_CONTEXT}}` backed by `backend/open_webui/resources/artichat_platform_knowledge.zh-CN.md`.
+- Added a readable docs copy at `docs/knowledge/artichat-platform-knowledge.zh-CN.md`.
+- Subscription prompt variables call the existing subscription lifecycle logic before rendering, so expired paid subscriptions are downgraded before the model sees the user context.
+- Verification for this addition:
+  - `pytest backend/open_webui/tests/subscriptions -q`: 42 passed, 1 warning.
+  - `npm run test:subscriptions`: passed.
+  - `npm run build`: passed with existing Svelte/Vite warnings.
+
 ## Cleanup
 
 - `docker image prune -f`: completed, reclaimed `0B`.

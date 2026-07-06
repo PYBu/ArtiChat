@@ -5,7 +5,6 @@ import uuid
 from datetime import datetime
 from typing import Any, Optional
 
-from open_webui.config import DEFAULT_RAG_TEMPLATE
 from open_webui.utils.misc import get_last_user_message, get_messages_content
 
 log = logging.getLogger(__name__)
@@ -264,6 +263,8 @@ def replace_messages_variable(
 # but illuminate it, so that the answer serves the one who asked.
 async def rag_template(template: str, context: str, query: str):
     if template.strip() == '':
+        from open_webui.config import DEFAULT_RAG_TEMPLATE
+
         template = DEFAULT_RAG_TEMPLATE
 
     template = await prompt_template(template)

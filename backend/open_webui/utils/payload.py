@@ -1,13 +1,140 @@
 import copy
 import json
+from datetime import datetime
+from decimal import Decimal
+from functools import lru_cache
+from pathlib import Path
 from typing import Callable, Optional
 
+from open_webui.models.subscriptions import micros_to_chatpoint
 from open_webui.utils.misc import (
     add_or_update_system_message,
     deep_update,
     replace_system_message_content,
 )
+from open_webui.utils.subscriptions import ensure_subscription_current
 from open_webui.utils.task import prompt_template, prompt_variables_template
+
+
+SUBSCRIPTION_PROMPT_VARIABLES = {
+    '{{ARTICHAT_SUBSCRIPTION_CONTEXT}}',
+    '{{USER_SUBSCRIPTION}}',
+    '{{USER_SUBSCRIPTION_TIER}}',
+    '{{USER_SUBSCRIPTION_STATUS}}',
+    '{{USER_SUBSCRIPTION_EXPIRES_AT}}',
+    '{{USER_SUBSCRIPTION_PERIOD_START_AT}}',
+    '{{USER_SUBSCRIPTION_PERIOD_END_AT}}',
+    '{{USER_SUBSCRIPTION_NEXT_RESET_AT}}',
+    '{{PLAN_CHATPOINT_ALLOWANCE}}',
+    '{{PLAN_CHATPOINT_BALANCE}}',
+    '{{PLAN_CHATPOINT_USED}}',
+    '{{CHECK_CHATPOINT_BALANCE}}',
+    '{{TOTAL_CHATPOINT_BALANCE}}',
+    '{{CHATPOINT_BALANCE}}',
+    '{{CHATPOINT_QUOTA_EXHAUSTED}}',
+}
+PLATFORM_PROMPT_VARIABLE = '{{ARTICHAT_PLATFORM_CONTEXT}}'
+
+
+def _contains_prompt_variable(system: str, variables: set[str]) -> bool:
+    return any(variable in system for variable in variables)
+
+
+def _format_chatpoint(value_micros: int) -> str:
+    value = micros_to_chatpoint(value_micros)
+    if isinstance(value, Decimal):
+        return format(value.normalize(), 'f')
+    return str(value)
+
+
+def _format_ts(value: int | None) -> str:
+    if value is None:
+        return 'Never'
+    return datetime.fromtimestamp(value).isoformat()
+
+
+@lru_cache(maxsize=1)
+def _load_platform_context() -> str:
+    path = Path(__file__).resolve().parents[1] / 'resources' / 'artichat_platform_knowledge.zh-CN.md'
+    try:
+        return path.read_text(encoding='utf-8').strip()
+    except OSError:
+        return ''
+
+
+def _get_user_id(user) -> str | None:
+    if user is None:
+        return None
+    if isinstance(user, dict):
+        return user.get('id')
+    return getattr(user, 'id', None)
+
+
+async def build_server_prompt_variables(
+    system: str,
+    metadata: Optional[dict] = None,
+    user=None,
+) -> dict[str, str]:
+    variables = {}
+
+    if PLATFORM_PROMPT_VARIABLE in system:
+        variables[PLATFORM_PROMPT_VARIABLE] = _load_platform_context()
+
+    if not _contains_prompt_variable(system, SUBSCRIPTION_PROMPT_VARIABLES):
+        return variables
+
+    user_id = _get_user_id(user)
+    if not user_id:
+        return variables
+
+    db = (metadata or {}).get('subscription_db')
+    now = (metadata or {}).get('subscription_now')
+    subscription = await ensure_subscription_current(user_id, now=now, db=db)
+
+    allowance = subscription.plan_chatpoint_allowance_micros
+    plan_balance = subscription.plan_balance_micros
+    check_balance = subscription.check_balance_micros
+    plan_used = max(0, allowance - plan_balance)
+    total_balance = plan_balance + check_balance
+    exhausted = total_balance <= 0
+
+    context = '\n'.join(
+        [
+            'ArtiChat user subscription context:',
+            f'- Current subscription: {subscription.display_name}',
+            f'- Subscription tier: {subscription.tier}',
+            f'- Subscription status: {subscription.status}',
+            f'- Subscription expires at: {_format_ts(subscription.expires_at)}',
+            f'- Plan Chatpoint allowance: {_format_chatpoint(allowance)}',
+            f'- Plan Chatpoint balance: {_format_chatpoint(plan_balance)}',
+            f'- Plan Chatpoint used this period: {_format_chatpoint(plan_used)}',
+            f'- Check Chatpoint balance: {_format_chatpoint(check_balance)}',
+            f'- Total Chatpoint balance: {_format_chatpoint(total_balance)}',
+            f'- Plan Chatpoint next reset at: {_format_ts(subscription.next_reset_at)}',
+            f'- Chatpoint quota exhausted: {str(exhausted).lower()}',
+        ]
+    )
+
+    variables.update(
+        {
+            '{{ARTICHAT_SUBSCRIPTION_CONTEXT}}': context,
+            '{{USER_SUBSCRIPTION}}': subscription.display_name,
+            '{{USER_SUBSCRIPTION_TIER}}': subscription.tier,
+            '{{USER_SUBSCRIPTION_STATUS}}': subscription.status,
+            '{{USER_SUBSCRIPTION_EXPIRES_AT}}': _format_ts(subscription.expires_at),
+            '{{USER_SUBSCRIPTION_PERIOD_START_AT}}': _format_ts(subscription.period_start_at),
+            '{{USER_SUBSCRIPTION_PERIOD_END_AT}}': _format_ts(subscription.period_end_at),
+            '{{USER_SUBSCRIPTION_NEXT_RESET_AT}}': _format_ts(subscription.next_reset_at),
+            '{{PLAN_CHATPOINT_ALLOWANCE}}': _format_chatpoint(allowance),
+            '{{PLAN_CHATPOINT_BALANCE}}': _format_chatpoint(plan_balance),
+            '{{PLAN_CHATPOINT_USED}}': _format_chatpoint(plan_used),
+            '{{CHECK_CHATPOINT_BALANCE}}': _format_chatpoint(check_balance),
+            '{{TOTAL_CHATPOINT_BALANCE}}': _format_chatpoint(total_balance),
+            '{{CHATPOINT_BALANCE}}': _format_chatpoint(total_balance),
+            '{{CHATPOINT_QUOTA_EXHAUSTED}}': str(exhausted).lower(),
+        }
+    )
+    return variables
 
 
 async def resolve_system_prompt(
@@ -17,6 +144,10 @@ async def resolve_system_prompt(
 ) -> str:
     if not system:
         return ''
+
+    server_variables = await build_server_prompt_variables(system, metadata, user)
+    if server_variables:
+        system = prompt_variables_template(system, server_variables)
 
     # Metadata (WebUI Usage)
     if metadata:
