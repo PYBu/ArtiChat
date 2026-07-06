@@ -8,11 +8,18 @@
 
 	const formatChatpoint = (micros?: number | null) => `${(micros ?? 0) / 1_000_000}`;
 
-	const normalizePlan = (plan: any) => ({
-		...plan,
-		plan_chatpoint: formatChatpoint(plan.plan_chatpoint_allowance_micros),
-		featuresText: JSON.stringify(plan.features ?? {}, null, 2)
-	});
+	const normalizePlan = (plan: any) => {
+		const features = !Array.isArray(plan.features) && plan.features ? plan.features : {};
+		return {
+			...plan,
+			plan_chatpoint: formatChatpoint(plan.plan_chatpoint_allowance_micros),
+			icon: features.icon ?? '',
+			subtitle: features.subtitle ?? '',
+			highlightsText: (features.highlights ?? []).join('\n'),
+			model_summary: features.model_summary ?? '',
+			cta_label: features.cta_label ?? ''
+		};
+	};
 
 	const load = async () => {
 		loading = true;
@@ -26,16 +33,20 @@
 	};
 
 	const save = async (row: any) => {
-		let features = {};
-		try {
-			features = row.featuresText?.trim() ? JSON.parse(row.featuresText) : {};
-		} catch (error) {
-			toast.error('功能配置必须是有效的 JSON。');
-			return;
-		}
+		const features = {
+			icon: row.icon || undefined,
+			subtitle: row.subtitle || undefined,
+			highlights: (row.highlightsText ?? '')
+				.split('\n')
+				.map((item) => item.trim())
+				.filter(Boolean),
+			model_summary: row.model_summary || undefined,
+			cta_label: row.cta_label || undefined
+		};
 
 		const updated = await updateAdminSubscriptionPlan(localStorage.token, row.id, {
 			display_name: row.display_name,
+			description: row.description,
 			plan_chatpoint: row.plan_chatpoint,
 			period_days: Number(row.period_days),
 			features,
@@ -46,7 +57,7 @@
 		});
 
 		if (updated) {
-			row = Object.assign(row, normalizePlan(updated));
+			Object.assign(row, normalizePlan(updated));
 			toast.success('订阅计划已保存。');
 		}
 	};
@@ -57,7 +68,7 @@
 <div class="flex flex-col gap-3">
 	<div>
 		<div class="text-base font-medium">订阅计划</div>
-		<div class="text-xs text-gray-500">计划变更会应用于之后的新订阅和周期重置。</div>
+		<div class="text-xs text-gray-500">计划变更会应用于之后的新订阅和周期重置，不影响已订阅用户的快照额度。</div>
 	</div>
 
 	{#if loading}
@@ -90,10 +101,34 @@
 							<span>启用</span>
 						</label>
 					</div>
-					<label class="mt-2 flex flex-col gap-1">
-						<span class="text-xs text-gray-500">功能配置 JSON</span>
-						<textarea class="min-h-20 rounded-lg border border-gray-100 bg-transparent px-2 py-1 font-mono text-xs dark:border-gray-850" bind:value={row.featuresText}></textarea>
-					</label>
+
+					<div class="mt-3 grid gap-2 md:grid-cols-2">
+						<label class="flex flex-col gap-1">
+							<span class="text-xs text-gray-500">订阅介绍</span>
+							<textarea class="min-h-20 rounded-lg border border-gray-100 bg-transparent px-2 py-1 dark:border-gray-850" bind:value={row.description}></textarea>
+						</label>
+						<label class="flex flex-col gap-1">
+							<span class="text-xs text-gray-500">可访问模型说明</span>
+							<textarea class="min-h-20 rounded-lg border border-gray-100 bg-transparent px-2 py-1 dark:border-gray-850" bind:value={row.model_summary}></textarea>
+						</label>
+						<label class="flex flex-col gap-1">
+							<span class="text-xs text-gray-500">Icon</span>
+							<input class="rounded-lg border border-gray-100 bg-transparent px-2 py-1 dark:border-gray-850" placeholder="sparkles / badge / zap" bind:value={row.icon} />
+						</label>
+						<label class="flex flex-col gap-1">
+							<span class="text-xs text-gray-500">副标题</span>
+							<input class="rounded-lg border border-gray-100 bg-transparent px-2 py-1 dark:border-gray-850" bind:value={row.subtitle} />
+						</label>
+						<label class="flex flex-col gap-1">
+							<span class="text-xs text-gray-500">按钮文案</span>
+							<input class="rounded-lg border border-gray-100 bg-transparent px-2 py-1 dark:border-gray-850" bind:value={row.cta_label} />
+						</label>
+						<label class="flex flex-col gap-1">
+							<span class="text-xs text-gray-500">功能点，每行一条</span>
+							<textarea class="min-h-20 rounded-lg border border-gray-100 bg-transparent px-2 py-1 dark:border-gray-850" bind:value={row.highlightsText}></textarea>
+						</label>
+					</div>
+
 					<div class="mt-3 flex justify-end">
 						<button type="button" class="rounded-full bg-black px-3 py-1.5 text-white dark:bg-white dark:text-black" on:click={() => save(row)}>
 							保存

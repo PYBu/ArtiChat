@@ -28,6 +28,10 @@ export const getMySubscription = async (token: string) => {
 	return jsonFetch(`${WEBUI_API_BASE_URL}/subscriptions/me`, token);
 };
 
+export const getSubscriptionPlans = async (token: string) => {
+	return jsonFetch(`${WEBUI_API_BASE_URL}/subscriptions/plans`, token);
+};
+
 export const getMySubscriptionUsage = async (token: string) => {
 	return jsonFetch(`${WEBUI_API_BASE_URL}/subscriptions/usage`, token);
 };
@@ -41,6 +45,16 @@ export const redeemSubscriptionCode = async (token: string, code: string) => {
 
 export const getMySubscriptionRecords = async (token: string) => {
 	return jsonFetch(`${WEBUI_API_BASE_URL}/subscriptions/records`, token);
+};
+
+export const getPendingGiftCards = async (token: string) => {
+	return jsonFetch(`${WEBUI_API_BASE_URL}/subscriptions/gift-cards/pending`, token);
+};
+
+export const claimGiftCard = async (token: string, grantId: string) => {
+	return jsonFetch(`${WEBUI_API_BASE_URL}/subscriptions/gift-cards/${encodeURIComponent(grantId)}/claim`, token, {
+		method: 'POST'
+	});
 };
 
 export const updateBillingAddress = async (token: string, billingAddress: Record<string, unknown>) => {
@@ -84,6 +98,29 @@ export const createAdminRedemptionCodes = async (token: string, payload: Record<
 	return jsonFetch(`${WEBUI_API_BASE_URL}/subscriptions/admin/codes`, token, {
 		method: 'POST',
 		body: JSON.stringify(payload)
+	});
+};
+
+export const deleteAdminRedemptionCode = async (token: string, codeId: string) => {
+	return jsonFetch(`${WEBUI_API_BASE_URL}/subscriptions/admin/codes/${encodeURIComponent(codeId)}`, token, {
+		method: 'DELETE'
+	});
+};
+
+export const getAdminGiftCards = async (token: string) => {
+	return jsonFetch(`${WEBUI_API_BASE_URL}/subscriptions/admin/gift-cards`, token);
+};
+
+export const createAdminGiftCards = async (token: string, payload: Record<string, unknown>) => {
+	return jsonFetch(`${WEBUI_API_BASE_URL}/subscriptions/admin/gift-cards`, token, {
+		method: 'POST',
+		body: JSON.stringify(payload)
+	});
+};
+
+export const revokeAdminGiftCard = async (token: string, grantId: string) => {
+	return jsonFetch(`${WEBUI_API_BASE_URL}/subscriptions/admin/gift-cards/${encodeURIComponent(grantId)}`, token, {
+		method: 'DELETE'
 	});
 };
 

@@ -8,11 +8,15 @@ const failures = [];
 
 const requiredFiles = [
 	'src/lib/apis/subscriptions/index.ts',
+	'src/lib/apis/announcements/index.ts',
 	'src/lib/components/chat/Settings/Subscription.svelte',
 	'src/lib/components/chat/Settings/RedeemCode.svelte',
 	'src/lib/components/chat/Settings/Usage.svelte',
+	'src/lib/components/AnnouncementModal.svelte',
 	'src/lib/components/layout/Sidebar/SubscriptionQuotaRing.svelte',
 	'src/lib/components/admin/Settings/Subscriptions.svelte',
+	'src/lib/components/admin/Settings/Subscriptions/GiftCards.svelte',
+	'src/lib/components/admin/Settings/Subscriptions/Announcements.svelte',
 	'src/lib/components/workspace/Models/SubscriptionPolicy.svelte'
 ];
 
@@ -25,12 +29,32 @@ if (exists('src/lib/apis/subscriptions/index.ts')) {
 	for (const name of [
 		'getMySubscription',
 		'getMySubscriptionUsage',
+		'getSubscriptionPlans',
 		'redeemSubscriptionCode',
+		'getPendingGiftCards',
+		'claimGiftCard',
 		'updateBillingAddress',
 		'getAdminSubscriptionPlans',
-		'createAdminRedemptionCodes'
+		'createAdminRedemptionCodes',
+		'deleteAdminRedemptionCode',
+		'createAdminGiftCards',
+		'revokeAdminGiftCard'
 	]) {
 		if (!api.includes(`export const ${name}`)) failures.push(`Missing API helper ${name}`);
+	}
+}
+
+if (exists('src/lib/apis/announcements/index.ts')) {
+	const api = read('src/lib/apis/announcements/index.ts');
+	for (const name of [
+		'getActiveAnnouncements',
+		'markAnnouncementViewed',
+		'getAdminAnnouncements',
+		'createAdminAnnouncement',
+		'updateAdminAnnouncement',
+		'deleteAdminAnnouncement'
+	]) {
+		if (!api.includes(`export const ${name}`)) failures.push(`Missing announcement API helper ${name}`);
 	}
 }
 
@@ -56,13 +80,43 @@ const userMenu = read('src/lib/components/layout/Sidebar/UserMenu.svelte');
 if (!userMenu.includes('SubscriptionQuotaRing')) failures.push('UserMenu must include SubscriptionQuotaRing');
 
 const ring = read('src/lib/components/layout/Sidebar/SubscriptionQuotaRing.svelte');
-for (const marker of ['用量', '周期 Chatpoint', '充值 Chatpoint', 'exhausted', 'stroke-red']) {
+for (const marker of ['用量 / Usage', 'Plan Chatpoint', 'Check Chatpoint', 'refreshSubscription', 'exhausted', 'stroke-red']) {
 	if (!ring.includes(marker)) failures.push(`Quota ring missing ${marker}`);
 }
+
+if (ring.includes('免费版')) failures.push('Quota ring must use Free instead of 免费版');
 
 const adminSettings = read('src/lib/components/admin/Settings.svelte');
 for (const marker of ['订阅管理', "selectedTab === 'subscriptions'", '<Subscriptions']) {
 	if (!adminSettings.includes(marker)) failures.push(`Admin settings missing ${marker}`);
+}
+
+const adminSubscriptions = read('src/lib/components/admin/Settings/Subscriptions.svelte');
+for (const marker of ['礼品卡', '公告', '<GiftCards', '<Announcements']) {
+	if (!adminSubscriptions.includes(marker)) failures.push(`Admin subscriptions missing ${marker}`);
+}
+
+const redeemCode = read('src/lib/components/chat/Settings/RedeemCode.svelte');
+for (const marker of ['你有待领取礼品卡', 'claimGiftCard', 'notifySubscriptionChanged']) {
+	if (!redeemCode.includes(marker)) failures.push(`Redeem page missing ${marker}`);
+}
+
+const adminRedeemCodes = read('src/lib/components/admin/Settings/Subscriptions/RedeemCodes.svelte');
+for (const marker of ['自定义兑换码', 'deleteAdminRedemptionCode', 'code.code ?? code.code_preview']) {
+	if (!adminRedeemCodes.includes(marker)) failures.push(`Admin redeem codes missing ${marker}`);
+}
+
+const adminUsers = read('src/lib/components/admin/Settings/Subscriptions/UserSubscriptions.svelte');
+for (const marker of ['邮箱、用户名、显示名或用户 ID', 'row.user?.email']) {
+	if (!adminUsers.includes(marker)) failures.push(`Admin user subscriptions missing ${marker}`);
+}
+
+const usageLedger = read('src/lib/components/admin/Settings/Subscriptions/UsageLedger.svelte');
+if (!usageLedger.includes('user?.email')) failures.push('Usage ledger must display user email');
+
+const announcementModal = read('src/lib/components/AnnouncementModal.svelte');
+for (const marker of ['getActiveAnnouncements', 'sessionStorage', 'markAnnouncementViewed']) {
+	if (!announcementModal.includes(marker)) failures.push(`Announcement modal missing ${marker}`);
 }
 
 const modelEditor = read('src/lib/components/workspace/Models/ModelEditor.svelte');

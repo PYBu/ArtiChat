@@ -1,7 +1,11 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { toast } from 'svelte-sonner';
-	import { createAdminRedemptionCodes, getAdminRedemptionCodes } from '$lib/apis/subscriptions';
+	import {
+		createAdminRedemptionCodes,
+		deleteAdminRedemptionCode,
+		getAdminRedemptionCodes
+	} from '$lib/apis/subscriptions';
 
 	let codes: any[] = [];
 	let generatedCodes: string[] = [];
@@ -9,6 +13,7 @@
 	let creating = false;
 
 	let form = {
+		code: '',
 		mode: 'single_use',
 		quantity: 1,
 		max_uses: 1,
@@ -28,7 +33,7 @@
 	};
 	const tierLabel = (tier?: string | null) => {
 		if (!tier) return '不变更订阅';
-		if (tier === 'free') return '免费版';
+		if (tier === 'free') return 'Free';
 		if (tier === 'plus') return 'Plus';
 		if (tier === 'chatpower') return 'ChatPower';
 		return tier;
@@ -49,10 +54,11 @@
 		generatedCodes = [];
 		const payload = {
 			...form,
-			quantity: form.mode === 'multi_use' ? 1 : Number(form.quantity),
+			quantity: form.mode === 'multi_use' || form.code.trim() ? 1 : Number(form.quantity),
 			max_uses: Number(form.max_uses),
 			duration_days: Number(form.duration_days),
 			tier: form.tier || null,
+			code: form.code.trim() || null,
 			memo: form.memo || null
 		};
 
@@ -63,10 +69,22 @@
 
 		if (created) {
 			generatedCodes = created.raw_codes ?? [];
+			form.code = '';
 			toast.success('兑换码已创建。');
 			await load();
 		}
 		creating = false;
+	};
+
+	const removeCode = async (codeId: string) => {
+		const deleted = await deleteAdminRedemptionCode(localStorage.token, codeId).catch((error) => {
+			toast.error(`${error}`);
+			return null;
+		});
+		if (deleted) {
+			toast.success('兑换码已删除。');
+			await load();
+		}
 	};
 
 	onMount(load);
@@ -88,8 +106,12 @@
 				</select>
 			</label>
 			<label class="flex flex-col gap-1">
+				<span class="text-xs text-gray-500">自定义兑换码</span>
+				<input class="rounded-lg border border-gray-100 bg-transparent px-2 py-1 dark:border-gray-850" placeholder="留空自动生成" bind:value={form.code} />
+			</label>
+			<label class="flex flex-col gap-1">
 				<span class="text-xs text-gray-500">生成数量</span>
-				<input type="number" min="1" class="rounded-lg border border-gray-100 bg-transparent px-2 py-1 disabled:text-gray-400 dark:border-gray-850" disabled={form.mode === 'multi_use'} bind:value={form.quantity} />
+				<input type="number" min="1" class="rounded-lg border border-gray-100 bg-transparent px-2 py-1 disabled:text-gray-400 dark:border-gray-850" disabled={form.mode === 'multi_use' || !!form.code.trim()} bind:value={form.quantity} />
 			</label>
 			<label class="flex flex-col gap-1">
 				<span class="text-xs text-gray-500">最大使用次数</span>
@@ -99,7 +121,7 @@
 				<span class="text-xs text-gray-500">订阅档位</span>
 				<select class="rounded-lg border border-gray-100 bg-transparent px-2 py-1 dark:border-gray-850" bind:value={form.tier}>
 					<option value="">不变更订阅</option>
-					<option value="free">免费版</option>
+					<option value="free">Free</option>
 					<option value="plus">Plus</option>
 					<option value="chatpower">ChatPower</option>
 				</select>
@@ -146,16 +168,26 @@
 	{:else}
 		<div class="flex flex-col divide-y divide-gray-100 rounded-lg border border-gray-100 dark:divide-gray-850 dark:border-gray-850">
 			{#each codes as code}
-				<div class="grid gap-2 p-3 text-xs md:grid-cols-[1fr_7rem_7rem_8rem_7rem]">
+				<div class="grid gap-2 p-3 text-xs md:grid-cols-[1fr_7rem_7rem_8rem_7rem_auto]">
 					<div>
-						<div class="font-mono font-medium">{code.code_preview}</div>
+						<div class="font-mono font-medium">{code.code ?? code.code_preview}</div>
+						{#if !code.code}
+							<div class="text-[11px] text-yellow-600">旧兑换码未保存完整内容</div>
+						{/if}
 						<div class="text-gray-500">{code.memo ?? '-'}</div>
 					</div>
 					<div>{modeLabel(code.mode)}</div>
 					<div>{code.used_count}/{code.max_uses}</div>
 					<div>{tierLabel(code.tier)}，{code.duration_days ?? 0} 天</div>
 					<div>{formatChatpoint(code.plan_chatpoint_micros + code.check_chatpoint_micros)} CP</div>
-					<div class="md:col-span-5 text-gray-500">过期时间：{formatDate(code.expires_at)}</div>
+					<div class="flex justify-end">
+						<button type="button" class="rounded-full px-3 py-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30" on:click={() => removeCode(code.id)}>
+							删除
+						</button>
+					</div>
+					<div class="md:col-span-6 text-gray-500">
+						过期时间：{formatDate(code.expires_at)} · 状态：{code.is_active ? '可用' : '已停用'}
+					</div>
 				</div>
 			{/each}
 		</div>

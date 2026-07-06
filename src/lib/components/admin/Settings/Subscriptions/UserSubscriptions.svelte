@@ -30,12 +30,16 @@
 		return status || '-';
 	};
 
-	const normalize = (subscription: any) => ({
-		...subscription,
-		plan_chatpoint: formatChatpoint(subscription.plan_balance_micros),
-		check_chatpoint: formatChatpoint(subscription.check_balance_micros),
-		expires_at_input: toDateTimeLocal(subscription.expires_at)
-	});
+	const normalize = (item: any) => {
+		const subscription = item.subscription ?? item;
+		return {
+			...subscription,
+			user: item.user ?? null,
+			plan_chatpoint: formatChatpoint(subscription.plan_balance_micros),
+			check_chatpoint: formatChatpoint(subscription.check_balance_micros),
+			expires_at_input: toDateTimeLocal(subscription.expires_at)
+		};
+	};
 
 	const load = async () => {
 		loading = true;
@@ -62,7 +66,7 @@
 		});
 
 		if (updated) {
-			Object.assign(row, normalize(updated));
+			Object.assign(row, normalize({ subscription: updated, user: row.user }));
 			toast.success('用户订阅已保存。');
 		}
 	};
@@ -82,7 +86,7 @@
 	</div>
 
 	<div class="flex gap-2">
-		<input class="w-full rounded-lg border border-gray-100 bg-transparent px-3 py-2 dark:border-gray-850" placeholder="按用户 ID 搜索" bind:value={query} />
+		<input class="w-full rounded-lg border border-gray-100 bg-transparent px-3 py-2 dark:border-gray-850" placeholder="按邮箱、用户名、显示名或用户 ID 搜索" bind:value={query} />
 		<button type="button" class="rounded-full bg-black px-3 py-1.5 text-white dark:bg-white dark:text-black" on:click={load}>
 			搜索
 		</button>
@@ -98,7 +102,8 @@
 				<div class="rounded-lg border border-gray-100 p-3 dark:border-gray-850">
 					<div class="mb-2 flex items-center justify-between gap-2">
 						<div class="min-w-0">
-							<div class="truncate font-medium">{row.user_id}</div>
+							<div class="truncate font-medium">{row.user?.email ?? row.user_id}</div>
+							<div class="truncate text-xs text-gray-500">{row.user?.username ?? row.user?.name ?? row.user_id}</div>
 							<div class="text-xs text-gray-500">下次重置：{row.next_reset_at ? new Date(row.next_reset_at * 1000).toLocaleString() : '-'}</div>
 						</div>
 						<button type="button" class="rounded-full bg-black px-3 py-1.5 text-white dark:bg-white dark:text-black" on:click={() => save(row)}>
@@ -110,7 +115,7 @@
 						<label class="flex flex-col gap-1">
 							<span class="text-xs text-gray-500">订阅档位</span>
 							<select class="rounded-lg border border-gray-100 bg-transparent px-2 py-1 dark:border-gray-850" bind:value={row.tier}>
-								<option value="free">免费版</option>
+								<option value="free">Free</option>
 								<option value="plus">Plus</option>
 								<option value="chatpower">ChatPower</option>
 							</select>

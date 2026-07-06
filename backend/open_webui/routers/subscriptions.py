@@ -74,6 +74,7 @@ class AdminCodeUpdateForm(BaseModel):
 
 class AdminPlanUpdateForm(BaseModel):
     display_name: str | None = None
+    description: str | None = None
     plan_chatpoint: str | int | None = None
     period_days: int | None = None
     features: dict | list | None = None
@@ -186,6 +187,7 @@ async def update_admin_plan(
         return await SubscriptionPlans.update_plan(
             plan_id,
             display_name=form_data.display_name,
+            description=form_data.description,
             plan_chatpoint_allowance_micros=(
                 chatpoint_to_micros(form_data.plan_chatpoint) if form_data.plan_chatpoint is not None else None
             ),

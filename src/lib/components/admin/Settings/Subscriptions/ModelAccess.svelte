@@ -7,7 +7,7 @@
 	} from '$lib/apis/subscriptions';
 
 	const tiers = [
-		{ id: 'free', label: '免费版' },
+		{ id: 'free', label: 'Free' },
 		{ id: 'plus', label: 'Plus' },
 		{ id: 'chatpower', label: 'ChatPower' }
 	];

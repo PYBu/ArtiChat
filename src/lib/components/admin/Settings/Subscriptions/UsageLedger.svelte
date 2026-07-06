@@ -9,6 +9,7 @@
 
 	const formatChatpoint = (micros?: number | null) => ((micros ?? 0) / 1_000_000).toLocaleString(undefined, { maximumFractionDigits: 4 });
 	const formatDate = (value?: number | null) => (value ? new Date(value * 1000).toLocaleString() : '-');
+	const userLabel = (item: any) => item?.user?.email ?? item?.user?.username ?? item?.user_id ?? '-';
 
 	const load = async () => {
 		loading = true;
@@ -65,7 +66,7 @@
 				<div class="flex flex-col divide-y divide-gray-100 rounded-lg border border-gray-100 dark:divide-gray-850 dark:border-gray-850">
 					{#each usage.items as item}
 						<div class="grid gap-2 p-2 text-xs md:grid-cols-[1fr_1fr_7rem_7rem_8rem]">
-							<div class="truncate">{item.user_id}</div>
+							<div class="truncate">{userLabel(item)}</div>
 							<div class="truncate">{item.model_id}</div>
 							<div>{formatChatpoint(item.cost_micros)} CP</div>
 							<div>{item.total_tokens?.toLocaleString?.() ?? item.total_tokens} Token</div>
@@ -84,7 +85,7 @@
 				<div class="flex flex-col divide-y divide-gray-100 rounded-lg border border-gray-100 dark:divide-gray-850 dark:border-gray-850">
 					{#each ledger as entry}
 						<div class="grid gap-2 p-2 text-xs md:grid-cols-[1fr_8rem_7rem_7rem_8rem]">
-							<div class="truncate">{entry.user_id}</div>
+							<div class="truncate">{userLabel(entry)}</div>
 							<div>{entry.event_type}</div>
 							<div>{formatChatpoint(entry.plan_delta_micros)} 周期</div>
 							<div>{formatChatpoint(entry.check_delta_micros)} 充值</div>

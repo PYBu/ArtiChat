@@ -5,6 +5,8 @@
 	import RedeemCodes from './Subscriptions/RedeemCodes.svelte';
 	import UserSubscriptions from './Subscriptions/UserSubscriptions.svelte';
 	import UsageLedger from './Subscriptions/UsageLedger.svelte';
+	import GiftCards from './Subscriptions/GiftCards.svelte';
+	import Announcements from './Subscriptions/Announcements.svelte';
 
 	let selectedTab = 'plans';
 	let appliedUserQuery = '';
@@ -13,6 +15,8 @@
 		{ id: 'plans', label: '订阅计划' },
 		{ id: 'model-access', label: '模型权限' },
 		{ id: 'redeem-codes', label: '兑换码' },
+		{ id: 'gift-cards', label: '礼品卡' },
+		{ id: 'announcements', label: '公告' },
 		{ id: 'user-subscriptions', label: '用户订阅' },
 		{ id: 'usage-ledger', label: '用量账本' }
 	];
@@ -48,6 +52,10 @@
 			<ModelAccess />
 		{:else if selectedTab === 'redeem-codes'}
 			<RedeemCodes />
+		{:else if selectedTab === 'gift-cards'}
+			<GiftCards />
+		{:else if selectedTab === 'announcements'}
+			<Announcements />
 		{:else if selectedTab === 'user-subscriptions'}
 			<UserSubscriptions initialQuery={requestedUser} />
 		{:else if selectedTab === 'usage-ledger'}

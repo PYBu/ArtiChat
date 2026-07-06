@@ -413,6 +413,7 @@ class SubscriptionPlansTable:
         plan_id: str,
         *,
         display_name: str | None = None,
+        description: str | None = None,
         plan_chatpoint_allowance_micros: int | None = None,
         period_days: int | None = None,
         features: dict | list | None = None,
@@ -425,6 +426,8 @@ class SubscriptionPlansTable:
                 raise ValueError('SUBSCRIPTION_PLAN_NOT_FOUND')
             if display_name is not None:
                 plan.display_name = display_name
+            if description is not None:
+                plan.description = description
             if plan_chatpoint_allowance_micros is not None:
                 plan.plan_chatpoint_allowance_micros = plan_chatpoint_allowance_micros
             if period_days is not None:

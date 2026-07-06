@@ -1,5 +1,6 @@
 import { APP_NAME } from '$lib/constants';
 import { type Writable, writable } from 'svelte/store';
+import { getMySubscription } from '$lib/apis/subscriptions';
 import type { ModelConfig } from '$lib/apis';
 import type { Banner } from '$lib/types';
 import type { Socket } from 'socket.io-client';
@@ -80,6 +81,25 @@ export const terminalServers = writable([]);
 export const pyodideWorker: Writable<Worker | null> = writable(null);
 
 export const banners: Writable<Banner[]> = writable([]);
+export const subscription: Writable<any | null> = writable(null);
+export const subscriptionRefreshTick: Writable<number> = writable(0);
+
+export const refreshSubscription = async (token?: string) => {
+	const authToken = token ?? (typeof localStorage !== 'undefined' ? localStorage.token : '');
+	if (!authToken) {
+		subscription.set(null);
+		return null;
+	}
+
+	const data = await getMySubscription(authToken).catch(() => null);
+	subscription.set(data);
+	return data;
+};
+
+export const notifySubscriptionChanged = async () => {
+	subscriptionRefreshTick.update((value) => value + 1);
+	return await refreshSubscription();
+};
 
 export const settings: Writable<Settings> = writable({});
 

@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { toast } from 'svelte-sonner';
 	import { getMySubscriptionUsage } from '$lib/apis/subscriptions';
+	import { refreshSubscription } from '$lib/stores';
 
 	let data: any = null;
 	let loading = true;
@@ -20,6 +21,7 @@
 			toast.error(`${error}`);
 			return null;
 		});
+		await refreshSubscription(localStorage.token);
 		loading = false;
 	});
 </script>

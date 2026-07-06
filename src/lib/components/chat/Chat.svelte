@@ -49,7 +49,8 @@
 		showFileNavPath,
 		showFileNavDir,
 		chatRequestQueues,
-		desktopEvent
+		desktopEvent,
+		notifySubscriptionChanged
 	} from '$lib/stores';
 
 	import { WEBUI_API_BASE_URL } from '$lib/constants';
@@ -629,6 +630,7 @@
 				} else if (type === 'chat:active') {
 					if (!data?.active) {
 						taskIds = null;
+						notifySubscriptionChanged();
 						if (chatIdProp && !$temporaryChatEnabled && hasPendingAssistantLeaf()) {
 							await loadChat();
 						}
@@ -2039,6 +2041,7 @@
 					}
 				})
 			);
+			notifySubscriptionChanged();
 
 			history.messages[message.id] = message;
 
