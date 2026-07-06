@@ -10,8 +10,11 @@ from open_webui.models.subscriptions import (
     RedemptionRecords,
     SubscriptionLedgers,
     SubscriptionPlans,
+    SubscriptionUsages,
     UserSubscriptionModel,
     UserSubscriptions,
+    calculate_cost_micros,
+    debit_balances,
     now_ts,
 )
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -237,4 +240,145 @@ async def redeem_code(
         tier_after=tier_after,
         plan_delta_micros=plan_delta,
         check_delta_micros=check_delta,
+    )
+
+
+def extract_token_usage(usage: dict | None) -> tuple[int, int, int]:
+    usage = usage or {}
+    input_tokens = int(usage.get('input_tokens') or usage.get('prompt_tokens') or 0)
+    output_tokens = int(usage.get('output_tokens') or usage.get('completion_tokens') or 0)
+    total_tokens = int(usage.get('total_tokens') or input_tokens + output_tokens)
+    return input_tokens, output_tokens, total_tokens
+
+
+async def assert_chatpoint_available(
+    user_id: str, *, quota_mode: str, is_admin: bool, db: AsyncSession | None = None
+) -> UserSubscriptionModel | None:
+    if is_admin or quota_mode == 'unlimited':
+        return None
+
+    subscription = await UserSubscriptions.get_by_user_id(user_id, db=db)
+    if subscription is None:
+        subscription = await ensure_subscription_current(user_id, db=db)
+    if subscription.plan_balance_micros + subscription.check_balance_micros <= 0:
+        raise PermissionError('CHATPOINT_BALANCE_EXHAUSTED')
+    return subscription
+
+
+async def bill_model_usage(
+    *,
+    user_id: str,
+    model_id: str,
+    quota_mode: str,
+    usage_multiplier: str,
+    usage: dict | None,
+    metadata: dict,
+    is_admin: bool,
+    now: int | None = None,
+    db: AsyncSession | None = None,
+):
+    current_time = now if now is not None else now_ts()
+    input_tokens, output_tokens, total_tokens = extract_token_usage(usage)
+
+    if is_admin:
+        return await SubscriptionUsages.insert(
+            user_id=user_id,
+            chat_id=metadata.get('chat_id'),
+            message_id=metadata.get('message_id'),
+            model_id=model_id,
+            tier='admin',
+            quota_mode=quota_mode,
+            usage_multiplier=usage_multiplier,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            total_tokens=total_tokens,
+            cost_micros=0,
+            plan_cost_micros=0,
+            check_cost_micros=0,
+            plan_balance_after_micros=None,
+            check_balance_after_micros=None,
+            status='admin_bypass',
+            metadata=metadata,
+            created_at=current_time,
+            db=db,
+        )
+
+    subscription = await ensure_subscription_current(user_id, now=current_time, db=db)
+
+    if quota_mode == 'unlimited':
+        return await SubscriptionUsages.insert(
+            user_id=user_id,
+            chat_id=metadata.get('chat_id'),
+            message_id=metadata.get('message_id'),
+            model_id=model_id,
+            tier=subscription.tier,
+            quota_mode=quota_mode,
+            usage_multiplier=usage_multiplier,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            total_tokens=total_tokens,
+            cost_micros=0,
+            plan_cost_micros=0,
+            check_cost_micros=0,
+            plan_balance_after_micros=subscription.plan_balance_micros,
+            check_balance_after_micros=subscription.check_balance_micros,
+            status='unlimited',
+            metadata=metadata,
+            created_at=current_time,
+            db=db,
+        )
+
+    if total_tokens <= 0:
+        return await SubscriptionUsages.insert(
+            user_id=user_id,
+            chat_id=metadata.get('chat_id'),
+            message_id=metadata.get('message_id'),
+            model_id=model_id,
+            tier=subscription.tier,
+            quota_mode=quota_mode,
+            usage_multiplier=usage_multiplier,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            total_tokens=total_tokens,
+            cost_micros=0,
+            plan_cost_micros=0,
+            check_cost_micros=0,
+            plan_balance_after_micros=subscription.plan_balance_micros,
+            check_balance_after_micros=subscription.check_balance_micros,
+            status='missing_usage',
+            metadata=metadata,
+            created_at=current_time,
+            db=db,
+        )
+
+    cost_micros = calculate_cost_micros(total_tokens, usage_multiplier)
+    debit = debit_balances(subscription.plan_balance_micros, subscription.check_balance_micros, cost_micros)
+    updated = await UserSubscriptions.adjust_balances(
+        user_id,
+        plan_delta_micros=-debit.plan_cost_micros,
+        check_delta_micros=-debit.check_cost_micros,
+        event_type='usage_debit',
+        created_by=None,
+        db=db,
+    )
+    return await SubscriptionUsages.insert(
+        user_id=user_id,
+        chat_id=metadata.get('chat_id'),
+        message_id=metadata.get('message_id'),
+        model_id=model_id,
+        tier=subscription.tier,
+        quota_mode=quota_mode,
+        usage_multiplier=usage_multiplier,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        total_tokens=total_tokens,
+        cost_micros=cost_micros,
+        plan_cost_micros=debit.plan_cost_micros,
+        check_cost_micros=debit.check_cost_micros,
+        plan_balance_after_micros=updated.plan_balance_micros,
+        check_balance_after_micros=updated.check_balance_micros,
+        status='billed',
+        metadata=metadata,
+        created_at=current_time,
+        db=db,
     )

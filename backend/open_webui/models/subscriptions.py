@@ -677,3 +677,82 @@ class RedemptionRecordsTable:
 
 
 RedemptionRecords = RedemptionRecordsTable()
+
+
+class SubscriptionUsageModel(BaseModel):
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+    id: str
+    user_id: str
+    chat_id: str | None = None
+    message_id: str | None = None
+    model_id: str
+    tier: str
+    quota_mode: str
+    usage_multiplier: str
+    input_tokens: int
+    output_tokens: int
+    total_tokens: int
+    cost_micros: int
+    plan_cost_micros: int
+    check_cost_micros: int
+    plan_balance_after_micros: int | None = None
+    check_balance_after_micros: int | None = None
+    status: str
+    metadata: dict | None = Field(default=None, alias='meta')
+    created_at: int
+
+
+class SubscriptionUsagesTable:
+    async def insert(
+        self,
+        *,
+        user_id: str,
+        chat_id: str | None,
+        message_id: str | None,
+        model_id: str,
+        tier: str,
+        quota_mode: str,
+        usage_multiplier: str,
+        input_tokens: int,
+        output_tokens: int,
+        total_tokens: int,
+        cost_micros: int,
+        plan_cost_micros: int,
+        check_cost_micros: int,
+        plan_balance_after_micros: int | None,
+        check_balance_after_micros: int | None,
+        status: str,
+        metadata: dict | None,
+        created_at: int,
+        db: AsyncSession | None = None,
+    ) -> SubscriptionUsageModel:
+        async with get_subscription_db_context(db) as session:
+            row = SubscriptionUsage(
+                id=new_id('usage'),
+                user_id=user_id,
+                chat_id=chat_id,
+                message_id=message_id,
+                model_id=model_id,
+                tier=tier,
+                quota_mode=quota_mode,
+                usage_multiplier=usage_multiplier,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                total_tokens=total_tokens,
+                cost_micros=cost_micros,
+                plan_cost_micros=plan_cost_micros,
+                check_cost_micros=check_cost_micros,
+                plan_balance_after_micros=plan_balance_after_micros,
+                check_balance_after_micros=check_balance_after_micros,
+                status=status,
+                meta=metadata,
+                created_at=created_at,
+            )
+            session.add(row)
+            await session.commit()
+            await session.refresh(row)
+            return SubscriptionUsageModel.model_validate(row)
+
+
+SubscriptionUsages = SubscriptionUsagesTable()

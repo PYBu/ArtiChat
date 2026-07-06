@@ -248,6 +248,12 @@ from open_webui.utils.plugin import install_tool_and_function_dependencies
 from open_webui.utils.redis import get_redis_client
 from open_webui.utils.security_headers import SecurityHeadersMiddleware
 from open_webui.utils.session_pool import get_session
+from open_webui.utils.subscriptions import (
+    assert_chatpoint_available,
+    assert_model_subscription_access,
+    ensure_subscription_current,
+    filter_models_for_subscription,
+)
 from open_webui.utils.tools import set_terminal_servers, set_tool_servers
 
 if SAFE_MODE:
@@ -829,6 +835,12 @@ async def get_models(request: Request, refresh: bool = False, user=Depends(get_v
         )
 
     models = await get_filtered_models(models, user)
+    subscription = await ensure_subscription_current(user.id)
+    models = filter_models_for_subscription(
+        models,
+        tier=subscription.tier,
+        is_admin=(user.role == 'admin'),
+    )
 
     log.debug(
         f'/api/models returned filtered models accessible to the user: {json.dumps([model.get("id") for model in models])}'
@@ -1147,6 +1159,28 @@ async def chat_completion(
 
         if is_new_chat:
             metadata['chat_id'] = str(uuid4())
+
+        subscription = await ensure_subscription_current(user.id)
+        subscription_policies = {}
+        for entry in message_ids:
+            target_model_id = entry.get('model_id') or model_id
+            target_model = request.app.state.MODELS.get(target_model_id, model)
+            policy = assert_model_subscription_access(
+                target_model,
+                tier=subscription.tier,
+                is_admin=(user.role == 'admin'),
+            )
+            await assert_chatpoint_available(
+                user.id,
+                quota_mode=policy.quota_mode,
+                is_admin=(user.role == 'admin'),
+            )
+            subscription_policies[target_model_id] = policy.model_dump()
+
+        metadata['subscription_policies'] = subscription_policies
+        if len(message_ids) == 1:
+            target_model_id = message_ids[0].get('model_id') or model_id
+            metadata['subscription_policy'] = subscription_policies.get(target_model_id)
 
         initial_title_generation = None
         if is_new_chat and tasks and TASKS.TITLE_GENERATION in tasks:
@@ -1593,6 +1627,7 @@ async def chat_completion(
             per_model_metadata = {
                 **metadata,
                 'message_id': assistant_message_id,
+                'subscription_policy': metadata.get('subscription_policies', {}).get(target_model_id),
             }
 
             # Per-model form_data: own model
@@ -2159,14 +2194,15 @@ async def get_app_latest_release_version(user=Depends(get_verified_user)):
 
 @app.get('/api/changelog')
 async def get_app_changelog():
+    DISPLAY_VERSION = f'{VERSION} (Artivis Alpha)'
     return {
-        VERSION: {
-            'date': 'ArtiChat build',
+        DISPLAY_VERSION: {
+            'date': 'ArtiChat NEWS',
             'changed': [
                 {
-                    'title': 'ArtiChat branding',
-                    'content': 'This deployment uses ArtiChat branding and local release notes.',
-                    'raw': '<li><strong>ArtiChat branding.</strong> This deployment uses ArtiChat branding and local release notes.</li>',
+                    'title': '版本更新：',
+                    'content': '本次更新优化了ArtiChat的使用体验，更新了新模型。',
+                    'raw': '<li><strong>版本更新：</strong> 本次更新优化了ArtiChat的使用体验，更新了新模型。</li>',
                 }
             ],
         }

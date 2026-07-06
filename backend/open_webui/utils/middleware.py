@@ -114,6 +114,7 @@ from open_webui.utils.payload import apply_system_prompt_to_body, resolve_system
 from open_webui.utils.plugin import load_function_module_by_id
 from open_webui.utils.response import merge_usage, normalize_usage
 from open_webui.utils.sanitize import sanitize_code
+from open_webui.utils.subscriptions import bill_model_usage
 from open_webui.utils.task import (
     get_task_model_id,
     rag_template,
@@ -3416,6 +3417,31 @@ async def outlet_filter_handler(ctx):
         log.debug(f'Error running outlet filters: {e}')
 
 
+async def bill_subscription_usage_once(ctx, usage: dict | None):
+    if ctx.get('subscription_usage_billed'):
+        return
+
+    metadata = ctx.get('metadata') or {}
+    policy_data = metadata.get('subscription_policy')
+    user = ctx.get('user')
+    if not policy_data or not user:
+        return
+
+    form_data = ctx.get('form_data') or {}
+    model = ctx.get('model') or {}
+    model_id = form_data.get('model') or model.get('id', '')
+    await bill_model_usage(
+        user_id=user.id,
+        model_id=model_id,
+        quota_mode=policy_data.get('quota_mode', 'metered'),
+        usage_multiplier=policy_data.get('usage_multiplier', '1'),
+        usage=usage,
+        metadata=metadata,
+        is_admin=(getattr(user, 'role', None) == 'admin'),
+    )
+    ctx['subscription_usage_billed'] = True
+
+
 async def non_streaming_chat_response_handler(response, ctx):
     request = ctx['request']
 
@@ -3568,6 +3594,7 @@ async def non_streaming_chat_response_handler(response, ctx):
                         'output': response_output,
                         **({'usage': usage} if usage else {}),
                     }
+                    await bill_subscription_usage_once(ctx, usage)
                     await outlet_filter_handler(ctx)
                     await background_tasks_handler(ctx)
 
@@ -3581,13 +3608,16 @@ async def non_streaming_chat_response_handler(response, ctx):
     choices = response_data.get('choices', [])
     output = response_data.get('output')
     content = choices[0].get('message', {}).get('content') if choices else ''
+    usage = normalize_usage(response_data.get('usage', {}) or {}) if content or output else {}
+    if content or output:
+        await bill_subscription_usage_once(ctx, usage)
     if ENABLE_API_OUTLET_FILTERS and (content or output):
-        usage = normalize_usage(response_data.get('usage', {}) or {})
         ctx['assistant_message'] = {
             **({'content': content} if content else {}),
             **({'output': output} if output else {}),
             **({'usage': usage} if usage else {}),
         }
+        await bill_subscription_usage_once(ctx, usage)
         await outlet_filter_handler(ctx)
 
     if isinstance(response, dict):
@@ -5275,6 +5305,7 @@ async def streaming_chat_response_handler(response, ctx):
                     'output': output,
                     **({'usage': usage} if usage else {}),
                 }
+                await bill_subscription_usage_once(ctx, usage)
                 await outlet_filter_handler(ctx)
                 await background_tasks_handler(ctx)
             except asyncio.CancelledError:
@@ -5356,6 +5387,7 @@ async def streaming_chat_response_handler(response, ctx):
 
             if ENABLE_API_OUTLET_FILTERS and assistant_message:
                 ctx['assistant_message'] = assistant_message
+                await bill_subscription_usage_once(ctx, assistant_message.get('usage'))
                 await outlet_filter_handler(ctx)
 
         return StreamingResponse(
