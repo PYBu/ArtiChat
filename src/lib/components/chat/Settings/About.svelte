@@ -1,9 +1,7 @@
 <script lang="ts">
-	import { getVersionUpdates } from '$lib/apis';
 	import { getOllamaVersion } from '$lib/apis/ollama';
-	import { WEBUI_BUILD_HASH, WEBUI_VERSION } from '$lib/constants';
+	import { WEBUI_BUILD_HASH, WEBUI_DISPLAY_VERSION } from '$lib/constants';
 	import { WEBUI_NAME, config, showChangelog } from '$lib/stores';
-	import { compareVersion } from '$lib/utils';
 	import { onMount, getContext } from 'svelte';
 
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
@@ -12,35 +10,10 @@
 
 	let ollamaVersion = '';
 
-	let updateAvailable = null;
-	let version = {
-		current: '',
-		latest: ''
-	};
-
-	const checkForVersionUpdates = async () => {
-		updateAvailable = null;
-		version = await getVersionUpdates(localStorage.token).catch((error) => {
-			return {
-				current: WEBUI_VERSION,
-				latest: WEBUI_VERSION
-			};
-		});
-
-		console.log(version);
-
-		updateAvailable = compareVersion(version.latest, version.current);
-		console.log(updateAvailable);
-	};
-
 	onMount(async () => {
 		ollamaVersion = await getOllamaVersion(localStorage.token).catch((error) => {
 			return '';
 		});
-
-		if ($config?.features?.enable_version_update_check) {
-			checkForVersionUpdates();
-		}
 	});
 </script>
 
@@ -57,16 +30,8 @@
 				<div class="flex flex-col text-xs text-gray-700 dark:text-gray-200">
 					<div class="flex gap-1">
 						<Tooltip content={WEBUI_BUILD_HASH}>
-							v{WEBUI_VERSION}
+							v{WEBUI_DISPLAY_VERSION}
 						</Tooltip>
-
-						{#if $config?.features?.enable_version_update_check}
-							{updateAvailable === null
-								? $i18n.t('Checking for updates...')
-								: updateAvailable
-									? `(v${version.latest} ${$i18n.t('available!')})`
-									: $i18n.t('(latest)')}
-						{/if}
 					</div>
 
 					<button
@@ -78,17 +43,6 @@
 						<div>{$i18n.t("See what's new")}</div>
 					</button>
 				</div>
-
-				{#if $config?.features?.enable_version_update_check}
-					<button
-						class=" text-xs px-3 py-1.5 bg-gray-100 hover:bg-gray-200 dark:bg-gray-850 dark:hover:bg-gray-800 transition rounded-lg font-medium"
-						on:click={() => {
-							checkForVersionUpdates();
-						}}
-					>
-						{$i18n.t('Check for updates')}
-					</button>
-				{/if}
 			</div>
 		</div>
 
@@ -115,19 +69,23 @@
 			</div>
 		{:else}
 			<div class="text-xs text-gray-500 dark:text-gray-400">
-				{$WEBUI_NAME} is running in a local self-hosted environment.
+				ArtiChat 是一个 AI 多模型聚合平台，主要为用户提供 AI 模型对话服务。
 			</div>
 		{/if}
 
 		<div class="mt-2 text-xs text-gray-400 dark:text-gray-500">
-			Emoji graphics provided by
-			<a href="https://github.com/jdecked/twemoji" target="_blank">Twemoji</a>, licensed under
-			<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank">CC-BY 4.0</a>.
+			- ArtiChat 聚合了OpenAI、Anthropic、Google以及X等企业的模型。
+		</div>
+		<div class="mt-2 text-xs text-gray-400 dark:text-gray-500">
+			- 平台部分模型永久免费使用，若有更高级的需求可以尝试订阅我们的服务。
+		</div>
+		<div class="mt-2 text-xs text-gray-400 dark:text-gray-500">
+			- 模型提供商为Artivis旗下 <b>MineAPI</b> AI服务。
 		</div>
 
 		<div>
 			<pre
-				class="text-xs text-gray-400 dark:text-gray-500">Copyright (c) {new Date().getFullYear()} ArtiChat. All rights reserved.</pre>
+				class="text-xs text-gray-400 dark:text-gray-500">Copyright (c) {new Date().getFullYear()} Artivis | Artivis Studio. All rights reserved.</pre>
 		</div>
 	</div>
 </div>
