@@ -1,0 +1,93 @@
+<script>
+	import { toast } from 'svelte-sonner';
+	import { onMount, getContext } from 'svelte';
+	import { goto } from '$app/navigation';
+
+	import { config, functions, models, settings } from '$lib/stores';
+	import { createNewFunction, getFunctions } from '$lib/apis/functions';
+	import FunctionEditor from '$lib/components/admin/Functions/FunctionEditor.svelte';
+	import { getModels } from '$lib/apis';
+	import { compareVersion, extractFrontmatter } from '$lib/utils';
+	import { WEBUI_VERSION } from '$lib/constants';
+
+	const i18n = getContext('i18n');
+
+	let mounted = false;
+	let clone = false;
+	let func = null;
+
+	const saveHandler = async (data) => {
+		console.log(data);
+
+		const manifest = extractFrontmatter(data.content);
+		const requiredVersion =
+			manifest?.required_artichat_version ?? manifest?.required_open_webui_version ?? '0.0.0';
+		if (compareVersion(requiredVersion, WEBUI_VERSION)) {
+			console.log('Version is lower than required');
+			toast.error(
+				$i18n.t(
+					'ArtiChat version (v{{ARTICHAT_VERSION}}) is lower than required version (v{{REQUIRED_VERSION}})',
+					{
+						ARTICHAT_VERSION: WEBUI_VERSION,
+						REQUIRED_VERSION: requiredVersion
+					}
+				)
+			);
+			return;
+		}
+
+		const res = await createNewFunction(localStorage.token, {
+			id: data.id,
+			name: data.name,
+			meta: data.meta,
+			content: data.content
+		}).catch((error) => {
+			toast.error(`${error}`);
+			return null;
+		});
+
+		if (res) {
+			toast.success($i18n.t('Function created successfully'));
+			functions.set(await getFunctions(localStorage.token));
+			models.set(
+				await getModels(
+					localStorage.token,
+					$config?.features?.enable_direct_connections && ($settings?.directConnections ?? null),
+					false,
+					true
+				)
+			);
+
+			await goto('/admin/functions');
+		}
+	};
+
+	onMount(() => {
+		if (sessionStorage.function) {
+			func = JSON.parse(sessionStorage.function);
+			sessionStorage.removeItem('function');
+
+			console.log(func);
+			clone = true;
+		}
+
+		mounted = true;
+	});
+</script>
+
+{#if mounted}
+	{#key func?.content}
+		<div class="px-[16px] h-full">
+			<FunctionEditor
+				id={func?.id ?? ''}
+				name={func?.name ?? ''}
+				meta={func?.meta ?? { description: '' }}
+				content={func?.content ?? ''}
+				{clone}
+				onSave={(value) => {
+					saveHandler(value);
+				}}
+			/>
+		</div>
+	{/key}
+{/if}
