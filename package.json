@@ -22,6 +22,7 @@
 		"test:branding": "node scripts/check-branding.mjs",
 		"test:release-version": "node scripts/check-release-version.mjs",
 		"test:subscriptions": "node scripts/check-subscriptions.mjs",
+		"test:updates": "node scripts/check-update-system.mjs",
 		"pyodide:fetch": "node scripts/prepare-pyodide.js"
 	},
 	"devDependencies": {
