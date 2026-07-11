@@ -60,8 +60,15 @@ for (const required of ['SSH_ORIGINAL_COMMAND', 'exec sudo /usr/local/sbin/artic
 }
 
 const installer = fs.readFileSync(runnerFiles[1], 'utf8');
-for (const required of ['visudo -cf', 'no-agent-forwarding', 'no-port-forwarding', 'no-X11-forwarding', 'no-pty']) {
-	if (!installer.includes(required)) throw new Error(`Update runner installer is missing ${required}`);
+for (const required of [
+	'visudo -cf',
+	'no-agent-forwarding',
+	'no-port-forwarding',
+	'no-X11-forwarding',
+	'no-pty'
+]) {
+	if (!installer.includes(required))
+		throw new Error(`Update runner installer is missing ${required}`);
 }
 
 const compose = fs.readFileSync(runnerFiles[2], 'utf8');
@@ -73,7 +80,8 @@ for (const required of [
 ]) {
 	if (!compose.includes(required)) throw new Error(`Production Compose is missing ${required}`);
 }
-if (compose.includes('/var/run/docker.sock')) throw new Error('Production Compose exposes the Docker socket');
+if (compose.includes('/var/run/docker.sock'))
+	throw new Error('Production Compose exposes the Docker socket');
 
 const deploymentReadme = fs.readFileSync('deploy/aws-1panel/README.zh-CN.md', 'utf8');
 for (const required of [
@@ -86,6 +94,99 @@ for (const required of [
 ]) {
 	if (!deploymentReadme.includes(required)) {
 		throw new Error(`Production deployment README is missing ${required}`);
+	}
+}
+
+const requiredWorkflows = [
+	'.github/workflows/artichat-release.yml',
+	'.github/workflows/artichat-deploy.yml'
+];
+const forbiddenWorkflows = [
+	'.github/workflows/docker.yaml',
+	'.github/workflows/release.yml',
+	'.github/workflows/release-pypi.yml'
+];
+const workflowFailures = [];
+for (const workflow of requiredWorkflows) {
+	if (!fs.existsSync(workflow)) workflowFailures.push(`required workflow is missing: ${workflow}`);
+}
+for (const workflow of forbiddenWorkflows) {
+	if (fs.existsSync(workflow))
+		workflowFailures.push(`upstream publication workflow remains: ${workflow}`);
+}
+if (workflowFailures.length > 0) {
+	throw new Error(workflowFailures.join('\n'));
+}
+
+const releaseWorkflow = fs.readFileSync('.github/workflows/artichat-release.yml', 'utf8');
+for (const required of [
+	'name: ArtiChat Release',
+	"tags:\n      - 'v*.*.*'",
+	'contents: write',
+	'packages: write',
+	'artichat-release-${{ github.ref }}',
+	'GITHUB_REPOSITORY,,',
+	'npm ci --force',
+	'npm run test:release-version',
+	'npm run test:branding',
+	'npm run test:subscriptions',
+	'npm run test:updates',
+	'npm run test:frontend',
+	'npm run build',
+	'ghcr.io',
+	'GITHUB_TOKEN',
+	'linux/amd64',
+	'BUILD_HASH=${GITHUB_SHA}',
+	'docker buildx imagetools inspect',
+	'gh release create'
+]) {
+	if (!releaseWorkflow.includes(required))
+		throw new Error(`ArtiChat release workflow is missing ${required}`);
+}
+if (releaseWorkflow.includes('workflow_dispatch:'))
+	throw new Error('ArtiChat release workflow must be tag-driven');
+const inspectIndex = releaseWorkflow.indexOf('docker buildx imagetools inspect');
+const releaseIndex = releaseWorkflow.indexOf('gh release create');
+if (releaseIndex < inspectIndex)
+	throw new Error('GitHub Release must be created after image inspection');
+
+const deployWorkflow = fs.readFileSync('.github/workflows/artichat-deploy.yml', 'utf8');
+for (const required of [
+	'workflow_dispatch:',
+	'version:',
+	'operation_id:',
+	'artichat-production',
+	'cancel-in-progress: false',
+	'ARTICHAT_DEPLOY_KNOWN_HOSTS',
+	'gh release view',
+	'~/.ssh/artichat_deploy',
+	'deploy ${VERSION} ${OPERATION_ID}'
+]) {
+	if (!deployWorkflow.includes(required))
+		throw new Error(`ArtiChat deploy workflow is missing ${required}`);
+}
+if (/:latest\b/.test(deployWorkflow) || deployWorkflow.includes('StrictHostKeyChecking=no')) {
+	throw new Error(
+		'ArtiChat deploy workflow contains an unsafe deployment target or host-key setting'
+	);
+}
+
+const workflowFiles = fs
+	.readdirSync('.github/workflows')
+	.filter((name) => /\.(yml|yaml)$/.test(name));
+for (const file of workflowFiles) {
+	const workflow = fs.readFileSync(`.github/workflows/${file}`, 'utf8');
+	for (const forbidden of [
+		'pull_request_target',
+		'docker.sock',
+		'docker.io',
+		'openwebui',
+		'open-webui'
+	]) {
+		if (workflow.includes(forbidden))
+			throw new Error(
+				`Workflow ${file} contains forbidden publication or privilege string: ${forbidden}`
+			);
 	}
 }
 
