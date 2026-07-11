@@ -321,3 +321,6 @@ deploy-backups/
 # Local production Compose rendering fixtures
 deploy/aws-1panel/test.env
 deploy/aws-1panel/test-image.env
+
+# Local values that must never appear in a public export
+.public-forbidden-values

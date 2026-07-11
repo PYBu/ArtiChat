@@ -47,3 +47,9 @@
 # Misc
 *.env text eol=lf
 *.lock text eol=lf
+
+# Internal-only files excluded from public snapshots
+docs/progress export-ignore
+docs/superpowers export-ignore
+deploy-backups export-ignore
+.worktrees export-ignore
