@@ -41,17 +41,19 @@
 - Task 11 PowerShell parser, dirty-worktree gate, fail-closed secret fixture, custom forbidden-value scan, and clean ScanOnly checks: passed.
 - Task 11 normal export: passed; generated one clean root commit, excluded `docs/progress`, `docs/superpowers`, backups, worktrees, and local forbidden values, while retaining licenses, release notes, workflows, and deployment tooling.
 
-## Local Docker Smoke Blocker
+## Local Docker Smoke Resolution
 
-The existing local `artichat:main` container and `artichat_data` volume were inspected before attempting the `0.1.2` smoke. The container remained healthy on `0.1.1`; baseline data counts were users 3, chats 14, subscription plans 3, redemption codes 4, announcements 1, and knowledge bases 1.
+The Docker build blocker was traced to `onnxruntime-node` downloading unused Linux CUDA binaries during frontend `npm ci`. The Dockerfile now sets `ONNXRUNTIME_NODE_INSTALL_CUDA=skip` before installing frontend dependencies; the CPU/Slim build does not need CUDA for the browser frontend.
 
-The new image did not complete locally because the Docker build environment could not reliably access external dependencies:
+After the fix, `docker compose -p artichat build --build-arg BUILD_HASH=$(git rev-parse HEAD) --build-arg USE_SLIM=true artichat` passed in about 300 seconds, and only `artichat` was recreated with `--no-deps --force-recreate`.
 
-- First default build: onnxruntime release download failed with `ECONNRESET`.
-- Second default build: Hugging Face model prefetch failed with `Connection refused` through the Docker proxy.
-- `USE_SLIM=true` build: exceeded the 30-minute command limit before producing a new image; its residual buildx process was terminated.
+- `/health`: `{"status":true}`.
+- `/api/version`: `0.1.2`, display version `0.1.2 (Artivis Alpha)`, build hash `655381431dedeeedde7d4b83c7590af0a9387ea3`.
+- Container image: new image ID `sha256:de62e9a68ff2945fd050567f8a4b76f3a2bc1f68352661fda7ac8242123ad527`.
+- `artichat_data` remained the mounted volume.
+- Data counts stayed unchanged: users 3, chats 14, knowledge bases 1, redemption codes 4, subscription plans 3, announcements 1.
 
-No container recreate occurred, the old image ID remained active, and the existing data volume was not changed by these failed builds.
+The container logs showed normal startup and the existing non-fatal model-loading/API warnings only.
 
 ## External State Deferred
 

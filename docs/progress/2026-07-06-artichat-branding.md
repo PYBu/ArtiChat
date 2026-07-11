@@ -51,3 +51,7 @@ The local Docker smoke could not complete because external dependency downloads 
 - Retrying with the existing Dockerfile `USE_SLIM=true` switch exceeded the 30-minute command limit before producing a new image.
 
 The pre-existing `artichat:main` container remained healthy at `0.1.1`, and the `artichat_data` volume was not recreated or modified by these failed builds. Baseline counts before the smoke were: users 3, chats 14, subscription plans 3, redemption codes 4, announcements 1, and knowledge bases 1.
+
+### Smoke Resolution
+
+The root cause was `onnxruntime-node` downloading unused CUDA binaries during frontend `npm ci`. Setting `ONNXRUNTIME_NODE_INSTALL_CUDA=skip` in the Docker frontend stage fixed the build. A subsequent Slim image build passed, `artichat` restarted on `0.1.2`, `/health` returned true, `/api/version` returned a real build hash, and the recorded data counts remained unchanged.

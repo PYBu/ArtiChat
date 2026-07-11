@@ -9,7 +9,9 @@ const failures = [];
 const packageJson = JSON.parse(read('package.json'));
 const expectedVersion = packageJson.version;
 const expectedDisplayVersion = `${expectedVersion} (Artivis Alpha)`;
-const requestedTag = process.argv.find((value) => value.startsWith('--tag='))?.slice('--tag='.length);
+const requestedTag = process.argv
+	.find((value) => value.startsWith('--tag='))
+	?.slice('--tag='.length);
 
 if (requestedTag && requestedTag.replace(/^v/, '') !== expectedVersion) {
 	failures.push(`release tag ${requestedTag} does not match package version ${expectedVersion}`);
@@ -17,7 +19,9 @@ if (requestedTag && requestedTag.replace(/^v/, '') !== expectedVersion) {
 
 const packageLock = JSON.parse(read('package-lock.json'));
 if (packageLock.version !== expectedVersion) {
-	failures.push(`package-lock.json root version is ${packageLock.version}, expected ${expectedVersion}`);
+	failures.push(
+		`package-lock.json root version is ${packageLock.version}, expected ${expectedVersion}`
+	);
 }
 if (packageLock.packages?.['']?.version !== expectedVersion) {
 	failures.push(
@@ -29,7 +33,9 @@ const constants = read('src/lib/constants.ts');
 if (!constants.includes(`export const WEBUI_VERSION = APP_VERSION;`)) {
 	failures.push('WEBUI_VERSION must remain the semantic APP_VERSION value');
 }
-if (!constants.includes('export const WEBUI_DISPLAY_VERSION = `${WEBUI_VERSION} (Artivis Alpha)`;')) {
+if (
+	!constants.includes('export const WEBUI_DISPLAY_VERSION = `${WEBUI_VERSION} (Artivis Alpha)`;')
+) {
 	failures.push('WEBUI_DISPLAY_VERSION must derive from WEBUI_VERSION');
 }
 
@@ -57,6 +63,11 @@ if (!dockerfile.includes('ENV WEBUI_BUILD_HASH=${BUILD_HASH}')) {
 }
 if (dockerfile.includes('ENV WEBUI_BUILD_VERSION=${BUILD_HASH}')) {
 	failures.push('Docker image still uses the unread WEBUI_BUILD_VERSION variable');
+}
+const frontendNpmInstall = dockerfile.indexOf('RUN npm ci --force');
+const skipOnnxRuntimeCuda = dockerfile.indexOf('ENV ONNXRUNTIME_NODE_INSTALL_CUDA=skip');
+if (skipOnnxRuntimeCuda === -1 || skipOnnxRuntimeCuda > frontendNpmInstall) {
+	failures.push('Docker frontend dependencies must skip the unused onnxruntime CUDA download');
 }
 
 if (failures.length > 0) {

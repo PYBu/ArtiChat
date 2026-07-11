@@ -36,6 +36,7 @@ WORKDIR /app
 RUN apk add --no-cache git
 
 COPY package.json package-lock.json ./
+ENV ONNXRUNTIME_NODE_INSTALL_CUDA=skip
 RUN npm ci --force
 
 COPY . .
