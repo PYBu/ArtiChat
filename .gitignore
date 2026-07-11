@@ -317,3 +317,7 @@ cypress/screenshots
 
 # Local deployment backups
 deploy-backups/
+
+# Local production Compose rendering fixtures
+deploy/aws-1panel/test.env
+deploy/aws-1panel/test-image.env

@@ -18,7 +18,7 @@ setup_case() {
 
   mkdir -p "$root/deploy/data" "$root/deploy/backups" "$root/deploy/update-state" "$root/bin"
   printf 'original-user-data\n' > "$root/deploy/data/user-data.txt"
-  printf 'WEBUI_SECRET_KEY=test-only\n' > "$root/deploy/.env"
+  printf 'WEBUI_SECRET_KEY=test-only\nARTICHAT_UPDATE_REPOSITORY=artivis-test/ArtiChat\n' > "$root/deploy/.env"
   printf 'ARTICHAT_IMAGE=ghcr.io/artivis-test/artichat:0.1.1\n' > "$root/deploy/image.env"
   printf 'services:\n  artichat: {}\n' > "$root/deploy/docker-compose.yaml"
 
@@ -134,5 +134,10 @@ fi
 
 grep -q '"stage": "failed"' "$ARTICHAT_UPDATE_STATE_FILE" || fail 'failed rollback was reported as successful'
 test "$(find "$ARTICHAT_BACKUP_DIR" -type f | wc -l)" -eq 1 || fail 'failed rollback did not preserve its backup'
+
+setup_case repository-derived success
+unset ARTICHAT_IMAGE_REPOSITORY
+"$DEPLOY_SCRIPT" 0.1.2 operation-repository-derived
+grep -q 'ARTICHAT_IMAGE=ghcr.io/artivis-test/artichat:0.1.2' "$ARTICHAT_IMAGE_ENV_FILE" || fail 'GHCR repository was not derived from update repository'
 
 echo 'artichat deploy tests passed'
