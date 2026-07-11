@@ -2204,8 +2204,8 @@ async def get_app_changelog():
             'changed': [
                 {
                     'title': '版本更新：',
-                    'content': '本次更新优化了ArtiChat的使用体验，更新了新模型。',
-                    'raw': '<li><strong>版本更新：</strong> 本次更新优化了ArtiChat的使用体验，更新了新模型。</li>',
+                    'content': '新增管理员版本检测与受控 Docker 更新；部署前自动备份数据，并在健康检查失败时回滚。',
+                    'raw': '<li><strong>版本更新：</strong> 新增管理员版本检测与受控 Docker 更新；部署前自动备份数据，并在健康检查失败时回滚。</li>',
                 }
             ],
         }
