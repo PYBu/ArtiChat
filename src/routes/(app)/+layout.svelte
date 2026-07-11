@@ -9,15 +9,15 @@
 	import { page } from '$app/stores';
 	import { fade } from 'svelte/transition';
 
-	import { getModels, getToolServersData, getVersionUpdates } from '$lib/apis';
+	import { getModels, getToolServersData } from '$lib/apis';
+	import { getUpdateInfo, type UpdateInfo } from '$lib/apis/updates';
 	import { getTools } from '$lib/apis/tools';
 	import { getBanners } from '$lib/apis/configs';
 	import { getTerminalServers } from '$lib/apis/terminal';
 	import { getUserSettings } from '$lib/apis/users';
 	import { setTextScale } from '$lib/utils/text-scale';
 
-	import { WEBUI_VERSION, WEBUI_API_BASE_URL } from '$lib/constants';
-	import { compareVersion } from '$lib/utils';
+	import { WEBUI_API_BASE_URL } from '$lib/constants';
 
 	import {
 		config,
@@ -57,7 +57,7 @@
 	let DB = null;
 	let localDBChats = [];
 
-	let version;
+	let version: UpdateInfo | null = null;
 
 	const clearChatInputStorage = () => {
 		const chatInputKeys = Object.keys(localStorage).filter((key) => key.startsWith('chat-input'));
@@ -371,12 +371,7 @@
 	});
 
 	const checkForVersionUpdates = async () => {
-		version = await getVersionUpdates(localStorage.token).catch((error) => {
-			return {
-				current: WEBUI_VERSION,
-				latest: WEBUI_VERSION
-			};
-		});
+		version = await getUpdateInfo(localStorage.token).catch(() => null);
 	};
 </script>
 
@@ -384,7 +379,7 @@
 <ChangelogModal bind:show={$showChangelog} />
 <AnnouncementModal />
 
-{#if version && compareVersion(version.latest, version.current) && ($settings?.showUpdateToast ?? true)}
+{#if version?.update_available && ($settings?.showUpdateToast ?? true)}
 	<div class=" absolute bottom-8 right-8 z-50" in:fade={{ duration: 100 }}>
 		<UpdateInfoToast
 			{version}

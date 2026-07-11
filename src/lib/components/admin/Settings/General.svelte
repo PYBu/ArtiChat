@@ -2,15 +2,15 @@
 	import DOMPurify from 'dompurify';
 	import { v4 as uuidv4 } from 'uuid';
 
-	import { getBackendConfig, getVersionUpdates } from '$lib/apis';
+	import { getBackendConfig } from '$lib/apis';
 	import { getAdminConfig, updateAdminConfig } from '$lib/apis/auths';
 	import { getBanners, setBanners } from '$lib/apis/configs';
+	import { getUpdateInfo, type UpdateInfo } from '$lib/apis/updates';
 	import Switch from '$lib/components/common/Switch.svelte';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import { WEBUI_BUILD_HASH, WEBUI_VERSION } from '$lib/constants';
 	import { banners as _banners, config, showChangelog } from '$lib/stores';
 	import type { Banner } from '$lib/types';
-	import { compareVersion } from '$lib/utils';
 	import { onMount, getContext } from 'svelte';
 	import { toast } from 'svelte-sonner';
 	import Textarea from '$lib/components/common/Textarea.svelte';
@@ -21,8 +21,8 @@
 
 	export let saveHandler: Function;
 
-	let updateAvailable = false;
-	let version = {
+	let updateAvailable: boolean | null = false;
+	let version: Pick<UpdateInfo, 'current' | 'latest'> = {
 		current: WEBUI_VERSION,
 		latest: WEBUI_VERSION
 	};
@@ -33,17 +33,14 @@
 
 	const checkForVersionUpdates = async () => {
 		updateAvailable = null;
-		version = await getVersionUpdates(localStorage.token).catch((error) => {
-			return {
-				current: WEBUI_VERSION,
-				latest: WEBUI_VERSION
-			};
-		});
-
-		console.info(version);
-
-		updateAvailable = compareVersion(version.latest, version.current);
-		console.info(updateAvailable);
+		const updateInfo = await getUpdateInfo(localStorage.token, true).catch(() => null);
+		if (updateInfo) {
+			version = updateInfo;
+			updateAvailable = updateInfo.update_available;
+		} else {
+			version = { current: WEBUI_VERSION, latest: WEBUI_VERSION };
+			updateAvailable = false;
+		}
 	};
 
 	const updateBanners = async () => {

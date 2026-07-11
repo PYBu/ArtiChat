@@ -4,13 +4,10 @@
 	const dispatch = createEventDispatcher();
 	const i18n = getContext('i18n');
 
-	import { WEBUI_VERSION } from '$lib/constants';
+	import type { UpdateInfo } from '$lib/apis/updates';
 	import XMark from '../icons/XMark.svelte';
 
-	export let version = {
-		current: WEBUI_VERSION,
-		latest: WEBUI_VERSION
-	};
+	export let version: UpdateInfo;
 </script>
 
 <div
