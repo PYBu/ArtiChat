@@ -166,6 +166,7 @@ from open_webui.routers import (
     tasks,
     terminals,
     tools,
+    updates,
     users,
     utils,
 )
@@ -750,6 +751,7 @@ app.include_router(notes.router, prefix='/api/v1/notes', tags=['notes'])
 app.include_router(models.router, prefix='/api/v1/models', tags=['models'])
 app.include_router(subscriptions.router, prefix='/api/v1/subscriptions', tags=['subscriptions'])
 app.include_router(announcements.router, prefix='/api/v1/announcements', tags=['announcements'])
+app.include_router(updates.router, prefix='/api/v1/updates', tags=['updates'])
 app.include_router(knowledge.router, prefix='/api/v1/knowledge', tags=['knowledge'])
 app.include_router(prompts.router, prefix='/api/v1/prompts', tags=['prompts'])
 app.include_router(tools.router, prefix='/api/v1/tools', tags=['tools'])
@@ -2187,13 +2189,10 @@ async def delete_event_webhook_api(webhook_id: str, user=Depends(get_admin_user)
 async def get_app_version():
     return {
         'version': VERSION,
+        'display_version': f'{VERSION} (Artivis Alpha)',
+        'build_hash': WEBUI_BUILD_HASH,
         'deployment_id': DEPLOYMENT_ID,
     }
-
-
-@app.get('/api/version/updates')
-async def get_app_latest_release_version(user=Depends(get_verified_user)):
-    return {'current': VERSION, 'latest': VERSION}
 
 
 @app.get('/api/changelog')

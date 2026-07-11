@@ -1048,6 +1048,17 @@ PIP_PACKAGE_INDEX_OPTIONS = os.getenv('PIP_PACKAGE_INDEX_OPTIONS', '').split()
 ####################################
 
 ENABLE_VERSION_UPDATE_CHECK = os.getenv('ENABLE_VERSION_UPDATE_CHECK', 'true').lower() == 'true'
+ARTICHAT_UPDATE_REPOSITORY = os.getenv('ARTICHAT_UPDATE_REPOSITORY', '').strip()
+ARTICHAT_UPDATE_WORKFLOW = os.getenv('ARTICHAT_UPDATE_WORKFLOW', 'artichat-deploy.yml').strip()
+ARTICHAT_UPDATE_REF = os.getenv('ARTICHAT_UPDATE_REF', 'main').strip()
+ARTICHAT_UPDATE_GITHUB_TOKEN = os.getenv('ARTICHAT_UPDATE_GITHUB_TOKEN', '').strip()
+ARTICHAT_UPDATE_STATE_PATH = Path(
+    os.getenv('ARTICHAT_UPDATE_STATE_PATH', str(DATA_DIR / 'update-state' / 'status.json'))
+).resolve()
+ARTICHAT_UPDATE_CACHE_TTL_SECONDS = int(os.getenv('ARTICHAT_UPDATE_CACHE_TTL_SECONDS', '300'))
+ARTICHAT_UPDATE_STALE_AFTER_SECONDS = int(
+    os.getenv('ARTICHAT_UPDATE_STALE_AFTER_SECONDS', '1800')
+)
 OFFLINE_MODE = os.getenv('OFFLINE_MODE', 'false').lower() == 'true'
 
 if OFFLINE_MODE:
