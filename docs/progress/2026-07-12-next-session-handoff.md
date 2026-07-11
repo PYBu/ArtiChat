@@ -12,6 +12,7 @@ Git 分支：artichat-brand-whitelabel
 
 先完整读取：
 docs/progress/2026-07-11-github-docker-update-system.md
+docs/progress/2026-07-12-public-release-production-bootstrap-session.md
 docs/superpowers/plans/2026-07-11-artichat-github-docker-updates.md
 
 Tasks 1-11 和 Task 12 的自动化生产引导已完成。公开仓库为 https://github.com/PYBu/ArtiChat，v0.1.2 Release 和公开 GHCR 镜像已发布。生产服务器已安装受限更新 runner，并通过 operation `bootstrap-0.1.2-20260711T194923Z` 更新到 0.1.2；健康、真实 build hash、备份完整性和 20 项业务表计数均已验证。管理员登录后的 UI 数据抽查仍待人工完成。
