@@ -10,40 +10,26 @@ Use this file to resume work in a new Codex session.
 工作目录：C:\Users\admin\Desktop\Pro\ArtiChat\.worktrees\artichat-brand-whitelabel
 Git 分支：artichat-brand-whitelabel
 
-先读取：
+先完整读取：
 docs/progress/2026-07-11-github-docker-update-system.md
 docs/superpowers/plans/2026-07-11-artichat-github-docker-updates.md
 
-当前从 Task 8 开始：审查当前未提交的 SSH 包装器、安装脚本、生产 Compose 和部署 README，运行 Bash 语法检查、Compose 渲染和 npm run test:updates，确认无误后再提交。
+Tasks 1-11 的本地实现已经提交。先确认工作树干净，并复核最新 commit。当前唯一未完成的本地验证是 0.1.2 Docker smoke：默认构建分别被 onnxruntime 下载 ECONNRESET 和 Hugging Face Connection refused 阻塞，USE_SLIM=true 构建超过 30 分钟工具限制；旧 0.1.1 容器和 artichat_data 未被重建或修改。
 
-不要创建 GitHub 仓库、不要推送、不要配置 Actions Secrets、不要操作生产服务器，也不要使用子代理。
-保留当前 Task 8 未提交改动，不要重置或覆盖它们。
+网络稳定时重试本地 Docker 构建，只重建 artichat 服务，并验证 /health、/api/version、真实 build hash 和数据计数不变。
+
+不要创建 GitHub 仓库、不要推送、不要安装或登录 gh、不要配置 Actions Secrets、不要修改 GHCR 可见性、不要操作生产服务器，也不要使用子代理。只有用户明确启动“外部发布/生产部署阶段”后，才从 Task 11 Step 5 和 Task 12 继续。
 ```
 
-## Current State
+## Latest Commits
 
-- Tasks 1-7 are complete.
-- Latest progress commit: `c4f2fc7 docs: record update system task 7 progress`.
-- Task 7 deployment harness passed: `artichat deploy tests passed`.
-- Current worktree contains uncommitted Task 8 draft files. Review them before committing.
-- GitHub target is `PYBu/ArtiChat`, but public repository creation is intentionally deferred.
-- Do not push or change production state during the local implementation phase.
+- `0ab2d02 feat: add restricted production update runner`
+- `9d376ff ci: add ArtiChat release and deploy workflows`
+- `df8490b release: prepare ArtiChat 0.1.2`
+- `0d1118b chore: add sanitized public repository export`
 
-## Verification Notes
+## Verification Summary
 
-- Backend update tests through Task 4 passed: 45 tests.
-- Frontend helper tests passed: 3 tests.
-- `npm run test:updates` passed.
-- `vite build` passed.
-- A later full `npm run build` exceeded the 15-minute command limit during Pyodide preparation; child processes were terminated and generated Pyodide changes were restored.
-
-## Uncommitted Task 8 Files
-
-- `.env.example`
-- `.gitignore`
-- `deploy/aws-1panel/artichat-deploy.sh`
-- `deploy/aws-1panel/docker-compose.artichat-prod.yaml`
-- `deploy/aws-1panel/tests/test-artichat-deploy.sh`
-- `scripts/check-update-system.mjs`
-- `deploy/aws-1panel/artichat-deploy-ssh.sh`
-- `deploy/aws-1panel/install-update-runner.sh`
+- Source guards, frontend tests, 87 backend tests, full Vite build, Bash syntax, deploy harness, Compose rendering, workflow contracts, and public export tests passed.
+- A normal public export produced one clean root commit and passed the secret scanner.
+- Public GitHub creation, push, repository Secrets, GHCR publication, and production bootstrap remain intentionally deferred.
