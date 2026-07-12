@@ -5,7 +5,6 @@
 		{ href: '/admin/subscriptions/redeem-codes', title: '兑换码', description: '创建和停用兑换码。' },
 		{ href: '/admin/subscriptions/gift-cards', title: '礼品卡', description: '向用户发放可领取礼品。' },
 		{ href: '/admin/subscriptions/announcements', title: '公告', description: '管理登录公告。' },
-		{ href: '/admin/subscriptions/users', title: '用户订阅', description: '查看和编辑用户订阅。' },
 		{ href: '/admin/subscriptions/usage', title: '用量账本', description: '查看模型用量和余额变更。' }
 	];
 </script>

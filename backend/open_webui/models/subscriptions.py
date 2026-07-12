@@ -522,6 +522,7 @@ class UserSubscriptionSummaryModel(BaseModel):
     expires_at: int | None = None
     plan_balance_micros: int
     check_balance_micros: int
+    notes: str | None = None
 
 
 class SubscriptionLedgerModel(BaseModel):
