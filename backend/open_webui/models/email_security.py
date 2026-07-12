@@ -107,6 +107,19 @@ class EmailChallengeModel(BaseModel):
     created_at: int
 
 
+class PasswordResetTokenModel(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    email: str
+    user_id: str
+    token_hash: str
+    expires_at: int
+    consumed_at: int | None = None
+    ip_address: str | None = None
+    created_at: int
+
+
 class EmailDeliveryModel(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

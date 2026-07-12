@@ -8,9 +8,11 @@ import secrets
 from open_webui.models.email_security import (
     EmailChallenge,
     EmailChallengeModel,
+    PasswordResetToken,
+    PasswordResetTokenModel,
     get_email_security_db_context,
 )
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -20,6 +22,7 @@ EMAIL_CODE_RESEND_SECONDS = 60
 EMAIL_CODE_MAX_ATTEMPTS = 5
 EMAIL_CODE_MAX_SENDS_PER_EMAIL_HOUR = 5
 EMAIL_CODE_MAX_SENDS_PER_IP_HOUR = 20
+PASSWORD_RESET_TTL_SECONDS = 30 * 60
 
 
 def generate_email_code() -> str:
@@ -28,6 +31,90 @@ def generate_email_code() -> str:
 
 def generate_reset_token() -> str:
     return secrets.token_urlsafe(32)
+
+
+async def create_password_reset_token(
+    *,
+    email: str,
+    user_id: str,
+    token: str,
+    secret_key: str,
+    ip_address: str | None = None,
+    now: int,
+    db: AsyncSession | None = None,
+) -> PasswordResetTokenModel:
+    normalized_email = str(email or '').strip().lower()
+    token_hash = hash_email_secret(token, purpose='password_reset', secret_key=secret_key)
+    async with get_email_security_db_context(db) as session:
+        await session.execute(
+            update(PasswordResetToken)
+            .where(
+                PasswordResetToken.user_id == user_id,
+                PasswordResetToken.consumed_at.is_(None),
+            )
+            .values(consumed_at=now)
+        )
+        row = PasswordResetToken(
+            id=f'reset_{secrets.token_hex(16)}',
+            email=normalized_email,
+            user_id=user_id,
+            token_hash=token_hash,
+            expires_at=now + PASSWORD_RESET_TTL_SECONDS,
+            consumed_at=None,
+            ip_address=ip_address,
+            created_at=now,
+        )
+        session.add(row)
+        await session.commit()
+        await session.refresh(row)
+        return PasswordResetTokenModel.model_validate(row)
+
+
+async def validate_password_reset_token(
+    token: str,
+    *,
+    secret_key: str,
+    now: int,
+    db: AsyncSession | None = None,
+) -> PasswordResetTokenModel:
+    token_hash = hash_email_secret(token, purpose='password_reset', secret_key=secret_key)
+    async with get_email_security_db_context(db) as session:
+        result = await session.execute(
+            select(PasswordResetToken).where(PasswordResetToken.token_hash == token_hash)
+        )
+        row = result.scalars().first()
+        if row is None:
+            raise ValueError('PASSWORD_RESET_TOKEN_INVALID')
+        if row.consumed_at is not None:
+            raise ValueError('PASSWORD_RESET_TOKEN_USED')
+        if now > row.expires_at:
+            raise ValueError('PASSWORD_RESET_TOKEN_EXPIRED')
+        return PasswordResetTokenModel.model_validate(row)
+
+
+async def consume_password_reset_token(
+    token: str,
+    *,
+    secret_key: str,
+    now: int,
+    db: AsyncSession | None = None,
+) -> PasswordResetTokenModel:
+    token_hash = hash_email_secret(token, purpose='password_reset', secret_key=secret_key)
+    async with get_email_security_db_context(db) as session:
+        result = await session.execute(
+            select(PasswordResetToken).where(PasswordResetToken.token_hash == token_hash)
+        )
+        row = result.scalars().first()
+        if row is None:
+            raise ValueError('PASSWORD_RESET_TOKEN_INVALID')
+        if row.consumed_at is not None:
+            raise ValueError('PASSWORD_RESET_TOKEN_USED')
+        if now > row.expires_at:
+            raise ValueError('PASSWORD_RESET_TOKEN_EXPIRED')
+        row.consumed_at = now
+        await session.commit()
+        await session.refresh(row)
+        return PasswordResetTokenModel.model_validate(row)
 
 
 def hash_email_secret(value: str, *, purpose: str, secret_key: str) -> str:

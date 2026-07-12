@@ -422,7 +422,7 @@
 												<label for="password" class="text-sm font-medium text-left mb-1 block"
 													>{$i18n.t('Password')}</label
 												>
-												<SensitiveInput
+										<SensitiveInput
 													bind:value={password}
 													type="password"
 													id="password"
@@ -432,9 +432,20 @@
 													name="password"
 													screenReader={true}
 													required
-													aria-required="true"
-												/>
-											</div>{/if}
+											aria-required="true"
+										/>
+										{#if mode === 'signin'}
+											<div class="mt-1 text-right">
+												<button
+													type="button"
+													class="text-xs font-medium text-gray-500 hover:text-gray-800 dark:hover:text-gray-200"
+													on:click={() => goto('/auth/forgot-password')}
+												>
+													忘记密码？
+												</button>
+											</div>
+										{/if}
+									</div>{/if}
 
 										{#if codeSent && (mode === 'email-code' || mode === 'signup')}
 											<div class="mt-2">

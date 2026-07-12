@@ -173,3 +173,17 @@ export const verifyEmailChallenge = async (
 		{ method: 'POST', body: JSON.stringify({ email, purpose, code }) }
 	);
 };
+
+export const forgotPassword = async (email: string) => {
+	return jsonFetch<{ status: boolean }>(`${WEBUI_API_BASE_URL}/emails/password/forgot`, null, {
+		method: 'POST',
+		body: JSON.stringify({ email })
+	});
+};
+
+export const resetPassword = async (token: string, newPassword: string) => {
+	return jsonFetch<{ status: boolean }>(`${WEBUI_API_BASE_URL}/emails/password/reset`, null, {
+		method: 'POST',
+		body: JSON.stringify({ token, new_password: newPassword })
+	});
+};

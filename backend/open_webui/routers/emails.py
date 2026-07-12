@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from datetime import UTC, datetime
 from typing import Any
+from urllib.parse import urlencode
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -10,6 +12,7 @@ from open_webui.env import WEBUI_SECRET_KEY
 from open_webui.internal.db import get_async_session
 from open_webui.models.config import Config
 from open_webui.models.email_security import EmailDeliveries, EmailTemplates
+from open_webui.models.auths import Auths
 from open_webui.models.subscriptions import now_ts
 from open_webui.models.users import Users
 from open_webui.utils.email_delivery import (
@@ -24,19 +27,25 @@ from open_webui.utils.email_delivery import (
     validate_email_template,
 )
 from open_webui.utils.email_security import (
+    consume_password_reset_token,
+    create_password_reset_token,
     create_email_challenge,
     generate_email_code,
+    generate_reset_token,
     invalidate_email_challenge,
     is_registration_email_allowed,
     normalize_allowed_domains,
+    validate_password_reset_token,
     verify_email_challenge,
 )
+from open_webui.utils.passwords import get_password_hash, validate_password
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
 router = APIRouter()
 bearer_security = HTTPBearer(auto_error=False)
+log = logging.getLogger(__name__)
 
 
 async def get_email_current_user(
@@ -138,6 +147,15 @@ class EmailChallengeVerifyForm(BaseModel):
     email: str
     purpose: str
     code: str
+
+
+class ForgotPasswordForm(BaseModel):
+    email: str
+
+
+class ResetPasswordForm(BaseModel):
+    token: str
+    new_password: str
 
 
 async def load_smtp_settings() -> dict[str, Any]:
@@ -315,6 +333,124 @@ async def verify_challenge_code(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {'verification_token': challenge.id}
+
+
+@router.post('/password/forgot')
+async def forgot_password(
+    request: Request,
+    form_data: ForgotPasswordForm,
+    db: AsyncSession = Depends(get_async_session),
+):
+    email = form_data.email.strip().lower()
+    raw_token: str | None = None
+    try:
+        user = await Users.get_user_by_email(email, db=db)
+        settings = await load_smtp_settings()
+        if user is None or not settings.get('enabled'):
+            return {'status': True}
+
+        raw_token = generate_reset_token()
+        timestamp = now_ts()
+        await create_password_reset_token(
+            email=user.email,
+            user_id=user.id,
+            token=raw_token,
+            secret_key=WEBUI_SECRET_KEY,
+            ip_address=request.client.host if request.client else None,
+            now=timestamp,
+            db=db,
+        )
+        public_url = str(settings.get('public_url') or str(request.base_url)).rstrip('/')
+        reset_url = f'{public_url}/auth/reset-password?{urlencode({"token": raw_token})}'
+        delivery = await deliver_email(
+            template_key='password_reset',
+            recipient=user.email,
+            variables={
+                'platform_name': settings.get('sender_name') or 'ArtiChat',
+                'platform_url': public_url,
+                'user_name': user.name or user.email.split('@', 1)[0],
+                'reset_url': reset_url,
+                'expires_minutes': 30,
+            },
+            settings=settings,
+            secret_key=WEBUI_SECRET_KEY,
+            db=db,
+        )
+        if delivery.status != 'sent':
+            await consume_password_reset_token(
+                raw_token,
+                secret_key=WEBUI_SECRET_KEY,
+                now=now_ts(),
+                db=db,
+            )
+    except Exception:
+        if raw_token is not None:
+            try:
+                await consume_password_reset_token(
+                    raw_token,
+                    secret_key=WEBUI_SECRET_KEY,
+                    now=now_ts(),
+                    db=db,
+                )
+            except ValueError:
+                pass
+        log.warning('Password reset email could not be dispatched', exc_info=True)
+    return {'status': True}
+
+
+@router.post('/password/reset')
+async def reset_password(
+    request: Request,
+    form_data: ResetPasswordForm,
+    db: AsyncSession = Depends(get_async_session),
+):
+    timestamp = now_ts()
+    try:
+        reset_token = await validate_password_reset_token(
+            form_data.token,
+            secret_key=WEBUI_SECRET_KEY,
+            now=timestamp,
+            db=db,
+        )
+        validate_password(form_data.new_password)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    user = await Users.get_user_by_id(reset_token.user_id, db=db)
+    if user is None or user.email.strip().lower() != reset_token.email:
+        raise HTTPException(status_code=400, detail='PASSWORD_RESET_TOKEN_INVALID')
+
+    await consume_password_reset_token(
+        form_data.token,
+        secret_key=WEBUI_SECRET_KEY,
+        now=timestamp,
+        db=db,
+    )
+    hashed_password = await get_password_hash(form_data.new_password)
+    if not await Auths.update_user_password_by_id(user.id, hashed_password, db=db):
+        raise HTTPException(status_code=400, detail='PASSWORD_RESET_FAILED')
+
+    try:
+        settings = await load_smtp_settings()
+        if settings.get('enabled'):
+            await deliver_email(
+                template_key='password_changed',
+                recipient=user.email,
+                variables={
+                    'platform_name': settings.get('sender_name') or 'ArtiChat',
+                    'platform_url': settings.get('public_url') or str(request.base_url).rstrip('/'),
+                    'user_name': user.name or user.email.split('@', 1)[0],
+                    'changed_at': datetime.now(UTC).strftime('%Y-%m-%d %H:%M UTC'),
+                },
+                settings=settings,
+                secret_key=WEBUI_SECRET_KEY,
+                db=db,
+            )
+    except Exception:
+        log.warning('Password changed notice could not be dispatched', exc_info=True)
+    return {'status': True}
 
 
 @router.get('/admin/settings')

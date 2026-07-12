@@ -1,12 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+	forgotPassword,
 	getEmailDeliveries,
 	getEmailSettings,
 	getEmailTemplates,
 	getRegistrationSettings,
 	getPublicRegistrationSettings,
 	requestEmailChallenge,
+	resetPassword,
 	retryEmailDelivery,
 	sendEmailTest,
 	testEmailConnection,
@@ -47,6 +49,8 @@ describe('email admin api', () => {
 		await getPublicRegistrationSettings();
 		await requestEmailChallenge('alice@example.com', 'registration');
 		await verifyEmailChallenge('alice@example.com', 'registration', '123456');
+		await forgotPassword('alice@example.com');
+		await resetPassword('reset-token', 'New-password-123!');
 
 		expect(fetchMock.mock.calls.map(([url]) => String(url))).toEqual([
 			expect.stringContaining('/emails/admin/settings'),
@@ -61,7 +65,9 @@ describe('email admin api', () => {
 			expect.stringContaining('/emails/admin/registration'),
 			expect.stringContaining('/emails/registration/public'),
 			expect.stringContaining('/emails/challenges/request'),
-			expect.stringContaining('/emails/challenges/verify')
+			expect.stringContaining('/emails/challenges/verify'),
+			expect.stringContaining('/emails/password/forgot'),
+			expect.stringContaining('/emails/password/reset')
 		]);
 		expect(fetchMock.mock.calls[1][1]).toMatchObject({
 			method: 'PUT',
