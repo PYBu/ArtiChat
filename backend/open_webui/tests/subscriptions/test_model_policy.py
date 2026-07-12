@@ -19,6 +19,64 @@ def test_missing_policy_allows_all_tiers_and_is_metered():
     assert policy.allowed_tiers == ['free', 'plus', 'chatpower']
     assert policy.quota_mode == 'metered'
     assert policy.usage_multiplier == '1'
+    assert policy.input_chatpoint_per_million == '100'
+    assert policy.output_chatpoint_per_million == '100'
+    assert policy.cache_creation_chatpoint_per_million == '0'
+    assert policy.cache_read_chatpoint_per_million == '0'
+
+
+def test_legacy_multiplier_normalizes_to_equivalent_four_part_prices():
+    policy = ModelSubscriptionPolicy.model_validate(
+        {
+            'allowed_tiers': ['free'],
+            'quota_mode': 'metered',
+            'usage_multiplier': '2.5',
+        }
+    )
+
+    assert policy.input_chatpoint_per_million == '250'
+    assert policy.output_chatpoint_per_million == '250'
+    assert policy.cache_creation_chatpoint_per_million == '0'
+    assert policy.cache_read_chatpoint_per_million == '0'
+
+
+def test_explicit_four_part_prices_are_preserved_as_canonical_strings():
+    policy = ModelSubscriptionPolicy.model_validate(
+        {
+            'allowed_tiers': ['plus'],
+            'quota_mode': 'metered',
+            'usage_multiplier': '9',
+            'input_chatpoint_per_million': '1.2500',
+            'output_chatpoint_per_million': 3,
+            'cache_creation_chatpoint_per_million': '0.50',
+            'cache_read_chatpoint_per_million': '0.125',
+        }
+    )
+
+    assert policy.input_chatpoint_per_million == '1.25'
+    assert policy.output_chatpoint_per_million == '3'
+    assert policy.cache_creation_chatpoint_per_million == '0.5'
+    assert policy.cache_read_chatpoint_per_million == '0.125'
+
+
+@pytest.mark.parametrize(
+    'field,value',
+    [
+        ('input_chatpoint_per_million', '-1'),
+        ('output_chatpoint_per_million', 'invalid'),
+        ('cache_creation_chatpoint_per_million', '-0.1'),
+        ('cache_read_chatpoint_per_million', 'nan'),
+    ],
+)
+def test_invalid_four_part_prices_are_rejected(field, value):
+    with pytest.raises(ValueError, match='MODEL_SUBSCRIPTION_POLICY_INVALID'):
+        ModelSubscriptionPolicy.model_validate(
+            {
+                'allowed_tiers': ['free'],
+                'quota_mode': 'metered',
+                field: value,
+            }
+        )
 
 
 def test_filter_removes_models_not_allowed_for_tier():

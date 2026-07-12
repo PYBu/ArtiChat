@@ -17,7 +17,7 @@ from open_webui.models.subscriptions import (
     debit_balances,
     now_ts,
 )
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 SECONDS_PER_DAY = 24 * 60 * 60
@@ -33,6 +33,28 @@ class ModelSubscriptionPolicy(BaseModel):
     allowed_tiers: list[str] = Field(default_factory=lambda: [FREE_TIER, PLUS_TIER, CHATPOWER_TIER])
     quota_mode: str = 'metered'
     usage_multiplier: str = '1'
+    input_chatpoint_per_million: str | None = None
+    output_chatpoint_per_million: str | None = None
+    cache_creation_chatpoint_per_million: str | None = None
+    cache_read_chatpoint_per_million: str | None = None
+
+    @model_validator(mode='before')
+    @classmethod
+    def normalize_legacy_prices(cls, value):
+        data = dict(value or {})
+        try:
+            multiplier = Decimal(str(data.get('usage_multiplier', '1')))
+        except InvalidOperation as exc:
+            raise ValueError('MODEL_SUBSCRIPTION_POLICY_INVALID: usage_multiplier must be numeric') from exc
+        if not multiplier.is_finite() or multiplier < 0:
+            raise ValueError('MODEL_SUBSCRIPTION_POLICY_INVALID: usage_multiplier must be >= 0')
+
+        legacy_price = _canonical_decimal(multiplier * Decimal('100'))
+        data.setdefault('input_chatpoint_per_million', legacy_price)
+        data.setdefault('output_chatpoint_per_million', legacy_price)
+        data.setdefault('cache_creation_chatpoint_per_million', '0')
+        data.setdefault('cache_read_chatpoint_per_million', '0')
+        return data
 
     @field_validator('allowed_tiers')
     @classmethod
@@ -60,6 +82,76 @@ class ModelSubscriptionPolicy(BaseModel):
         if multiplier < 0:
             raise ValueError('MODEL_SUBSCRIPTION_POLICY_INVALID: usage_multiplier must be >= 0')
         return str(value)
+
+    @field_validator(
+        'input_chatpoint_per_million',
+        'output_chatpoint_per_million',
+        'cache_creation_chatpoint_per_million',
+        'cache_read_chatpoint_per_million',
+        mode='before',
+    )
+    @classmethod
+    def validate_token_price(cls, value) -> str:
+        try:
+            price = Decimal(str(value))
+        except InvalidOperation as exc:
+            raise ValueError('MODEL_SUBSCRIPTION_POLICY_INVALID: token price must be numeric') from exc
+        if not price.is_finite() or price < 0:
+            raise ValueError('MODEL_SUBSCRIPTION_POLICY_INVALID: token price must be >= 0')
+        return _canonical_decimal(price)
+
+
+def _canonical_decimal(value: Decimal) -> str:
+    normalized = format(value.normalize(), 'f')
+    return '0' if Decimal(normalized) == 0 else normalized
+
+
+class NormalizedBillableUsage(BaseModel):
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cache_creation_tokens: int = 0
+    cache_read_tokens: int = 0
+    total_tokens: int = 0
+    raw_usage: dict = Field(default_factory=dict)
+    usage_present: bool = False
+
+
+def _usage_int(usage: dict, *keys: str) -> int:
+    for key in keys:
+        if key in usage and usage[key] is not None:
+            try:
+                return max(int(usage[key]), 0)
+            except (TypeError, ValueError):
+                return 0
+    return 0
+
+
+def normalize_billable_usage(usage: dict | None) -> NormalizedBillableUsage:
+    raw_usage = dict(usage or {})
+    input_tokens = _usage_int(raw_usage, 'input_tokens', 'prompt_tokens', 'prompt_eval_count', 'prompt_n')
+    output_tokens = _usage_int(raw_usage, 'output_tokens', 'completion_tokens', 'eval_count', 'predicted_n')
+    cache_creation_tokens = _usage_int(raw_usage, 'cache_creation_tokens', 'cache_creation_input_tokens')
+    cache_read_tokens = _usage_int(raw_usage, 'cache_read_tokens', 'cache_read_input_tokens')
+
+    cache_is_included_in_input = False
+    for details_key in ('prompt_tokens_details', 'input_tokens_details'):
+        details = raw_usage.get(details_key)
+        if isinstance(details, dict) and details.get('cached_tokens') is not None:
+            cache_read_tokens = max(int(details.get('cached_tokens') or 0), 0)
+            cache_is_included_in_input = True
+            break
+
+    normal_input_tokens = max(input_tokens - cache_read_tokens, 0) if cache_is_included_in_input else input_tokens
+    total_tokens = normal_input_tokens + output_tokens + cache_creation_tokens + cache_read_tokens
+    return NormalizedBillableUsage(
+        input_tokens=normal_input_tokens,
+        output_tokens=output_tokens,
+        cache_creation_tokens=cache_creation_tokens,
+        cache_read_tokens=cache_read_tokens,
+        total_tokens=total_tokens,
+        raw_usage=raw_usage,
+        usage_present=bool(raw_usage),
+    )
 
 
 def get_model_subscription_policy(model: dict) -> ModelSubscriptionPolicy:

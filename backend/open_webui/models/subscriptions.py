@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 CHATPOINT_MICROS = 1_000_000
 TOKENS_PER_CHATPOINT = 10_000
+TOKENS_PER_MILLION = 1_000_000
 
 FREE_TIER = 'free'
 PLUS_TIER = 'plus'
@@ -56,6 +57,35 @@ def calculate_cost_micros(total_tokens: int, usage_multiplier: str | Decimal | i
         return 0
 
     raw_chatpoints = Decimal(total_tokens) / Decimal(TOKENS_PER_CHATPOINT) * multiplier
+    return chatpoint_to_micros(raw_chatpoints)
+
+
+def calculate_token_cost_micros(
+    *,
+    input_tokens: int,
+    output_tokens: int,
+    cache_creation_tokens: int,
+    cache_read_tokens: int,
+    input_chatpoint_per_million: str | Decimal | int,
+    output_chatpoint_per_million: str | Decimal | int,
+    cache_creation_chatpoint_per_million: str | Decimal | int,
+    cache_read_chatpoint_per_million: str | Decimal | int,
+) -> int:
+    token_counts = [input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens]
+    prices = [
+        Decimal(str(input_chatpoint_per_million)),
+        Decimal(str(output_chatpoint_per_million)),
+        Decimal(str(cache_creation_chatpoint_per_million)),
+        Decimal(str(cache_read_chatpoint_per_million)),
+    ]
+    if any(value < 0 for value in token_counts):
+        raise ValueError('token counts must be greater than or equal to 0')
+    if any(not value.is_finite() or value < 0 for value in prices):
+        raise ValueError('token prices must be greater than or equal to 0')
+
+    raw_chatpoints = sum(Decimal(tokens) * price for tokens, price in zip(token_counts, prices)) / Decimal(
+        TOKENS_PER_MILLION
+    )
     return chatpoint_to_micros(raw_chatpoints)
 
 
