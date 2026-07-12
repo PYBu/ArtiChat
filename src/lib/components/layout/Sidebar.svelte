@@ -57,6 +57,7 @@
 	import { createNewNote, getPinnedNoteList, toggleNotePinnedStatusById } from '$lib/apis/notes';
 	import { updateUserSettings } from '$lib/apis/users';
 	import { checkActiveChats } from '$lib/apis/tasks';
+	import { getPendingGiftCards } from '$lib/apis/subscriptions';
 	import { createNoteHandler } from '$lib/components/notes/utils';
 	import { WEBUI_API_BASE_URL, WEBUI_BASE_URL } from '$lib/constants';
 
@@ -88,6 +89,16 @@
 
 	const BREAKPOINT = 768;
 	const DEFAULT_PINNED_ITEMS = ['notes', 'workspace'];
+	let hasPendingGift = false;
+
+	const loadPendingGiftCards = async () => {
+		if (!$user || !localStorage.token) {
+			hasPendingGift = false;
+			return;
+		}
+		const response = await getPendingGiftCards(localStorage.token).catch(() => ({ items: [] }));
+		hasPendingGift = (response?.items ?? []).length > 0;
+	};
 
 	let scrollTop = 0;
 
@@ -508,7 +519,9 @@
 		}
 	};
 
-	const onFocus = () => {};
+	const onFocus = () => {
+		loadPendingGiftCards();
+	};
 
 	const onBlur = () => {
 		shiftKey = false;
@@ -563,6 +576,7 @@
 		});
 
 		showSidebar.set(!$mobile ? localStorage.sidebar === 'true' : false);
+		await loadPendingGiftCards();
 
 		const unsubscribers = [
 			mobile.subscribe((value) => {
@@ -1601,6 +1615,22 @@
 				></div>
 				<div class="flex flex-col font-primary">
 					{#if $user !== undefined && $user !== null}
+						{#if hasPendingGift}
+							<button
+								id="pending-gift-entry"
+								type="button"
+								class="mb-1 w-full rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-left text-xs font-medium text-green-800 transition hover:bg-green-100 dark:border-green-900 dark:bg-green-950/30 dark:text-green-200 dark:hover:bg-green-950/50"
+								on:click={async () => {
+									await showSettings.set('redeem_code');
+									if ($mobile) {
+										await tick();
+										showSidebar.set(false);
+									}
+								}}
+							>
+								可领取的礼品
+							</button>
+						{/if}
 						<UserMenu
 							role={$user?.role}
 							profile={$config?.features?.enable_user_status ?? true}

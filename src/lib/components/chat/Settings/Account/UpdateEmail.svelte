@@ -9,6 +9,7 @@
 	} from '$lib/apis/emails';
 	import { user } from '$lib/stores';
 	import { toast } from 'svelte-sonner';
+	import { emailErrorMessage } from '$lib/utils/email-errors';
 
 	let show = false;
 	let newEmail = '';
@@ -19,7 +20,7 @@
 
 	const finish = async (verificationToken: string | null) => {
 		const updated = await updateUserEmail(localStorage.token, newEmail, verificationToken).catch((error) => {
-			toast.error(`${error}`);
+			toast.error(emailErrorMessage(error));
 			return false;
 		});
 		if (updated) {
@@ -34,7 +35,7 @@
 		busy = true;
 		if (step === 'idle') {
 			const request = await requestSensitiveChallenge(localStorage.token, 'email').catch((error) => {
-				toast.error(`${error}`);
+				toast.error(emailErrorMessage(error));
 				return null;
 			});
 			if (request?.verification_required) {
@@ -45,7 +46,7 @@
 			}
 		} else if (step === 'current') {
 			const verified = await verifySensitiveChallenge(localStorage.token, 'email', currentCode).catch((error) => {
-				toast.error(`${error}`);
+				toast.error(emailErrorMessage(error));
 				return null;
 			});
 			if (verified?.verification_token) {
@@ -54,7 +55,7 @@
 					newEmail,
 					verified.verification_token
 				).catch((error) => {
-					toast.error(`${error}`);
+					toast.error(emailErrorMessage(error));
 					return null;
 				});
 				if (request?.verification_required) {
@@ -66,12 +67,18 @@
 			}
 		} else {
 			const verified = await verifyNewEmailChallenge(localStorage.token, newEmail, newCode).catch((error) => {
-				toast.error(`${error}`);
+				toast.error(emailErrorMessage(error));
 				return null;
 			});
 			if (verified?.verification_token) await finish(verified.verification_token);
 		}
 		busy = false;
+	};
+
+	const restartVerification = () => {
+		step = 'idle';
+		currentCode = '';
+		newCode = '';
 	};
 </script>
 
@@ -92,6 +99,9 @@
 				<input bind:value={currentCode} inputmode="numeric" maxlength="6" pattern="[0-9]{6}" required class="bg-transparent outline-hidden" aria-label="当前邮箱验证码" placeholder="当前邮箱验证码" />
 			{:else if step === 'new'}
 				<input bind:value={newCode} inputmode="numeric" maxlength="6" pattern="[0-9]{6}" required class="bg-transparent outline-hidden" aria-label="新邮箱验证码" placeholder="新邮箱验证码" />
+			{/if}
+			{#if step !== 'idle'}
+				<button type="button" class="self-start text-xs font-medium text-gray-500 underline" on:click={restartVerification}>重新开始验证</button>
 			{/if}
 			<div>
 				<button disabled={busy} class="rounded-full bg-black px-3 py-1.5 text-white disabled:opacity-50 dark:bg-white dark:text-black">

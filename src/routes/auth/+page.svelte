@@ -27,6 +27,7 @@
 	import { WEBUI_NAME, config, user, socket } from '$lib/stores';
 
 	import { generateInitialsImage, canvasPixelTest, getUserTimezone } from '$lib/utils';
+	import { emailErrorMessage } from '$lib/utils/email-errors';
 
 	import Spinner from '$lib/components/common/Spinner.svelte';
 	import OnBoarding from '$lib/components/OnBoarding.svelte';
@@ -48,13 +49,25 @@
 	let confirmPassword = '';
 	let emailCode = '';
 	let codeSent = false;
+	let resendSeconds = 0;
+	let codeExpiresSeconds = 0;
 	let verificationToken = '';
 	let registrationFeatures = { verification_enabled: false, email_code_login_enabled: false };
 	const resetEmailVerification = () => {
 		emailCode = '';
 		codeSent = false;
 		verificationToken = '';
+		resendSeconds = 0;
+		codeExpiresSeconds = 0;
 	};
+
+	onMount(() => {
+		const timer = window.setInterval(() => {
+			if (resendSeconds > 0) resendSeconds -= 1;
+			if (codeExpiresSeconds > 0) codeExpiresSeconds -= 1;
+		}, 1000);
+		return () => window.clearInterval(timer);
+	});
 
 	let ldapUsername = '';
 
@@ -86,7 +99,7 @@
 
 	const signInHandler = async () => {
 		const sessionUser = await userSignIn(email, password).catch((error) => {
-			toast.error(`${error}`);
+			toast.error(emailErrorMessage(error));
 			return null;
 		});
 
@@ -94,12 +107,18 @@
 	};
 
 	const sendCode = async (purpose: 'registration' | 'login') => {
+		if (resendSeconds > 0) {
+			toast.error(`请等待 ${resendSeconds} 秒后重新发送验证码。`);
+			return null;
+		}
 		const result = await requestEmailChallenge(email, purpose).catch((error) => {
-			toast.error(`${error}`);
+			toast.error(emailErrorMessage(error));
 			return null;
 		});
 		if (result?.status) {
 			codeSent = true;
+			resendSeconds = 60;
+			codeExpiresSeconds = 600;
 			toast.success('验证码已发送。');
 		}
 		return result;
@@ -107,7 +126,7 @@
 
 	const verifyCode = async (purpose: 'registration' | 'login') => {
 		const result = await verifyEmailChallenge(email, purpose, emailCode).catch((error) => {
-			toast.error(`${error}`);
+			toast.error(emailErrorMessage(error));
 			return null;
 		});
 		verificationToken = result?.verification_token ?? '';
@@ -122,7 +141,7 @@
 		const token = await verifyCode('login');
 		if (!token) return;
 		const sessionUser = await userEmailCodeSignIn(email, token).catch((error) => {
-			toast.error(`${error}`);
+			toast.error(emailErrorMessage(error));
 			return null;
 		});
 		await setSessionUser(sessionUser);
@@ -150,7 +169,7 @@
 			generateInitialsImage(name),
 			verificationToken || null
 		).catch((error) => {
-			toast.error(`${error}`);
+			toast.error(emailErrorMessage(error));
 			return null;
 		});
 
@@ -379,9 +398,20 @@
 													class="my-0.5 w-full text-sm outline-hidden bg-transparent placeholder:text-gray-300 dark:placeholder:text-gray-600"
 													autocomplete="name"
 													placeholder={$i18n.t('Enter Your Full Name')}
-													required
-												/>
+												required
+											/>
+											<div class="mt-1 flex items-center justify-between text-xs text-gray-500">
+												<span>{codeExpiresSeconds > 0 ? `验证码将在 ${codeExpiresSeconds} 秒后过期` : '验证码已过期，请重新发送'}</span>
+												<button
+													type="button"
+													disabled={resendSeconds > 0}
+													class="font-medium underline disabled:no-underline disabled:opacity-50"
+													on:click={() => sendCode(mode === 'signup' ? 'registration' : 'login')}
+												>
+													{resendSeconds > 0 ? `${resendSeconds} 秒后可重发` : '重新发送'}
+												</button>
 											</div>
+										</div>
 										{/if}
 
 										{#if mode === 'ldap'}

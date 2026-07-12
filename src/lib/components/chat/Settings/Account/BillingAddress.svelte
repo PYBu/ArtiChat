@@ -3,6 +3,7 @@
 	import { toast } from 'svelte-sonner';
 	import { requestSensitiveChallenge, verifySensitiveChallenge } from '$lib/apis/emails';
 	import { getMySubscription, updateBillingAddress } from '$lib/apis/subscriptions';
+	import { emailErrorMessage } from '$lib/utils/email-errors';
 
 	let billingAddress = { name: '', country: '', address: '', postal_code: '', tax_id_or_notes: '' };
 	let verificationCode = '';
@@ -21,14 +22,14 @@
 				verificationRequested = false;
 				verificationCode = '';
 			})
-			.catch((error) => toast.error(`${error}`));
+			.catch((error) => toast.error(emailErrorMessage(error)));
 	};
 
 	const save = async () => {
 		busy = true;
 		if (!verificationRequested) {
 			const request = await requestSensitiveChallenge(localStorage.token, 'billing_address').catch((error) => {
-				toast.error(`${error}`);
+				toast.error(emailErrorMessage(error));
 				return null;
 			});
 			if (request?.verification_required) {
@@ -40,13 +41,21 @@
 		} else {
 			const verified = await verifySensitiveChallenge(localStorage.token, 'billing_address', verificationCode).catch(
 				(error) => {
-					toast.error(`${error}`);
+					toast.error(emailErrorMessage(error));
 					return null;
 				}
 			);
 			if (verified?.verification_token) await persist(verified.verification_token);
 		}
 		busy = false;
+	};
+
+	const resendVerification = async () => {
+		const result = await requestSensitiveChallenge(localStorage.token, 'billing_address').catch((error) => {
+			toast.error(emailErrorMessage(error));
+			return null;
+		});
+		if (result?.status) toast.success('验证码已重新发送');
 	};
 
 	onMount(load);
@@ -62,6 +71,7 @@
 		<input class="bg-transparent outline-hidden" aria-label="税号或备注" placeholder="税号或备注" bind:value={billingAddress.tax_id_or_notes} />
 		{#if verificationRequested}
 			<input bind:value={verificationCode} inputmode="numeric" maxlength="6" pattern="[0-9]{6}" required class="bg-transparent outline-hidden" aria-label="邮箱验证码" placeholder="邮箱验证码" />
+			<button type="button" class="self-start text-xs font-medium text-gray-500 underline" on:click={resendVerification}>重新发送验证码</button>
 		{/if}
 		<div>
 			<button type="button" disabled={busy} class="rounded-full bg-black px-3 py-1.5 text-white disabled:opacity-50 dark:bg-white dark:text-black" on:click={save}>

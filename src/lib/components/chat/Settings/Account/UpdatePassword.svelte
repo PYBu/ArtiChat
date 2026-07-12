@@ -4,6 +4,7 @@
 	import { updateUserPassword } from '$lib/apis/auths';
 	import { requestSensitiveChallenge, verifySensitiveChallenge } from '$lib/apis/emails';
 	import SensitiveInput from '$lib/components/common/SensitiveInput.svelte';
+	import { emailErrorMessage } from '$lib/utils/email-errors';
 
 	const i18n = getContext('i18n');
 	let show = false;
@@ -21,7 +22,7 @@
 			newPassword,
 			verificationToken
 		).catch((error) => {
-			toast.error(`${error}`);
+			toast.error(emailErrorMessage(error));
 			return null;
 		});
 		if (result) {
@@ -44,7 +45,7 @@
 		busy = true;
 		if (!verificationRequested) {
 			const request = await requestSensitiveChallenge(localStorage.token, 'password').catch((error) => {
-				toast.error(`${error}`);
+				toast.error(emailErrorMessage(error));
 				return null;
 			});
 			if (request?.verification_required) {
@@ -56,13 +57,21 @@
 		} else {
 			const verified = await verifySensitiveChallenge(localStorage.token, 'password', verificationCode).catch(
 				(error) => {
-					toast.error(`${error}`);
+					toast.error(emailErrorMessage(error));
 					return null;
 				}
 			);
 			if (verified?.verification_token) await persist(verified.verification_token);
 		}
 		busy = false;
+	};
+
+	const resendVerification = async () => {
+		const result = await requestSensitiveChallenge(localStorage.token, 'password').catch((error) => {
+			toast.error(emailErrorMessage(error));
+			return null;
+		});
+		if (result?.status) toast.success('验证码已重新发送');
 	};
 </script>
 
@@ -92,6 +101,7 @@
 				<div>
 					<div class="mb-1 text-xs text-gray-500">邮箱验证码</div>
 					<input bind:value={verificationCode} inputmode="numeric" maxlength="6" pattern="[0-9]{6}" required class="w-full bg-transparent text-sm outline-hidden dark:text-gray-300" />
+					<button type="button" class="mt-1 text-xs font-medium text-gray-500 underline" on:click={resendVerification}>重新发送验证码</button>
 				</div>
 			{/if}
 		</div>

@@ -4,6 +4,7 @@
 	import ThemeLogo from '$lib/components/common/ThemeLogo.svelte';
 	import { WEBUI_NAME } from '$lib/stores';
 	import { toast } from 'svelte-sonner';
+	import { emailErrorMessage } from '$lib/utils/email-errors';
 
 	let email = '';
 	let sending = false;
@@ -12,7 +13,7 @@
 	const submit = async () => {
 		sending = true;
 		const result = await forgotPassword(email).catch((error) => {
-			toast.error(`${error}`);
+			toast.error(emailErrorMessage(error));
 			return null;
 		});
 		sending = false;
