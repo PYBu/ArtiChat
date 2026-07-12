@@ -2,8 +2,19 @@
 	export let policy = {
 		allowed_tiers: ['free', 'plus', 'chatpower'],
 		quota_mode: 'metered',
-		usage_multiplier: '1'
+		usage_multiplier: '1',
+		input_chatpoint_per_million: '100',
+		output_chatpoint_per_million: '100',
+		cache_creation_chatpoint_per_million: '0',
+		cache_read_chatpoint_per_million: '0'
 	};
+
+	const priceFields = [
+		{ key: 'input_chatpoint_per_million', label: '输入' },
+		{ key: 'output_chatpoint_per_million', label: '输出' },
+		{ key: 'cache_creation_chatpoint_per_million', label: '创建缓存' },
+		{ key: 'cache_read_chatpoint_per_million', label: '读取缓存' }
+	];
 
 	const tiers = [
 		{ id: 'free', label: 'Free' },
@@ -32,7 +43,7 @@
 		</div>
 	</div>
 
-	<div class="grid gap-2 rounded-lg border border-gray-100 p-3 dark:border-gray-850 md:grid-cols-3">
+	<div class="grid gap-3 rounded-lg border border-gray-100 p-3 dark:border-gray-850 md:grid-cols-2">
 		<div>
 			<div class="mb-2 text-xs text-gray-500">可见范围</div>
 			<div class="flex flex-wrap gap-2">
@@ -57,13 +68,22 @@
 			</select>
 		</label>
 
-		<label class="flex flex-col gap-1">
-			<span class="text-xs text-gray-500">扣费倍率</span>
-			<input
-				class="rounded-lg border border-gray-100 bg-transparent px-2 py-1 disabled:text-gray-400 dark:border-gray-850"
-				disabled={policy.quota_mode === 'unlimited'}
-				bind:value={policy.usage_multiplier}
-			/>
-		</label>
+
+		<div class="grid grid-cols-2 gap-2 md:col-span-2 md:grid-cols-4">
+			{#each priceFields as field}
+				<label class="flex min-w-0 flex-col gap-1">
+					<span class="text-xs text-gray-500">{field.label}</span>
+					<input
+						type="number"
+						min="0"
+						step="any"
+						class="min-w-0 rounded-lg border border-gray-100 bg-transparent px-2 py-1 disabled:text-gray-400 dark:border-gray-850"
+						disabled={policy.quota_mode === 'unlimited'}
+						bind:value={policy[field.key]}
+					/>
+					<span class="text-[10px] text-gray-400">Chatpoint / 1M Token</span>
+				</label>
+			{/each}
+		</div>
 	</div>
 </div>

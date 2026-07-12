@@ -84,6 +84,23 @@ if ((modelAccess.match(/保存更改/g) ?? []).length !== 1) {
 	failures.push('Model access must contain exactly one 保存更改 command');
 }
 
+const pricingFields = [
+	'input_chatpoint_per_million',
+	'output_chatpoint_per_million',
+	'cache_creation_chatpoint_per_million',
+	'cache_read_chatpoint_per_million'
+];
+for (const file of [
+	'src/lib/components/admin/Settings/Subscriptions/ModelAccess.svelte',
+	'src/lib/components/workspace/Models/SubscriptionPolicy.svelte',
+	'src/lib/components/workspace/Models/ModelEditor.svelte'
+]) {
+	const text = read(file);
+	for (const field of pricingFields) {
+		if (!text.includes(field)) failures.push(`${file} missing ${field}`);
+	}
+}
+
 const settingsModal = read('src/lib/components/chat/SettingsModal.svelte');
 for (const marker of [
 	"import Subscription from './Settings/Subscription.svelte'",
@@ -148,6 +165,15 @@ for (const marker of ['邮箱、用户名、显示名或用户 ID', 'row.user?.e
 
 const usageLedger = read('src/lib/components/admin/Settings/Subscriptions/UsageLedger.svelte');
 if (!usageLedger.includes('user?.email')) failures.push('Usage ledger must display user email');
+for (const marker of [...pricingFields.map((field) => field.replace('_chatpoint_per_million', '_tokens')), 'client_ip', 'first_token_latency_ms', 'statusFilter']) {
+	if (!usageLedger.includes(marker)) failures.push(`Admin usage ledger missing ${marker}`);
+}
+
+const userUsage = read('src/lib/components/chat/Settings/Usage.svelte');
+for (const marker of [...pricingFields.map((field) => field.replace('_chatpoint_per_million', '_tokens')), 'first_token_latency_ms', 'total_duration_ms']) {
+	if (!userUsage.includes(marker)) failures.push(`User usage ledger missing ${marker}`);
+}
+if (userUsage.includes('client_ip')) failures.push('User usage ledger must not reference client_ip');
 
 const announcementModal = read('src/lib/components/AnnouncementModal.svelte');
 for (const marker of ['getActiveAnnouncements', 'sessionStorage', 'markAnnouncementViewed']) {

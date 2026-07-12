@@ -151,8 +151,28 @@ export const updateAdminUserSubscription = async (
 	});
 };
 
-export const getAdminSubscriptionUsage = async (token: string) => {
-	return jsonFetch(`${WEBUI_API_BASE_URL}/subscriptions/admin/usage`, token);
+export const getAdminSubscriptionUsage = async (
+	token: string,
+	filters: {
+		userId?: string;
+		modelId?: string;
+		status?: string;
+		startAt?: number;
+		endAt?: number;
+		limit?: number;
+		offset?: number;
+	} = {}
+) => {
+	const params = new URLSearchParams();
+	if (filters.userId) params.set('user_id', filters.userId);
+	if (filters.modelId) params.set('model_id', filters.modelId);
+	if (filters.status) params.set('status', filters.status);
+	if (filters.startAt !== undefined) params.set('start_at', String(filters.startAt));
+	if (filters.endAt !== undefined) params.set('end_at', String(filters.endAt));
+	if (filters.limit !== undefined) params.set('limit', String(filters.limit));
+	if (filters.offset !== undefined) params.set('offset', String(filters.offset));
+	const query = params.toString();
+	return jsonFetch(`${WEBUI_API_BASE_URL}/subscriptions/admin/usage${query ? `?${query}` : ''}`, token);
 };
 
 export const getAdminSubscriptionLedger = async (token: string) => {

@@ -20,8 +20,19 @@
 	const defaultPolicy = () => ({
 		allowed_tiers: ['free', 'plus', 'chatpower'],
 		quota_mode: 'metered',
-		usage_multiplier: '1'
+		usage_multiplier: '1',
+		input_chatpoint_per_million: '100',
+		output_chatpoint_per_million: '100',
+		cache_creation_chatpoint_per_million: '0',
+		cache_read_chatpoint_per_million: '0'
 	});
+
+	const priceFields = [
+		{ key: 'input_chatpoint_per_million', label: '输入' },
+		{ key: 'output_chatpoint_per_million', label: '输出' },
+		{ key: 'cache_creation_chatpoint_per_million', label: '创建缓存' },
+		{ key: 'cache_read_chatpoint_per_million', label: '读取缓存' }
+	];
 
 	const normalize = (model: any) => ({
 		...model,
@@ -81,7 +92,7 @@
 	<div class="flex flex-wrap items-start justify-between gap-3">
 		<div>
 			<div class="text-base font-medium">模型权限</div>
-			<div class="text-xs text-gray-500">控制模型可见范围、扣费模式和 Chatpoint 扣费倍率。</div>
+			<div class="text-xs text-gray-500">控制模型可见范围、扣费模式和每百万 Token 的 Chatpoint 价格。</div>
 		</div>
 		<button
 			type="button"
@@ -100,7 +111,7 @@
 	{:else}
 		<div class="flex flex-col divide-y divide-gray-100 rounded-lg border border-gray-100 dark:divide-gray-850 dark:border-gray-850">
 			{#each rows as row (row.id)}
-				<div class="grid gap-3 p-3 lg:grid-cols-[1fr_15rem_11rem_8rem]">
+				<div class="grid gap-3 p-3 lg:grid-cols-[1fr_15rem_11rem]">
 					<div class="min-w-0">
 						<div class="truncate font-medium">{row.name ?? row.id}</div>
 						<div class="truncate text-xs text-gray-500">{row.id}</div>
@@ -128,12 +139,24 @@
 						<option value="unlimited">无限使用</option>
 					</select>
 
-					<input
-						class="rounded-lg border border-gray-100 bg-transparent px-2 py-1 disabled:text-gray-400 dark:border-gray-850"
-						disabled={row.subscription.quota_mode === 'unlimited'}
-						bind:value={row.subscription.usage_multiplier}
-						on:input={markDirty}
-					/>
+
+					<div class="grid grid-cols-2 gap-2 lg:col-span-3 lg:grid-cols-4">
+						{#each priceFields as field}
+							<label class="flex min-w-0 flex-col gap-1">
+								<span class="text-xs text-gray-500">{field.label}</span>
+								<input
+									type="number"
+									min="0"
+									step="any"
+									class="min-w-0 rounded-lg border border-gray-100 bg-transparent px-2 py-1 disabled:text-gray-400 dark:border-gray-850"
+									disabled={row.subscription.quota_mode === 'unlimited'}
+									bind:value={row.subscription[field.key]}
+									on:input={markDirty}
+								/>
+								<span class="text-[10px] text-gray-400">Chatpoint / 1M Token</span>
+							</label>
+						{/each}
+					</div>
 				</div>
 			{/each}
 		</div>
