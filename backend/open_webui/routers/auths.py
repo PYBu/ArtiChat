@@ -78,6 +78,7 @@ from open_webui.utils.rate_limit import RateLimiter
 from open_webui.utils.registration import resolve_signup_email_verified_at
 from open_webui.utils.sensitive_actions import authorize_sensitive_action
 from open_webui.utils.session_security import revoke_user_sessions
+from open_webui.utils.account_notifications import notify_user
 from open_webui.utils.email_security import (
     claim_email_verification_ticket,
     validate_email_verification_ticket,
@@ -519,6 +520,12 @@ async def update_password(
                     actor=user,
                     subject_id=user.id,
                     subject_type='user',
+                )
+                await notify_user(
+                    'password_changed',
+                    user,
+                    {'changed_at': datetime.datetime.now(datetime.UTC).strftime('%Y-%m-%d %H:%M UTC')},
+                    db=db,
                 )
             return success
         else:

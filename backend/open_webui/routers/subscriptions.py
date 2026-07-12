@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from open_webui.internal.db import get_async_session
@@ -17,6 +19,8 @@ from open_webui.models.subscriptions import (
 )
 from open_webui.utils.subscriptions import ModelSubscriptionPolicy, ensure_subscription_current, redeem_code
 from open_webui.utils.sensitive_actions import authorize_sensitive_action
+from open_webui.utils.account_notifications import notify_subscription_changed, notify_user
+from open_webui.models.users import Users
 from pydantic import BaseModel, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -153,7 +157,9 @@ async def redeem_subscription_code(
     db: AsyncSession = Depends(get_async_session),
 ):
     try:
-        return await redeem_code(user.id, form_data.code, db=db)
+        result = await redeem_code(user.id, form_data.code, db=db)
+        await notify_subscription_changed(user, result.subscription, db=db)
+        return result
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -175,7 +181,9 @@ async def claim_gift_card(
     db: AsyncSession = Depends(get_async_session),
 ):
     try:
-        return await GiftCardGrants.claim(grant_id, user_id=user.id, db=db)
+        result = await GiftCardGrants.claim(grant_id, user_id=user.id, db=db)
+        await notify_subscription_changed(user, result.subscription, db=db)
+        return result
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -199,7 +207,14 @@ async def update_billing_address(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     subscription = await ensure_subscription_current(user.id, db=db)
     subscription.billing_address = form_data.billing_address
-    return await UserSubscriptions.save(subscription, db=db)
+    saved = await UserSubscriptions.save(subscription, db=db)
+    await notify_user(
+        'billing_address_changed',
+        user,
+        {'changed_at': datetime.now(UTC).strftime('%Y-%m-%d %H:%M UTC')},
+        db=db,
+    )
+    return saved
 
 
 @router.get('/admin/plans')
@@ -465,6 +480,9 @@ async def update_admin_user_subscription(
         created_by=user.id,
         db=db,
     )
+    target_user = await Users.get_user_by_id(user_id, db=db)
+    if target_user is not None:
+        await notify_subscription_changed(target_user, saved, db=db)
     return saved
 
 
