@@ -1326,6 +1326,27 @@ class SubscriptionUsageModel(BaseModel):
     created_at: int
 
 
+class SubscriptionUsagePublicModel(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    model_id: str
+    tier: str
+    quota_mode: str
+    input_tokens: int
+    output_tokens: int
+    cache_creation_tokens: int | None = None
+    cache_read_tokens: int | None = None
+    total_tokens: int
+    cost_micros: int
+    plan_cost_micros: int
+    check_cost_micros: int
+    first_token_latency_ms: int | None = None
+    total_duration_ms: int | None = None
+    status: str
+    created_at: int
+
+
 class SubscriptionUsagesTable:
     async def insert(
         self,
@@ -1408,11 +1429,13 @@ class SubscriptionUsagesTable:
         *,
         user_id: str | None = None,
         model_id: str | None = None,
+        status: str | None = None,
         start_at: int | None = None,
         end_at: int | None = None,
         limit: int = 100,
         offset: int = 0,
         include_user: bool = False,
+        public: bool = False,
         db: AsyncSession | None = None,
     ) -> dict:
         async with get_subscription_db_context(db) as session:
@@ -1424,6 +1447,8 @@ class SubscriptionUsagesTable:
                 stmt = stmt.filter(SubscriptionUsage.user_id == user_id)
             if model_id:
                 stmt = stmt.filter(SubscriptionUsage.model_id == model_id)
+            if status:
+                stmt = stmt.filter(SubscriptionUsage.status == status)
             if start_at is not None:
                 stmt = stmt.filter(SubscriptionUsage.created_at >= start_at)
             if end_at is not None:
@@ -1442,13 +1467,19 @@ class SubscriptionUsagesTable:
                 ]
                 usage_models = [item['usage'] for item in items]
             else:
-                usage_models = [SubscriptionUsageModel.model_validate(row) for row in result.scalars().all()]
-                items = usage_models
+                rows = result.scalars().all()
+                usage_models = [SubscriptionUsageModel.model_validate(row) for row in rows]
+                if public:
+                    items = [SubscriptionUsagePublicModel.model_validate(row) for row in rows]
+                else:
+                    items = usage_models
             return {
                 'items': items,
                 'total_cost_micros': sum(item.cost_micros for item in usage_models),
                 'total_input_tokens': sum(item.input_tokens for item in usage_models),
                 'total_output_tokens': sum(item.output_tokens for item in usage_models),
+                'total_cache_creation_tokens': sum(item.cache_creation_tokens or 0 for item in usage_models),
+                'total_cache_read_tokens': sum(item.cache_read_tokens or 0 for item in usage_models),
             }
 
 

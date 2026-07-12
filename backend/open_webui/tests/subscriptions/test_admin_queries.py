@@ -1,4 +1,6 @@
 import pytest
+from fastapi.encoders import jsonable_encoder
+from types import SimpleNamespace
 
 from open_webui.models.subscriptions import (
     FREE_TIER,
@@ -8,6 +10,7 @@ from open_webui.models.subscriptions import (
     UserSubscriptions,
 )
 from open_webui.models.users import User
+from open_webui.routers.subscriptions import get_my_usage
 
 
 async def create_user(db_session, user_id: str, email: str, username: str, name: str):
@@ -71,12 +74,20 @@ async def test_admin_usage_and_ledger_include_user_email(db_session):
         usage_multiplier='1',
         input_tokens=10,
         output_tokens=20,
+        cache_creation_tokens=5,
+        cache_read_tokens=7,
         total_tokens=30,
+        input_chatpoint_per_million='10',
+        output_chatpoint_per_million='20',
+        cache_creation_chatpoint_per_million='4',
+        cache_read_chatpoint_per_million='1',
         cost_micros=3,
         plan_cost_micros=3,
         check_cost_micros=0,
         plan_balance_after_micros=100,
         check_balance_after_micros=0,
+        client_ip='203.0.113.8',
+        raw_usage={'prompt_tokens': 22},
         status='billed',
         metadata={},
         created_at=1_720_000_000,
@@ -98,4 +109,107 @@ async def test_admin_usage_and_ledger_include_user_email(db_session):
     ledger = await SubscriptionLedgers.search(include_user=True, db=db_session)
 
     assert usage['items'][0]['user']['email'] == 'alice@example.com'
+    assert usage['items'][0]['client_ip'] == '203.0.113.8'
+    assert usage['total_cache_creation_tokens'] == 5
+    assert usage['total_cache_read_tokens'] == 7
     assert ledger[0]['user']['email'] == 'alice@example.com'
+
+
+@pytest.mark.asyncio
+async def test_user_usage_projection_never_serializes_sensitive_audit_fields(db_session):
+    await SubscriptionPlans.seed_defaults(db=db_session)
+    await create_user(db_session, 'private-user', 'private@example.com', 'private', 'Private User')
+    await UserSubscriptions.create_from_plan(
+        user_id='private-user',
+        plan_id=FREE_TIER,
+        starts_at=1_720_000_000,
+        expires_at=None,
+        source='default',
+        db=db_session,
+    )
+    await SubscriptionUsages.insert(
+        user_id='private-user',
+        chat_id='chat-private',
+        message_id='msg-private',
+        request_id='req-private',
+        model_id='model-private',
+        tier='free',
+        quota_mode='metered',
+        usage_multiplier='1',
+        input_tokens=10,
+        output_tokens=20,
+        cache_creation_tokens=5,
+        cache_read_tokens=7,
+        total_tokens=42,
+        cost_micros=3,
+        plan_cost_micros=3,
+        check_cost_micros=0,
+        plan_balance_after_micros=100,
+        check_balance_after_micros=0,
+        first_token_latency_ms=50,
+        total_duration_ms=400,
+        client_ip='203.0.113.9',
+        raw_usage={'secret_provider_detail': True},
+        status='billed',
+        metadata={'internal': 'value'},
+        created_at=1_720_000_000,
+        db=db_session,
+    )
+
+    response = jsonable_encoder(await get_my_usage(user=SimpleNamespace(id='private-user'), db=db_session))
+    item = response['usage']['items'][0]
+
+    assert item['model_id'] == 'model-private'
+    assert item['cache_creation_tokens'] == 5
+    assert item['first_token_latency_ms'] == 50
+    assert {'client_ip', 'raw_usage', 'metadata', 'user_id'}.isdisjoint(item)
+
+
+@pytest.mark.asyncio
+async def test_admin_usage_filters_by_status(db_session):
+    await SubscriptionUsages.insert(
+        user_id='filter-user',
+        chat_id=None,
+        message_id=None,
+        model_id='model-filter',
+        tier='free',
+        quota_mode='metered',
+        usage_multiplier='1',
+        input_tokens=1,
+        output_tokens=0,
+        total_tokens=1,
+        cost_micros=1,
+        plan_cost_micros=1,
+        check_cost_micros=0,
+        plan_balance_after_micros=0,
+        check_balance_after_micros=0,
+        status='billed',
+        metadata={},
+        created_at=1_720_000_000,
+        db=db_session,
+    )
+    await SubscriptionUsages.insert(
+        user_id='filter-user',
+        chat_id=None,
+        message_id=None,
+        model_id='model-filter',
+        tier='free',
+        quota_mode='unlimited',
+        usage_multiplier='1',
+        input_tokens=2,
+        output_tokens=0,
+        total_tokens=2,
+        cost_micros=0,
+        plan_cost_micros=0,
+        check_cost_micros=0,
+        plan_balance_after_micros=0,
+        check_balance_after_micros=0,
+        status='unlimited',
+        metadata={},
+        created_at=1_720_000_001,
+        db=db_session,
+    )
+
+    result = await SubscriptionUsages.get_usage_summary(status='unlimited', db=db_session)
+
+    assert [item.status for item in result['items']] == ['unlimited']

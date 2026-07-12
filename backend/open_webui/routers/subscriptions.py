@@ -139,7 +139,7 @@ async def get_subscription_plans(user=Depends(get_verified_subscription_user), d
 @router.get('/usage')
 async def get_my_usage(user=Depends(get_verified_subscription_user), db: AsyncSession = Depends(get_async_session)):
     subscription = await ensure_subscription_current(user.id, db=db)
-    usage = await SubscriptionUsages.get_usage_summary(user_id=user.id, db=db)
+    usage = await SubscriptionUsages.get_usage_summary(user_id=user.id, public=True, db=db)
     ledger = await SubscriptionLedgers.get_recent_for_user(user.id, limit=50, db=db)
     return {'subscription': subscription, 'usage': usage, 'ledger': ledger}
 
@@ -459,6 +459,7 @@ async def update_admin_user_subscription(
 async def get_admin_usage(
     user_id: str | None = None,
     model_id: str | None = None,
+    status: str | None = None,
     start_at: int | None = None,
     end_at: int | None = None,
     limit: int = 100,
@@ -469,6 +470,7 @@ async def get_admin_usage(
     return await SubscriptionUsages.get_usage_summary(
         user_id=user_id,
         model_id=model_id,
+        status=status,
         start_at=start_at,
         end_at=end_at,
         limit=limit,
