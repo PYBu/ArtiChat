@@ -512,6 +512,18 @@ class UserSubscriptionModel(BaseModel):
     updated_at: int
 
 
+class UserSubscriptionSummaryModel(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    user_id: str
+    tier: str
+    display_name: str
+    status: str
+    expires_at: int | None = None
+    plan_balance_micros: int
+    check_balance_micros: int
+
+
 class SubscriptionLedgerModel(BaseModel):
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
@@ -647,6 +659,19 @@ class UserSubscriptionsTable:
             result = await session.execute(select(UserSubscription).filter(UserSubscription.user_id == user_id))
             row = result.scalar_one_or_none()
             return UserSubscriptionModel.model_validate(row) if row else None
+
+    async def get_summaries_by_user_ids(
+        self, user_ids: list[str], db: AsyncSession | None = None
+    ) -> dict[str, UserSubscriptionSummaryModel]:
+        unique_ids = list(dict.fromkeys([item for item in user_ids if item]))
+        if not unique_ids:
+            return {}
+        async with get_subscription_db_context(db) as session:
+            result = await session.execute(select(UserSubscription).filter(UserSubscription.user_id.in_(unique_ids)))
+            return {
+                row.user_id: UserSubscriptionSummaryModel.model_validate(row)
+                for row in result.scalars().all()
+            }
 
     async def create_from_plan(
         self,

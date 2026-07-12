@@ -213,3 +213,29 @@ async def test_admin_usage_filters_by_status(db_session):
     result = await SubscriptionUsages.get_usage_summary(status='unlimited', db=db_session)
 
     assert [item.status for item in result['items']] == ['unlimited']
+
+
+@pytest.mark.asyncio
+async def test_admin_user_list_includes_subscription_summary(db_session):
+    await SubscriptionPlans.seed_defaults(db=db_session)
+    await create_user(db_session, 'summary-user', 'summary@example.com', 'summary', 'Summary User')
+    subscription = await UserSubscriptions.create_from_plan(
+        user_id='summary-user',
+        plan_id=FREE_TIER,
+        starts_at=1_720_000_000,
+        expires_at=1_730_000_000,
+        source='default',
+        db=db_session,
+    )
+    subscription.check_balance_micros = 2_500_000
+    await UserSubscriptions.save(subscription, db=db_session)
+
+    summaries = await UserSubscriptions.get_summaries_by_user_ids(['summary-user'], db=db_session)
+
+    summary = summaries['summary-user']
+    assert summary.tier == 'free'
+    assert summary.display_name == 'Free'
+    assert summary.status == 'free'
+    assert summary.expires_at == 1_730_000_000
+    assert summary.plan_balance_micros == 100_000_000
+    assert summary.check_balance_micros == 2_500_000

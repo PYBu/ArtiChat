@@ -179,6 +179,7 @@ class UpdateProfileForm(BaseModel):
 
 class UserGroupIdsModel(UserModel):
     group_ids: list[str] = []
+    subscription: dict | None = None
 
 
 class UserModelResponse(UserModel):
