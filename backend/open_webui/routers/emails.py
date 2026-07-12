@@ -40,6 +40,7 @@ from open_webui.utils.email_security import (
 )
 from open_webui.utils.passwords import get_password_hash, validate_password
 from open_webui.utils.session_security import revoke_user_sessions
+from open_webui.utils.session_security import current_session_id
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -157,6 +158,20 @@ class ForgotPasswordForm(BaseModel):
 class ResetPasswordForm(BaseModel):
     token: str
     new_password: str
+
+
+class SensitiveChallengeForm(BaseModel):
+    action: str
+
+
+class SensitiveChallengeVerifyForm(SensitiveChallengeForm):
+    code: str
+
+
+SENSITIVE_ACTION_LABELS = {
+    'password': '修改密码',
+    'billing_address': '修改付款信息',
+}
 
 
 async def load_smtp_settings() -> dict[str, Any]:
@@ -397,6 +412,85 @@ async def forgot_password(
                 pass
         log.warning('Password reset email could not be dispatched', exc_info=True)
     return {'status': True}
+
+
+@router.post('/challenges/sensitive/request')
+async def request_sensitive_challenge(
+    request: Request,
+    form_data: SensitiveChallengeForm,
+    user=Depends(get_email_current_user),
+    db: AsyncSession = Depends(get_async_session),
+):
+    action = form_data.action.strip().lower()
+    if action not in SENSITIVE_ACTION_LABELS:
+        raise HTTPException(status_code=400, detail='SENSITIVE_ACTION_INVALID')
+    registration = await load_registration_settings()
+    if not registration['sensitive_action_verification_enabled']:
+        return {'status': True, 'verification_required': False}
+    settings = await load_smtp_settings()
+    if not settings.get('enabled'):
+        raise HTTPException(status_code=400, detail='EMAIL_DELIVERY_DISABLED')
+    try:
+        session_id = current_session_id(request)
+        code = generate_email_code()
+        challenge = await create_email_challenge(
+            email=user.email,
+            purpose=f'sensitive:{action}',
+            code=code,
+            secret_key=WEBUI_SECRET_KEY,
+            user_id=user.id,
+            session_id=session_id,
+            ip_address=request.client.host if request.client else None,
+            now=now_ts(),
+            db=db,
+        )
+        delivery = await deliver_email(
+            template_key='sensitive_action_code',
+            recipient=user.email,
+            variables={
+                'platform_name': settings.get('sender_name') or 'ArtiChat',
+                'platform_url': settings.get('public_url') or '',
+                'user_name': user.name or user.email.split('@', 1)[0],
+                'code': code,
+                'expires_minutes': 10,
+                'action_name': SENSITIVE_ACTION_LABELS[action],
+            },
+            settings=settings,
+            secret_key=WEBUI_SECRET_KEY,
+            db=db,
+        )
+        if delivery.status != 'sent':
+            await invalidate_email_challenge(challenge.id, now=now_ts(), db=db)
+            raise ValueError('EMAIL_DELIVERY_FAILED')
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {'status': True, 'verification_required': True}
+
+
+@router.post('/challenges/sensitive/verify')
+async def verify_sensitive_challenge(
+    request: Request,
+    form_data: SensitiveChallengeVerifyForm,
+    user=Depends(get_email_current_user),
+    db: AsyncSession = Depends(get_async_session),
+):
+    action = form_data.action.strip().lower()
+    if action not in SENSITIVE_ACTION_LABELS:
+        raise HTTPException(status_code=400, detail='SENSITIVE_ACTION_INVALID')
+    try:
+        challenge = await verify_email_challenge(
+            email=user.email,
+            purpose=f'sensitive:{action}',
+            code=form_data.code,
+            secret_key=WEBUI_SECRET_KEY,
+            user_id=user.id,
+            session_id=current_session_id(request),
+            now=now_ts(),
+            db=db,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {'verification_token': challenge.id}
 
 
 @router.post('/password/reset')

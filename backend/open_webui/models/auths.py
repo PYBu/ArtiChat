@@ -79,6 +79,7 @@ class ProfileImageUrlForm(BaseModel):
 class UpdatePasswordForm(BaseModel):
     password: str
     new_password: str
+    verification_token: str | None = None
 
 
 class SignupForm(BaseModel):

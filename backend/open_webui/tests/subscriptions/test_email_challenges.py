@@ -3,6 +3,7 @@ import pytest
 from open_webui.models.users import User
 from open_webui.utils.email_security import (
     claim_email_verification_ticket,
+    claim_sensitive_action_grant,
     create_email_challenge,
     validate_email_verification_ticket,
     verify_email_challenge,
@@ -205,5 +206,67 @@ async def test_consumed_ticket_is_bound_to_email_purpose_and_expiry(db_session):
             code='654321',
             secret_key='test-secret',
             now=701,
+            db=db_session,
+        )
+
+
+@pytest.mark.asyncio
+async def test_sensitive_action_grant_is_bound_to_user_session_and_action(db_session):
+    challenge = await create_email_challenge(
+        email='alice@example.com',
+        purpose='sensitive:password',
+        code='123456',
+        secret_key='test-secret',
+        user_id='user-1',
+        session_id='session-1',
+        now=100,
+        db=db_session,
+    )
+    await verify_email_challenge(
+        email='alice@example.com',
+        purpose='sensitive:password',
+        code='123456',
+        secret_key='test-secret',
+        user_id='user-1',
+        session_id='session-1',
+        now=200,
+        db=db_session,
+    )
+
+    with pytest.raises(ValueError, match='SENSITIVE_ACTION_GRANT_INVALID'):
+        await claim_sensitive_action_grant(
+            challenge.id,
+            action='billing_address',
+            user_id='user-1',
+            session_id='session-1',
+            now=201,
+            db=db_session,
+        )
+    with pytest.raises(ValueError, match='SENSITIVE_ACTION_GRANT_INVALID'):
+        await claim_sensitive_action_grant(
+            challenge.id,
+            action='password',
+            user_id='user-1',
+            session_id='session-2',
+            now=201,
+            db=db_session,
+        )
+
+    claimed = await claim_sensitive_action_grant(
+        challenge.id,
+        action='password',
+        user_id='user-1',
+        session_id='session-1',
+        now=201,
+        db=db_session,
+    )
+    assert claimed.claimed_at == 201
+    with pytest.raises(ValueError, match='SENSITIVE_ACTION_GRANT_USED'):
+        await claim_sensitive_action_grant(
+            challenge.id,
+            action='password',
+            user_id='user-1',
+            session_id='session-1',
+            now=202,
             db=db_session,
         )

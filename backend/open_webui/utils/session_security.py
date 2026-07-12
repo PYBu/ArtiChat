@@ -4,7 +4,8 @@ import hmac
 import time
 from uuid import uuid4
 
-from open_webui.env import REDIS_KEY_PREFIX
+import jwt
+from open_webui.env import REDIS_KEY_PREFIX, WEBUI_SECRET_KEY
 from open_webui.models.oauth_sessions import OAuthSessions
 from open_webui.models.users import Users
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,6 +21,21 @@ def token_auth_epoch_matches(decoded: dict, user) -> bool:
         return True
     token_epoch = str(decoded.get('auth_epoch') or '')
     return hmac.compare_digest(token_epoch, str(current_epoch))
+
+
+def current_session_id(request) -> str:
+    authorization = request.headers.get('Authorization', '')
+    token = authorization[7:] if authorization.lower().startswith('bearer ') else request.cookies.get('token')
+    if not token or token.startswith('sk-'):
+        raise ValueError('SENSITIVE_ACTION_SESSION_REQUIRED')
+    try:
+        decoded = jwt.decode(token, WEBUI_SECRET_KEY, algorithms=['HS256'])
+    except Exception as exc:
+        raise ValueError('SENSITIVE_ACTION_SESSION_REQUIRED') from exc
+    session_id = str(decoded.get('jti') or '')
+    if not session_id:
+        raise ValueError('SENSITIVE_ACTION_SESSION_REQUIRED')
+    return session_id
 
 
 async def revoke_user_sessions(

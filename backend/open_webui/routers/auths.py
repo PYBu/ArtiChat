@@ -74,6 +74,7 @@ from open_webui.utils.groups import apply_default_group_assignment
 from open_webui.utils.misc import parse_duration, validate_email_format
 from open_webui.utils.rate_limit import RateLimiter
 from open_webui.utils.registration import resolve_signup_email_verified_at
+from open_webui.utils.sensitive_actions import authorize_sensitive_action
 from open_webui.utils.email_security import (
     claim_email_verification_ticket,
     validate_email_verification_ticket,
@@ -432,6 +433,16 @@ async def update_password(
                 validate_password(form_data.new_password)
             except Exception as e:
                 raise HTTPException(400, detail=str(e))
+            try:
+                await authorize_sensitive_action(
+                    request,
+                    user,
+                    action='password',
+                    verification_token=form_data.verification_token,
+                    db=db,
+                )
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
             hashed = await get_password_hash(form_data.new_password)
             success = await Auths.update_user_password_by_id(user.id, hashed, db=db)
             if success:

@@ -57,10 +57,14 @@ export const claimGiftCard = async (token: string, grantId: string) => {
 	});
 };
 
-export const updateBillingAddress = async (token: string, billingAddress: Record<string, unknown>) => {
+export const updateBillingAddress = async (
+	token: string,
+	billingAddress: Record<string, unknown>,
+	verificationToken: string | null = null
+) => {
 	return jsonFetch(`${WEBUI_API_BASE_URL}/subscriptions/billing-address`, token, {
 		method: 'PUT',
-		body: JSON.stringify({ billing_address: billingAddress })
+		body: JSON.stringify({ billing_address: billingAddress, verification_token: verificationToken })
 	});
 };
 

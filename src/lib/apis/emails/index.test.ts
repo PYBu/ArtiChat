@@ -8,6 +8,7 @@ import {
 	getRegistrationSettings,
 	getPublicRegistrationSettings,
 	requestEmailChallenge,
+	requestSensitiveChallenge,
 	resetPassword,
 	retryEmailDelivery,
 	sendEmailTest,
@@ -15,7 +16,8 @@ import {
 	updateEmailSettings,
 	updateEmailTemplate,
 	updateRegistrationSettings,
-	verifyEmailChallenge
+	verifyEmailChallenge,
+	verifySensitiveChallenge
 } from './index';
 
 describe('email admin api', () => {
@@ -51,6 +53,8 @@ describe('email admin api', () => {
 		await verifyEmailChallenge('alice@example.com', 'registration', '123456');
 		await forgotPassword('alice@example.com');
 		await resetPassword('reset-token', 'New-password-123!');
+		await requestSensitiveChallenge('token', 'password');
+		await verifySensitiveChallenge('token', 'password', '123456');
 
 		expect(fetchMock.mock.calls.map(([url]) => String(url))).toEqual([
 			expect.stringContaining('/emails/admin/settings'),
@@ -67,7 +71,9 @@ describe('email admin api', () => {
 			expect.stringContaining('/emails/challenges/request'),
 			expect.stringContaining('/emails/challenges/verify'),
 			expect.stringContaining('/emails/password/forgot'),
-			expect.stringContaining('/emails/password/reset')
+			expect.stringContaining('/emails/password/reset'),
+			expect.stringContaining('/emails/challenges/sensitive/request'),
+			expect.stringContaining('/emails/challenges/sensitive/verify')
 		]);
 		expect(fetchMock.mock.calls[1][1]).toMatchObject({
 			method: 'PUT',

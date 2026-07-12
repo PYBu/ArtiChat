@@ -516,7 +516,12 @@ export const updateUserTimezone = async (token: string, timezone: string) => {
 	});
 };
 
-export const updateUserPassword = async (token: string, password: string, newPassword: string) => {
+export const updateUserPassword = async (
+	token: string,
+	password: string,
+	newPassword: string,
+	verificationToken: string | null = null
+) => {
 	let error = null;
 
 	const res = await fetch(`${WEBUI_API_BASE_URL}/auths/update/password`, {
@@ -527,7 +532,8 @@ export const updateUserPassword = async (token: string, password: string, newPas
 		},
 		body: JSON.stringify({
 			password: password,
-			new_password: newPassword
+			new_password: newPassword,
+			verification_token: verificationToken
 		})
 	})
 		.then(async (res) => {

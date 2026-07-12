@@ -16,6 +16,7 @@ from open_webui.models.subscriptions import (
     now_ts,
 )
 from open_webui.utils.subscriptions import ModelSubscriptionPolicy, ensure_subscription_current, redeem_code
+from open_webui.utils.sensitive_actions import authorize_sensitive_action
 from pydantic import BaseModel, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -52,6 +53,7 @@ class RedeemForm(BaseModel):
 
 class BillingAddressForm(BaseModel):
     billing_address: dict
+    verification_token: str | None = None
 
 
 class AdminCodeCreateForm(BaseModel):
@@ -180,10 +182,21 @@ async def claim_gift_card(
 
 @router.put('/billing-address')
 async def update_billing_address(
+    request: Request,
     form_data: BillingAddressForm,
     user=Depends(get_verified_subscription_user),
     db: AsyncSession = Depends(get_async_session),
 ):
+    try:
+        await authorize_sensitive_action(
+            request,
+            user,
+            action='billing_address',
+            verification_token=form_data.verification_token,
+            db=db,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     subscription = await ensure_subscription_current(user.id, db=db)
     subscription.billing_address = form_data.billing_address
     return await UserSubscriptions.save(subscription, db=db)

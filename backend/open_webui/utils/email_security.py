@@ -243,6 +243,7 @@ async def verify_email_challenge(
     purpose: str,
     code: str,
     secret_key: str,
+    user_id: str | None = None,
     session_id: str | None = None,
     now: int,
     db: AsyncSession | None = None,
@@ -255,6 +256,8 @@ async def verify_email_challenge(
         )
         if session_id is not None:
             statement = statement.where(EmailChallenge.session_id == session_id)
+        if user_id is not None:
+            statement = statement.where(EmailChallenge.user_id == user_id)
         result = await session.execute(statement.order_by(EmailChallenge.created_at.desc()).limit(1))
         challenge = result.scalar_one_or_none()
         if challenge is None:
@@ -272,6 +275,35 @@ async def verify_email_challenge(
             raise ValueError('EMAIL_CODE_INVALID')
 
         challenge.consumed_at = now
+        await session.commit()
+        await session.refresh(challenge)
+        return EmailChallengeModel.model_validate(challenge)
+
+
+async def claim_sensitive_action_grant(
+    grant_id: str,
+    *,
+    action: str,
+    user_id: str,
+    session_id: str,
+    now: int,
+    db: AsyncSession | None = None,
+) -> EmailChallengeModel:
+    async with get_email_security_db_context(db) as session:
+        challenge = await session.get(EmailChallenge, grant_id)
+        if (
+            challenge is None
+            or challenge.purpose != f'sensitive:{action}'
+            or challenge.user_id != user_id
+            or challenge.session_id != session_id
+            or challenge.consumed_at is None
+        ):
+            raise ValueError('SENSITIVE_ACTION_GRANT_INVALID')
+        if now > challenge.expires_at:
+            raise ValueError('SENSITIVE_ACTION_GRANT_EXPIRED')
+        if challenge.claimed_at is not None:
+            raise ValueError('SENSITIVE_ACTION_GRANT_USED')
+        challenge.claimed_at = now
         await session.commit()
         await session.refresh(challenge)
         return EmailChallengeModel.model_validate(challenge)

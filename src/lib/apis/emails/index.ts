@@ -45,6 +45,8 @@ export type RegistrationSettings = {
 	sensitive_action_verification_enabled: boolean;
 };
 
+export type SensitiveAction = 'password' | 'billing_address' | 'email';
+
 const jsonFetch = async <T>(
 	url: string,
 	token: string | null,
@@ -186,4 +188,24 @@ export const resetPassword = async (token: string, newPassword: string) => {
 		method: 'POST',
 		body: JSON.stringify({ token, new_password: newPassword })
 	});
+};
+
+export const requestSensitiveChallenge = async (token: string, action: SensitiveAction) => {
+	return jsonFetch<{ status: boolean; verification_required: boolean }>(
+		`${WEBUI_API_BASE_URL}/emails/challenges/sensitive/request`,
+		token,
+		{ method: 'POST', body: JSON.stringify({ action }) }
+	);
+};
+
+export const verifySensitiveChallenge = async (
+	token: string,
+	action: SensitiveAction,
+	code: string
+) => {
+	return jsonFetch<{ verification_token: string }>(
+		`${WEBUI_API_BASE_URL}/emails/challenges/sensitive/verify`,
+		token,
+		{ method: 'POST', body: JSON.stringify({ action, code }) }
+	);
 };
