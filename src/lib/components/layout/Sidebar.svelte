@@ -29,7 +29,8 @@
 		selectedFolder,
 		WEBUI_NAME,
 		sidebarWidth,
-		activeChatIds
+		activeChatIds,
+		subscriptionRefreshTick
 	} from '$lib/stores';
 	import { onMount, getContext, tick, onDestroy } from 'svelte';
 
@@ -576,9 +577,11 @@
 		});
 
 		showSidebar.set(!$mobile ? localStorage.sidebar === 'true' : false);
-		await loadPendingGiftCards();
 
 		const unsubscribers = [
+			subscriptionRefreshTick.subscribe(() => {
+				loadPendingGiftCards();
+			}),
 			mobile.subscribe((value) => {
 				if ($showSidebar && value) {
 					showSidebar.set(false);

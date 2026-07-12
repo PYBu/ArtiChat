@@ -17,4 +17,11 @@ describe('pending gift sidebar entry', () => {
 		expect(giftEntry).toBeGreaterThan(-1);
 		expect(giftEntry).toBeLessThan(expandedUserMenu);
 	});
+
+	it('refreshes the gift action after a subscription change', () => {
+		const sidebar = readFileSync(resolve('src/lib/components/layout/Sidebar.svelte'), 'utf8');
+
+		expect(sidebar).toContain('subscriptionRefreshTick');
+		expect(sidebar).toMatch(/subscriptionRefreshTick\.subscribe\(\(\)\s*=>\s*\{\s*loadPendingGiftCards\(\);/);
+	});
 });
