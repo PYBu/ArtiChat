@@ -79,6 +79,16 @@ export const getAdminSubscriptionModels = async (token: string) => {
 	return jsonFetch(`${WEBUI_API_BASE_URL}/subscriptions/admin/models`, token);
 };
 
+export const updateAdminModelSubscriptionPolicies = async (
+	token: string,
+	models: Array<{ id: string; subscription: Record<string, unknown> }>
+) => {
+	return jsonFetch(`${WEBUI_API_BASE_URL}/subscriptions/admin/models/bulk`, token, {
+		method: 'PUT',
+		body: JSON.stringify({ models })
+	});
+};
+
 export const updateAdminModelSubscriptionPolicy = async (
 	token: string,
 	modelId: string,

@@ -64,6 +64,17 @@ for (const marker of ['showInactive', '显示已停用', "toast.success('公告�
 	if (!adminAnnouncements.includes(marker)) failures.push(`Announcement admin missing ${marker}`);
 }
 
+const modelAccess = read('src/lib/components/admin/Settings/Subscriptions/ModelAccess.svelte');
+for (const marker of ['updateAdminModelSubscriptionPolicies', 'dirty', '保存更改']) {
+	if (!modelAccess.includes(marker)) failures.push(`Model access bulk save missing ${marker}`);
+}
+if (modelAccess.includes('updateAdminModelSubscriptionPolicy(')) {
+	failures.push('Model access must not save one model at a time');
+}
+if ((modelAccess.match(/保存更改/g) ?? []).length !== 1) {
+	failures.push('Model access must contain exactly one 保存更改 command');
+}
+
 const settingsModal = read('src/lib/components/chat/SettingsModal.svelte');
 for (const marker of [
 	"import Subscription from './Settings/Subscription.svelte'",

@@ -3,7 +3,7 @@
 	import { toast } from 'svelte-sonner';
 	import {
 		getAdminSubscriptionModels,
-		updateAdminModelSubscriptionPolicy
+		updateAdminModelSubscriptionPolicies
 	} from '$lib/apis/subscriptions';
 
 	const tiers = [
@@ -14,6 +14,8 @@
 
 	let rows: any[] = [];
 	let loading = true;
+	let saving = false;
+	let dirty = false;
 
 	const defaultPolicy = () => ({
 		allowed_tiers: ['free', 'plus', 'chatpower'],
@@ -23,7 +25,7 @@
 
 	const normalize = (model: any) => ({
 		...model,
-		subscription: { ...defaultPolicy(), ...(model.subscription ?? {}) }
+		subscription: { ...defaultPolicy(), ...(model.subscription ?? model.meta?.subscription ?? {}) }
 	});
 
 	const load = async () => {
@@ -34,7 +36,13 @@
 				toast.error(`${error}`);
 				return [];
 			});
+		dirty = false;
 		loading = false;
+	};
+
+	const markDirty = () => {
+		dirty = true;
+		rows = [...rows];
 	};
 
 	const toggleTier = (row: any, tier: string) => {
@@ -45,25 +53,44 @@
 			allowed.add(tier);
 		}
 		row.subscription.allowed_tiers = tiers.map((item) => item.id).filter((item) => allowed.has(item));
+		markDirty();
 	};
 
-	const save = async (row: any) => {
-		const updated = await updateAdminModelSubscriptionPolicy(localStorage.token, row.id, row.subscription).catch(
-			(error) => {
-				toast.error(`${error}`);
-				return null;
-			}
-		);
-		if (updated) toast.success('模型订阅策略已保存。');
+	const save = async () => {
+		if (!dirty || saving) return;
+		saving = true;
+		const updated = await updateAdminModelSubscriptionPolicies(
+			localStorage.token,
+			rows.map((row) => ({ id: row.id, subscription: row.subscription }))
+		).catch((error) => {
+			toast.error(`${error}`);
+			return null;
+		});
+		if (updated) {
+			rows = updated.map(normalize);
+			dirty = false;
+			toast.success('模型权限已保存。');
+		}
+		saving = false;
 	};
 
 	onMount(load);
 </script>
 
 <div class="flex flex-col gap-3">
-	<div>
-		<div class="text-base font-medium">模型权限</div>
-		<div class="text-xs text-gray-500">控制模型可见范围、扣费模式和 Chatpoint 扣费倍率。</div>
+	<div class="flex flex-wrap items-start justify-between gap-3">
+		<div>
+			<div class="text-base font-medium">模型权限</div>
+			<div class="text-xs text-gray-500">控制模型可见范围、扣费模式和 Chatpoint 扣费倍率。</div>
+		</div>
+		<button
+			type="button"
+			class="rounded-lg bg-black px-3 py-1.5 text-white disabled:cursor-not-allowed disabled:opacity-40 dark:bg-white dark:text-black"
+			disabled={!dirty || saving}
+			on:click={save}
+		>
+			{saving ? '保存中...' : '保存更改'}
+		</button>
 	</div>
 
 	{#if loading}
@@ -73,7 +100,7 @@
 	{:else}
 		<div class="flex flex-col divide-y divide-gray-100 rounded-lg border border-gray-100 dark:divide-gray-850 dark:border-gray-850">
 			{#each rows as row (row.id)}
-				<div class="grid gap-3 p-3 lg:grid-cols-[1fr_15rem_11rem_8rem_auto]">
+				<div class="grid gap-3 p-3 lg:grid-cols-[1fr_15rem_11rem_8rem]">
 					<div class="min-w-0">
 						<div class="truncate font-medium">{row.name ?? row.id}</div>
 						<div class="truncate text-xs text-gray-500">{row.id}</div>
@@ -92,7 +119,11 @@
 						{/each}
 					</div>
 
-					<select class="rounded-lg border border-gray-100 bg-transparent px-2 py-1 dark:border-gray-850" bind:value={row.subscription.quota_mode}>
+					<select
+						class="rounded-lg border border-gray-100 bg-transparent px-2 py-1 dark:border-gray-850"
+						bind:value={row.subscription.quota_mode}
+						on:change={markDirty}
+					>
 						<option value="metered">按量扣费</option>
 						<option value="unlimited">无限使用</option>
 					</select>
@@ -101,11 +132,8 @@
 						class="rounded-lg border border-gray-100 bg-transparent px-2 py-1 disabled:text-gray-400 dark:border-gray-850"
 						disabled={row.subscription.quota_mode === 'unlimited'}
 						bind:value={row.subscription.usage_multiplier}
+						on:input={markDirty}
 					/>
-
-					<button type="button" class="rounded-full bg-black px-3 py-1.5 text-white dark:bg-white dark:text-black" on:click={() => save(row)}>
-						保存
-					</button>
 				</div>
 			{/each}
 		</div>
