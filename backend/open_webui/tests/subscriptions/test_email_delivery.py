@@ -125,3 +125,14 @@ def test_template_rendering_escapes_user_values_in_html():
 
     assert '<script>' not in rendered.html_body
     assert '&lt;script&gt;' in rendered.html_body
+
+
+def test_password_reset_link_is_preserved_in_plain_text():
+    rendered = render_email_template(
+        template_key='password_reset',
+        subject='Reset password',
+        markdown_body='[Reset password]({{reset_url}})',
+        variables={'reset_url': 'https://chat.example.com/reset?token=secret'},
+    )
+
+    assert 'https://chat.example.com/reset?token=secret' in rendered.text_body

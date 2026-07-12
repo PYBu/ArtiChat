@@ -1,20 +1,33 @@
 from __future__ import annotations
 
+import asyncio
 import base64
 import hashlib
 import html
 import re
+import smtplib
+import ssl
+from contextlib import contextmanager
 from dataclasses import dataclass
+from email.message import EmailMessage
+from email.utils import formataddr
 from html.parser import HTMLParser
-from typing import Any
+from typing import Any, Callable, Iterator
 
 import markdown
 from cryptography.fernet import Fernet, InvalidToken
+from open_webui.models.email_security import (
+    EmailDeliveries,
+    EmailDeliveryModel,
+    EmailTemplates,
+)
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 SMTP_SECURITY_MODES = {'none', 'starttls', 'ssl'}
 PASSWORD_MASK = '********'
 TEMPLATE_VARIABLE = re.compile(r'{{\s*([a-z][a-z0-9_]*)\s*}}')
+SENSITIVE_DELIVERY_VARIABLES = {'code', 'reset_url'}
 
 COMMON_TEMPLATE_VARIABLES = {'platform_name', 'platform_url', 'user_name'}
 EMAIL_TEMPLATE_VARIABLES = {
@@ -112,6 +125,13 @@ class RenderedEmail:
     text_body: str
 
 
+class SMTPStageError(RuntimeError):
+    def __init__(self, stage: str, code: str):
+        super().__init__(code)
+        self.stage = stage
+        self.code = code
+
+
 def _smtp_fernet(secret_key: str) -> Fernet:
     if not secret_key:
         raise ValueError('SMTP_SECRET_KEY_REQUIRED')
@@ -188,6 +208,216 @@ def smtp_admin_settings(settings: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+@contextmanager
+def _smtp_client(
+    settings: dict[str, Any],
+    *,
+    secret_key: str,
+    smtp_factory: Callable[..., Any],
+    smtp_ssl_factory: Callable[..., Any],
+    timeout: float,
+) -> Iterator[Any]:
+    security = str(settings.get('security') or 'starttls')
+    try:
+        if security == 'ssl':
+            transport = smtp_ssl_factory(
+                settings['host'],
+                int(settings['port']),
+                timeout=timeout,
+                context=ssl.create_default_context(),
+            )
+        else:
+            transport = smtp_factory(settings['host'], int(settings['port']), timeout=timeout)
+    except Exception as exc:
+        raise SMTPStageError('connect', 'SMTP_CONNECTION_FAILED') from exc
+
+    try:
+        with transport as client:
+            if security == 'starttls':
+                try:
+                    client.ehlo()
+                    client.starttls(context=ssl.create_default_context())
+                    client.ehlo()
+                except Exception as exc:
+                    raise SMTPStageError('tls', 'SMTP_TLS_FAILED') from exc
+
+            username = str(settings.get('username') or '')
+            if username:
+                try:
+                    encrypted_password = str(settings.get('password_encrypted') or '')
+                    password = decrypt_smtp_password(encrypted_password, secret_key=secret_key)
+                    client.login(username, password)
+                except SMTPStageError:
+                    raise
+                except Exception as exc:
+                    raise SMTPStageError('auth', 'SMTP_AUTH_FAILED') from exc
+            yield client
+    except SMTPStageError:
+        raise
+    except Exception as exc:
+        raise SMTPStageError('connect', 'SMTP_CONNECTION_FAILED') from exc
+
+
+def check_smtp_connection(
+    settings: dict[str, Any],
+    *,
+    secret_key: str,
+    smtp_factory: Callable[..., Any] = smtplib.SMTP,
+    smtp_ssl_factory: Callable[..., Any] = smtplib.SMTP_SSL,
+    timeout: float = 10,
+) -> dict[str, Any]:
+    with _smtp_client(
+        settings,
+        secret_key=secret_key,
+        smtp_factory=smtp_factory,
+        smtp_ssl_factory=smtp_ssl_factory,
+        timeout=timeout,
+    ):
+        return {'ok': True, 'stage': 'complete'}
+
+
+def send_smtp_message(
+    *,
+    recipient: str,
+    rendered: RenderedEmail,
+    settings: dict[str, Any],
+    secret_key: str,
+    smtp_factory: Callable[..., Any] = smtplib.SMTP,
+    smtp_ssl_factory: Callable[..., Any] = smtplib.SMTP_SSL,
+    timeout: float = 10,
+) -> None:
+    message = EmailMessage()
+    message['Subject'] = rendered.subject
+    message['From'] = formataddr(
+        (str(settings.get('sender_name') or 'ArtiChat'), str(settings.get('sender_email') or ''))
+    )
+    message['To'] = recipient
+    reply_to = str(settings.get('reply_to') or '')
+    if reply_to:
+        message['Reply-To'] = reply_to
+    message.set_content(rendered.text_body)
+    message.add_alternative(rendered.html_body, subtype='html')
+
+    with _smtp_client(
+        settings,
+        secret_key=secret_key,
+        smtp_factory=smtp_factory,
+        smtp_ssl_factory=smtp_ssl_factory,
+        timeout=timeout,
+    ) as client:
+        try:
+            client.send_message(message)
+        except Exception as exc:
+            raise SMTPStageError('send', 'SMTP_SEND_FAILED') from exc
+
+
+def _stored_delivery_variables(variables: dict[str, Any]) -> dict[str, Any]:
+    return {
+        key: '[redacted]' if key in SENSITIVE_DELIVERY_VARIABLES else value
+        for key, value in variables.items()
+    }
+
+
+async def _attempt_delivery(
+    delivery: EmailDeliveryModel,
+    *,
+    settings: dict[str, Any],
+    secret_key: str,
+    send_func: Callable[..., None],
+    now: int | None,
+    db: AsyncSession | None,
+) -> EmailDeliveryModel:
+    delivery = await EmailDeliveries.start_attempt(delivery.id, now=now, db=db)
+    rendered = RenderedEmail(
+        subject=delivery.subject,
+        html_body=delivery.html_body,
+        text_body=delivery.text_body,
+    )
+    try:
+        await asyncio.to_thread(
+            send_func,
+            recipient=delivery.recipient,
+            rendered=rendered,
+            settings=settings,
+            secret_key=secret_key,
+        )
+    except SMTPStageError as exc:
+        return await EmailDeliveries.mark_failed(delivery.id, error=exc.code, db=db)
+    except Exception:
+        return await EmailDeliveries.mark_failed(delivery.id, error='EMAIL_DELIVERY_FAILED', db=db)
+    return await EmailDeliveries.mark_sent(delivery.id, now=now, db=db)
+
+
+async def deliver_email(
+    *,
+    template_key: str,
+    recipient: str,
+    variables: dict[str, Any],
+    settings: dict[str, Any],
+    secret_key: str,
+    send_func: Callable[..., None] = send_smtp_message,
+    now: int | None = None,
+    db: AsyncSession | None = None,
+) -> EmailDeliveryModel:
+    if not settings.get('enabled'):
+        raise ValueError('EMAIL_DELIVERY_DISABLED')
+    await EmailTemplates.seed_defaults(DEFAULT_EMAIL_TEMPLATES, now=now, db=db)
+    template = await EmailTemplates.get(template_key, db=db)
+    if template is None:
+        raise ValueError('EMAIL_TEMPLATE_NOT_FOUND')
+    if not template.is_enabled:
+        raise ValueError('EMAIL_TEMPLATE_DISABLED')
+
+    rendered = render_email_template(
+        template_key=template.key,
+        subject=template.subject,
+        markdown_body=template.markdown_body,
+        variables=variables,
+    )
+    delivery = await EmailDeliveries.create(
+        template_key=template.key,
+        recipient=recipient,
+        subject=rendered.subject,
+        html_body=rendered.html_body,
+        text_body=rendered.text_body,
+        variables=_stored_delivery_variables(variables),
+        now=now,
+        db=db,
+    )
+    return await _attempt_delivery(
+        delivery,
+        settings=settings,
+        secret_key=secret_key,
+        send_func=send_func,
+        now=now,
+        db=db,
+    )
+
+
+async def retry_email_delivery(
+    delivery_id: str,
+    *,
+    settings: dict[str, Any],
+    secret_key: str,
+    send_func: Callable[..., None] = send_smtp_message,
+    now: int | None = None,
+    db: AsyncSession | None = None,
+) -> EmailDeliveryModel:
+    delivery = await EmailDeliveries.get(delivery_id, db=db)
+    if delivery is None:
+        raise ValueError('EMAIL_DELIVERY_NOT_FOUND')
+    if delivery.status != 'failed':
+        raise ValueError('EMAIL_DELIVERY_NOT_RETRYABLE')
+    return await _attempt_delivery(
+        delivery,
+        settings=settings,
+        secret_key=secret_key,
+        send_func=send_func,
+        now=now,
+        db=db,
+    )
+
+
 def _replace_template_variables(template: str, variables: dict[str, str]) -> str:
     return TEMPLATE_VARIABLE.sub(lambda match: variables[match.group(1)], template)
 
@@ -196,6 +426,7 @@ class _PlainTextParser(HTMLParser):
     def __init__(self) -> None:
         super().__init__()
         self.parts: list[str] = []
+        self.link_targets: list[str] = []
 
     def handle_data(self, data: str) -> None:
         self.parts.append(data)
@@ -203,8 +434,14 @@ class _PlainTextParser(HTMLParser):
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         if tag == 'br':
             self.parts.append('\n')
+        elif tag == 'a':
+            self.link_targets.append(dict(attrs).get('href') or '')
 
     def handle_endtag(self, tag: str) -> None:
+        if tag == 'a' and self.link_targets:
+            target = self.link_targets.pop()
+            if target:
+                self.parts.append(f' ({target})')
         if tag in {'p', 'div', 'h1', 'h2', 'h3', 'li'}:
             self.parts.append('\n')
 
