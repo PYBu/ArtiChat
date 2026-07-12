@@ -37,6 +37,14 @@ export type EmailDelivery = {
 	created_at: number;
 };
 
+export type RegistrationSettings = {
+	allowed_domains: string[];
+	allow_subdomains: boolean;
+	verification_enabled: boolean;
+	email_code_login_enabled: boolean;
+	sensitive_action_verification_enabled: boolean;
+};
+
 const jsonFetch = async <T>(url: string, token: string, options: RequestInit = {}): Promise<T> => {
 	let error: unknown = null;
 	const headers = Object.assign(
@@ -122,4 +130,18 @@ export const retryEmailDelivery = async (token: string, deliveryId: string) => {
 		token,
 		{ method: 'POST' }
 	);
+};
+
+export const getRegistrationSettings = async (token: string) => {
+	return jsonFetch<RegistrationSettings>(`${WEBUI_API_BASE_URL}/emails/admin/registration`, token);
+};
+
+export const updateRegistrationSettings = async (
+	token: string,
+	settings: Partial<RegistrationSettings>
+) => {
+	return jsonFetch<RegistrationSettings>(`${WEBUI_API_BASE_URL}/emails/admin/registration`, token, {
+		method: 'PUT',
+		body: JSON.stringify(settings)
+	});
 };

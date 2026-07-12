@@ -7,6 +7,8 @@ from open_webui.routers import emails
 def test_email_admin_router_exposes_settings_templates_and_delivery_paths():
     paths = {route.path for route in emails.router.routes}
 
+    assert '/registration/public' in paths
+    assert '/admin/registration' in paths
     assert '/admin/settings' in paths
     assert '/admin/connection-test' in paths
     assert '/admin/test-email' in paths
@@ -52,6 +54,39 @@ async def test_admin_settings_store_encrypted_password_and_return_only_mask(monk
     assert response['password'] == '********'
     assert response['password_configured'] is True
     assert 'password_encrypted' not in response
+
+
+@pytest.mark.asyncio
+async def test_registration_settings_normalize_domains_and_public_response_hides_allowlist(monkeypatch):
+    stored = {storage_key: default for storage_key, default in emails.REGISTRATION_CONFIG_DEFAULTS.items()}
+
+    async def get_many(*keys):
+        return {key: stored[key] for key in keys}
+
+    async def upsert(updates):
+        stored.update(updates)
+
+    monkeypatch.setattr(emails.Config, 'get_many', get_many)
+    monkeypatch.setattr(emails.Config, 'upsert', upsert)
+
+    response = await emails.update_registration_settings(
+        emails.RegistrationSettingsForm(
+            allowed_domains=[' Example.com ', 'TEAM.example.com', 'example.com'],
+            allow_subdomains=True,
+            verification_enabled=True,
+            email_code_login_enabled=True,
+            sensitive_action_verification_enabled=True,
+        ),
+        user=object(),
+    )
+
+    assert response['allowed_domains'] == ['example.com', 'team.example.com']
+    public = await emails.get_public_registration_settings()
+    assert public == {
+        'verification_enabled': True,
+        'email_code_login_enabled': True,
+    }
+    assert 'allowed_domains' not in public
 
 
 @pytest.mark.asyncio

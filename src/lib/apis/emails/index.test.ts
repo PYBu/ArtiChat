@@ -4,11 +4,13 @@ import {
 	getEmailDeliveries,
 	getEmailSettings,
 	getEmailTemplates,
+	getRegistrationSettings,
 	retryEmailDelivery,
 	sendEmailTest,
 	testEmailConnection,
 	updateEmailSettings,
-	updateEmailTemplate
+	updateEmailTemplate,
+	updateRegistrationSettings
 } from './index';
 
 describe('email admin api', () => {
@@ -37,6 +39,8 @@ describe('email admin api', () => {
 		});
 		await getEmailDeliveries('token', { limit: 50, offset: 10 });
 		await retryEmailDelivery('token', 'mail_1');
+		await getRegistrationSettings('token');
+		await updateRegistrationSettings('token', { allowed_domains: ['example.com'] });
 
 		expect(fetchMock.mock.calls.map(([url]) => String(url))).toEqual([
 			expect.stringContaining('/emails/admin/settings'),
@@ -46,7 +50,9 @@ describe('email admin api', () => {
 			expect.stringContaining('/emails/admin/templates'),
 			expect.stringContaining('/emails/admin/templates/registration_code'),
 			expect.stringContaining('/emails/admin/deliveries?limit=50&offset=10'),
-			expect.stringContaining('/emails/admin/deliveries/mail_1/retry')
+			expect.stringContaining('/emails/admin/deliveries/mail_1/retry'),
+			expect.stringContaining('/emails/admin/registration'),
+			expect.stringContaining('/emails/admin/registration')
 		]);
 		expect(fetchMock.mock.calls[1][1]).toMatchObject({
 			method: 'PUT',

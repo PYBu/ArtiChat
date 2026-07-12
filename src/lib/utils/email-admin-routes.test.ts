@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 
 describe('email admin routes', () => {
 	it('keeps email settings, templates, and deliveries as independent pages', () => {
+		expect(existsSync(resolve('src/routes/(app)/admin/registration/+page.svelte'))).toBe(true);
 		for (const page of ['settings', 'templates', 'deliveries']) {
 			expect(
 				existsSync(resolve(`src/routes/(app)/admin/email/${page}/+page.svelte`)),

@@ -12,19 +12,21 @@
 
 	let loaded = false;
 
-	$: adminSection = $page.url.pathname.startsWith('/admin/email')
-		? '/admin/email'
-		: $page.url.pathname.startsWith('/admin/subscriptions')
-			? '/admin/subscriptions'
-			: $page.url.pathname.startsWith('/admin/analytics')
-				? '/admin/analytics'
-				: $page.url.pathname.startsWith('/admin/evaluations')
-					? '/admin/evaluations'
-					: $page.url.pathname.startsWith('/admin/functions')
-						? '/admin/functions'
-						: $page.url.pathname.startsWith('/admin/settings')
-							? '/admin/settings'
-							: '/admin';
+	$: adminSection = $page.url.pathname.startsWith('/admin/registration')
+		? '/admin/registration'
+		: $page.url.pathname.startsWith('/admin/email')
+			? '/admin/email'
+			: $page.url.pathname.startsWith('/admin/subscriptions')
+				? '/admin/subscriptions'
+				: $page.url.pathname.startsWith('/admin/analytics')
+					? '/admin/analytics'
+					: $page.url.pathname.startsWith('/admin/evaluations')
+						? '/admin/evaluations'
+						: $page.url.pathname.startsWith('/admin/functions')
+							? '/admin/functions'
+							: $page.url.pathname.startsWith('/admin/settings')
+								? '/admin/settings'
+								: '/admin';
 
 	onMount(async () => {
 		if ($user?.role !== 'admin') {
@@ -85,6 +87,7 @@
 							<option value="/admin/evaluations">评估</option>
 							<option value="/admin/functions">函数</option>
 							<option value="/admin/subscriptions">订阅运营</option>
+							<option value="/admin/registration">注册管理</option>
 							<option value="/admin/email">邮箱</option>
 							<option value="/admin/settings">设置</option>
 						</select>
@@ -92,6 +95,14 @@
 						<div
 							class="flex gap-1 scrollbar-none overflow-x-auto w-fit text-center text-sm font-medium rounded-full bg-transparent pt-1"
 						>
+							<a
+								draggable="false"
+								class="min-w-fit p-1.5 {$page.url.pathname.includes('/admin/registration')
+									? ''
+									: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition select-none"
+								href="/admin/registration">注册管理</a
+							>
+
 							<a
 								draggable="false"
 								class="min-w-fit p-1.5 {$page.url.pathname.includes('/admin/email')

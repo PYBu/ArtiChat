@@ -21,7 +21,8 @@ from open_webui.utils.email_delivery import (
     smtp_admin_settings,
     validate_email_template,
 )
-from pydantic import BaseModel
+from open_webui.utils.email_security import normalize_allowed_domains
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -71,6 +72,20 @@ SMTP_CONFIG_DEFAULTS = {
     SMTP_CONFIG_KEYS['public_url']: '',
     SMTP_CONFIG_KEYS['subscription_notifications']: True,
 }
+REGISTRATION_CONFIG_KEYS = {
+    'allowed_domains': 'registration.allowed_domains',
+    'allow_subdomains': 'registration.allow_subdomains',
+    'verification_enabled': 'registration.verification_enabled',
+    'email_code_login_enabled': 'registration.email_code_login_enabled',
+    'sensitive_action_verification_enabled': 'registration.sensitive_action_verification_enabled',
+}
+REGISTRATION_CONFIG_DEFAULTS = {
+    REGISTRATION_CONFIG_KEYS['allowed_domains']: [],
+    REGISTRATION_CONFIG_KEYS['allow_subdomains']: False,
+    REGISTRATION_CONFIG_KEYS['verification_enabled']: False,
+    REGISTRATION_CONFIG_KEYS['email_code_login_enabled']: False,
+    REGISTRATION_CONFIG_KEYS['sensitive_action_verification_enabled']: False,
+}
 
 
 class SMTPSettingsForm(BaseModel):
@@ -97,6 +112,14 @@ class EmailTemplateUpdateForm(BaseModel):
     is_enabled: bool = True
 
 
+class RegistrationSettingsForm(BaseModel):
+    allowed_domains: list[str] = Field(default_factory=list)
+    allow_subdomains: bool = False
+    verification_enabled: bool = False
+    email_code_login_enabled: bool = False
+    sensitive_action_verification_enabled: bool = False
+
+
 async def load_smtp_settings() -> dict[str, Any]:
     values = await Config.get_many(*SMTP_CONFIG_KEYS.values())
     return {
@@ -105,8 +128,24 @@ async def load_smtp_settings() -> dict[str, Any]:
     }
 
 
+async def load_registration_settings() -> dict[str, Any]:
+    values = await Config.get_many(*REGISTRATION_CONFIG_KEYS.values())
+    return {
+        field: values.get(storage_key, REGISTRATION_CONFIG_DEFAULTS[storage_key])
+        for field, storage_key in REGISTRATION_CONFIG_KEYS.items()
+    }
+
+
 def _smtp_updates(settings: dict[str, Any]) -> dict[str, Any]:
     return {SMTP_CONFIG_KEYS[field]: value for field, value in settings.items() if field in SMTP_CONFIG_KEYS}
+
+
+def _registration_updates(settings: dict[str, Any]) -> dict[str, Any]:
+    return {
+        REGISTRATION_CONFIG_KEYS[field]: value
+        for field, value in settings.items()
+        if field in REGISTRATION_CONFIG_KEYS
+    }
 
 
 def _connection_test_settings(settings: dict[str, Any]) -> dict[str, Any]:
@@ -135,6 +174,33 @@ def _delivery_response(delivery) -> dict[str, Any]:
         'sent_at': delivery.sent_at,
         'created_at': delivery.created_at,
     }
+
+
+@router.get('/registration/public')
+async def get_public_registration_settings():
+    settings = await load_registration_settings()
+    return {
+        'verification_enabled': bool(settings['verification_enabled']),
+        'email_code_login_enabled': bool(settings['email_code_login_enabled']),
+    }
+
+
+@router.get('/admin/registration')
+async def get_registration_settings(user=Depends(get_email_admin_user)):
+    return await load_registration_settings()
+
+
+@router.put('/admin/registration')
+async def update_registration_settings(
+    form_data: RegistrationSettingsForm,
+    user=Depends(get_email_admin_user),
+):
+    normalized = {
+        **form_data.model_dump(),
+        'allowed_domains': normalize_allowed_domains(form_data.allowed_domains),
+    }
+    await Config.upsert(_registration_updates(normalized))
+    return normalized
 
 
 @router.get('/admin/settings')
