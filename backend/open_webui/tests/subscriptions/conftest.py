@@ -21,6 +21,7 @@ from open_webui.internal.db import Base  # noqa: E402
 async def db_session(tmp_path):
     import open_webui.models.subscriptions  # noqa: F401
     import open_webui.models.announcements  # noqa: F401
+    import open_webui.models.models  # noqa: F401
 
     db_path = tmp_path / 'subscriptions-test.db'
     engine = create_async_engine(f'sqlite+aiosqlite:///{db_path}', connect_args={'check_same_thread': False})

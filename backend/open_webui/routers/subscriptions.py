@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from open_webui.internal.db import get_async_session
-from open_webui.models.models import ModelForm, Models
+from open_webui.models.models import Models
 from open_webui.models.subscriptions import (
     FREE_TIER,
     GiftCardGrants,
@@ -16,7 +16,7 @@ from open_webui.models.subscriptions import (
     now_ts,
 )
 from open_webui.utils.subscriptions import ModelSubscriptionPolicy, ensure_subscription_current, redeem_code
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter()
@@ -82,7 +82,26 @@ class AdminPlanUpdateForm(BaseModel):
 
 
 class AdminModelPolicyForm(BaseModel):
-    subscription: dict
+    subscription: ModelSubscriptionPolicy
+
+
+class AdminModelPolicyItem(BaseModel):
+    id: str
+    subscription: ModelSubscriptionPolicy
+
+
+class AdminModelPoliciesForm(BaseModel):
+    models: list[AdminModelPolicyItem]
+
+    @field_validator('models')
+    @classmethod
+    def validate_models(cls, value: list[AdminModelPolicyItem]) -> list[AdminModelPolicyItem]:
+        if not value:
+            raise ValueError('MODEL_SUBSCRIPTION_POLICY_INVALID: models must not be empty')
+        ids = [item.id for item in value]
+        if len(ids) != len(set(ids)):
+            raise ValueError('MODEL_SUBSCRIPTION_POLICY_INVALID: model ids must be unique')
+        return value
 
 
 class AdminUserSubscriptionUpdateForm(BaseModel):
@@ -214,6 +233,19 @@ async def get_admin_model_policies(user=Depends(get_admin_subscription_user), db
     ]
 
 
+@router.put('/admin/models/bulk')
+async def update_admin_model_policies(
+    form_data: AdminModelPoliciesForm,
+    user=Depends(get_admin_subscription_user),
+    db: AsyncSession = Depends(get_async_session),
+):
+    policies = {item.id: item.subscription.model_dump() for item in form_data.models}
+    try:
+        return await Models.update_model_subscription_policies(policies, db=db)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
 @router.put('/admin/models/{model_id}')
 async def update_admin_model_policy(
     model_id: str,
@@ -221,16 +253,14 @@ async def update_admin_model_policy(
     user=Depends(get_admin_subscription_user),
     db: AsyncSession = Depends(get_async_session),
 ):
-    model = await Models.get_model_by_id(model_id, db=db)
-    if not model:
-        raise HTTPException(status_code=404, detail='MODEL_NOT_FOUND')
-    policy = ModelSubscriptionPolicy.model_validate(form_data.subscription).model_dump()
-    model_data = model.model_dump()
-    meta = model_data.get('meta') or {}
-    meta['subscription'] = policy
-    model_data['meta'] = meta
-    updated = await Models.update_model_by_id(model_id, ModelForm(**model_data), db=db)
-    return updated
+    try:
+        updated = await Models.update_model_subscription_policies(
+            {model_id: form_data.subscription.model_dump()},
+            db=db,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return updated[0]
 
 
 @router.get('/admin/codes')

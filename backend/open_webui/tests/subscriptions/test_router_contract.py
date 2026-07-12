@@ -14,6 +14,7 @@ def test_router_exposes_user_and_admin_paths():
     assert '/billing-address' in paths
     assert '/admin/plans' in paths
     assert '/admin/models' in paths
+    assert '/admin/models/bulk' in paths
     assert '/admin/codes' in paths
     assert '/admin/codes/{code_id}' in paths
     assert '/admin/gift-cards' in paths
