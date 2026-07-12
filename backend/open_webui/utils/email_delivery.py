@@ -422,6 +422,22 @@ def _replace_template_variables(template: str, variables: dict[str, str]) -> str
     return TEMPLATE_VARIABLE.sub(lambda match: variables[match.group(1)], template)
 
 
+def validate_email_template(*, template_key: str, subject: str, markdown_body: str) -> list[str]:
+    allowed = EMAIL_TEMPLATE_VARIABLES.get(template_key)
+    if allowed is None:
+        raise ValueError('EMAIL_TEMPLATE_NOT_FOUND')
+
+    tokens = set(TEMPLATE_VARIABLE.findall(subject)) | set(TEMPLATE_VARIABLE.findall(markdown_body))
+    unsupported = sorted(tokens - allowed)
+    if unsupported:
+        raise ValueError(f'EMAIL_TEMPLATE_VARIABLE_NOT_ALLOWED: {unsupported[0]}')
+
+    remaining = TEMPLATE_VARIABLE.sub('', f'{subject}\n{markdown_body}')
+    if '{{' in remaining or '}}' in remaining:
+        raise ValueError('EMAIL_TEMPLATE_VARIABLE_INVALID')
+    return sorted(tokens)
+
+
 class _PlainTextParser(HTMLParser):
     def __init__(self) -> None:
         super().__init__()
@@ -457,14 +473,13 @@ def render_email_template(
     markdown_body: str,
     variables: dict[str, Any],
 ) -> RenderedEmail:
-    allowed = EMAIL_TEMPLATE_VARIABLES.get(template_key)
-    if allowed is None:
-        raise ValueError('EMAIL_TEMPLATE_NOT_FOUND')
-
-    tokens = set(TEMPLATE_VARIABLE.findall(subject)) | set(TEMPLATE_VARIABLE.findall(markdown_body))
-    unsupported = sorted(tokens - allowed)
-    if unsupported:
-        raise ValueError(f'EMAIL_TEMPLATE_VARIABLE_NOT_ALLOWED: {unsupported[0]}')
+    tokens = set(
+        validate_email_template(
+            template_key=template_key,
+            subject=subject,
+            markdown_body=markdown_body,
+        )
+    )
     missing = sorted(token for token in tokens if token not in variables)
     if missing:
         raise ValueError(f'EMAIL_TEMPLATE_VARIABLE_REQUIRED: {missing[0]}')
