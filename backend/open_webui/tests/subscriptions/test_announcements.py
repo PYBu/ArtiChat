@@ -107,3 +107,30 @@ async def test_new_user_announcement_only_shows_to_users_created_after_announcem
 
     assert announcement.id not in [item.id for item in old_user_active]
     assert [item.id for item in new_user_active] == [announcement.id]
+
+
+@pytest.mark.asyncio
+async def test_deleted_announcement_is_hidden_from_default_admin_list(db_session):
+    Announcements = announcements()
+    announcement = await Announcements.create(
+        title='Delete me',
+        body='This announcement should leave the default list.',
+        display_mode='once',
+        button_label='知道了',
+        icon='trash',
+        is_active=True,
+        starts_at=None,
+        ends_at=None,
+        sort_order=0,
+        created_by='admin',
+        now=1_720_000_000,
+        db=db_session,
+    )
+
+    await Announcements.delete(announcement.id, db=db_session)
+
+    visible = await Announcements.list_all(db=db_session)
+    history = await Announcements.list_all(include_inactive=True, db=db_session)
+
+    assert announcement.id not in [item.id for item in visible]
+    assert announcement.id in [item.id for item in history]

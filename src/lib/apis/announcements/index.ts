@@ -34,8 +34,9 @@ export const markAnnouncementViewed = async (token: string, announcementId: stri
 	});
 };
 
-export const getAdminAnnouncements = async (token: string) => {
-	return jsonFetch(`${WEBUI_API_BASE_URL}/announcements/admin`, token);
+export const getAdminAnnouncements = async (token: string, includeInactive = false) => {
+	const query = new URLSearchParams({ include_inactive: String(includeInactive) });
+	return jsonFetch(`${WEBUI_API_BASE_URL}/announcements/admin?${query.toString()}`, token);
 };
 
 export const createAdminAnnouncement = async (token: string, payload: Record<string, unknown>) => {

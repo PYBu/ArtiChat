@@ -56,6 +56,12 @@ if (exists('src/lib/apis/announcements/index.ts')) {
 	]) {
 		if (!api.includes(`export const ${name}`)) failures.push(`Missing announcement API helper ${name}`);
 	}
+	if (!api.includes('include_inactive')) failures.push('Announcement API must expose include_inactive');
+}
+
+const adminAnnouncements = read('src/lib/components/admin/Settings/Subscriptions/Announcements.svelte');
+for (const marker of ['showInactive', '显示已停用', "toast.success('公告已删除。')"]) {
+	if (!adminAnnouncements.includes(marker)) failures.push(`Announcement admin missing ${marker}`);
 }
 
 const settingsModal = read('src/lib/components/chat/SettingsModal.svelte');

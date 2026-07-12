@@ -11,6 +11,7 @@
 	let rows: any[] = [];
 	let loading = true;
 	let creating = false;
+	let showInactive = false;
 	let form = {
 		title: '',
 		body: '',
@@ -29,7 +30,7 @@
 
 	const load = async () => {
 		loading = true;
-		const response = await getAdminAnnouncements(localStorage.token).catch((error) => {
+		const response = await getAdminAnnouncements(localStorage.token, showInactive).catch((error) => {
 			toast.error(`${error}`);
 			return { items: [] };
 		});
@@ -77,7 +78,7 @@
 			return null;
 		});
 		if (deleted) {
-			toast.success('公告已停用。');
+			toast.success('公告已删除。');
 			await load();
 		}
 	};
@@ -86,9 +87,15 @@
 </script>
 
 <div class="flex flex-col gap-4">
-	<div>
-		<div class="text-base font-medium">公告</div>
-		<div class="text-xs text-gray-500">创建登录后弹出的公告，可设置弹出一次、每次登录或仅新用户弹出。</div>
+	<div class="flex flex-wrap items-start justify-between gap-2">
+		<div>
+			<div class="text-base font-medium">公告</div>
+			<div class="text-xs text-gray-500">创建登录后弹出的公告，可设置弹出一次、每次登录或仅新用户弹出。</div>
+		</div>
+		<label class="flex items-center gap-2 text-xs text-gray-500">
+			<input type="checkbox" bind:checked={showInactive} on:change={() => load()} />
+			<span>显示已停用</span>
+		</label>
 	</div>
 
 	<div class="rounded-lg border border-gray-100 p-3 dark:border-gray-850">

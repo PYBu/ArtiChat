@@ -120,12 +120,19 @@ class AnnouncementsTable:
             return AnnouncementModel.model_validate(row)
 
     async def list_all(
-        self, *, limit: int = 100, offset: int = 0, db: AsyncSession | None = None
+        self,
+        *,
+        limit: int = 100,
+        offset: int = 0,
+        include_inactive: bool = False,
+        db: AsyncSession | None = None,
     ) -> list[AnnouncementModel]:
         async with get_announcement_db_context(db) as session:
+            stmt = select(Announcement)
+            if not include_inactive:
+                stmt = stmt.filter(Announcement.is_active == True)  # noqa: E712
             result = await session.execute(
-                select(Announcement)
-                .order_by(Announcement.sort_order.asc(), Announcement.created_at.desc())
+                stmt.order_by(Announcement.sort_order.asc(), Announcement.created_at.desc())
                 .limit(limit)
                 .offset(offset)
             )
