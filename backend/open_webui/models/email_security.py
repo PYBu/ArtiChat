@@ -88,6 +88,23 @@ class EmailTemplateModel(BaseModel):
     updated_at: int
 
 
+class EmailChallengeModel(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    email: str
+    purpose: str
+    user_id: str | None = None
+    session_id: str | None = None
+    ip_address: str | None = None
+    expires_at: int
+    resend_available_at: int
+    attempts: int
+    max_attempts: int
+    consumed_at: int | None = None
+    created_at: int
+
+
 class EmailDeliveryModel(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
