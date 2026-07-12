@@ -1,6 +1,13 @@
 import pytest
 
-from open_webui.utils.email_security import is_registration_email_allowed, normalize_allowed_domains
+from open_webui.utils.email_security import (
+    generate_email_code,
+    generate_reset_token,
+    hash_email_secret,
+    is_registration_email_allowed,
+    normalize_allowed_domains,
+    verify_email_secret,
+)
 
 
 def test_domain_allowlist_normalizes_case_whitespace_and_duplicates():
@@ -35,3 +42,23 @@ def test_invalid_allowlist_domains_are_ignored():
     assert normalize_allowed_domains(['', '@example.com', 'bad domain', '.example.com', 'example.com']) == [
         'example.com'
     ]
+
+
+def test_email_codes_are_six_digits_and_hashes_are_purpose_bound():
+    code = generate_email_code()
+    assert len(code) == 6
+    assert code.isdigit()
+
+    digest = hash_email_secret(code, purpose='login', secret_key='test-secret')
+    assert verify_email_secret(code, digest, purpose='login', secret_key='test-secret') is True
+    assert verify_email_secret(code, digest, purpose='register', secret_key='test-secret') is False
+    assert verify_email_secret('000000', digest, purpose='login', secret_key='test-secret') is False
+
+
+def test_reset_tokens_are_high_entropy_and_hash_verifiable():
+    first = generate_reset_token()
+    second = generate_reset_token()
+    assert first != second
+    assert len(first) >= 40
+    digest = hash_email_secret(first, purpose='password_reset', secret_key='test-secret')
+    assert verify_email_secret(first, digest, purpose='password_reset', secret_key='test-secret') is True
