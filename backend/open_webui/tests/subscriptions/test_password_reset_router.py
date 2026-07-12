@@ -93,6 +93,7 @@ async def test_reset_password_consumes_token_and_changes_password(monkeypatch, d
     )
     updates = []
     notices = []
+    revoked = []
     monkeypatch.setattr(emails.Users, 'get_user_by_id', lambda user_id, db=None: async_value(user))
     monkeypatch.setattr(emails, 'get_password_hash', lambda password: async_value('hashed-password'), raising=False)
     monkeypatch.setattr(
@@ -107,6 +108,12 @@ async def test_reset_password_consumes_token_and_changes_password(monkeypatch, d
         lambda **kwargs: append_async(notices, kwargs, SimpleNamespace(status='sent')),
         raising=False,
     )
+    monkeypatch.setattr(
+        emails,
+        'revoke_user_sessions',
+        lambda request, user_id, db=None: append_async(revoked, user_id, 'epoch-new'),
+        raising=False,
+    )
 
     response = await emails.reset_password(
         request_from(),
@@ -116,6 +123,7 @@ async def test_reset_password_consumes_token_and_changes_password(monkeypatch, d
 
     assert response == {'status': True}
     assert updates == [('user-1', 'hashed-password')]
+    assert revoked == ['user-1']
     assert notices[0]['template_key'] == 'password_changed'
     with pytest.raises(ValueError, match='PASSWORD_RESET_TOKEN_USED'):
         await validate_password_reset_token(

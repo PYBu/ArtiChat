@@ -171,7 +171,7 @@ async def create_session_response(
         expires_at = int(time.time()) + int(expires_delta.total_seconds())
 
     token = create_token(
-        data={'id': user.id},
+        data={'id': user.id, 'auth_epoch': user.auth_epoch},
         expires_delta=expires_delta,
     )
 
@@ -1147,7 +1147,10 @@ async def add_user(
             )
 
             expires_delta = parse_duration(await Config.get('auth.jwt_expiry'))
-            token = create_token(data={'id': user.id}, expires_delta=expires_delta)
+            token = create_token(
+                data={'id': user.id, 'auth_epoch': user.auth_epoch},
+                expires_delta=expires_delta,
+            )
             return {
                 'token': token,
                 'token_type': 'Bearer',

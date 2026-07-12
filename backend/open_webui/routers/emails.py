@@ -39,6 +39,7 @@ from open_webui.utils.email_security import (
     verify_email_challenge,
 )
 from open_webui.utils.passwords import get_password_hash, validate_password
+from open_webui.utils.session_security import revoke_user_sessions
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -431,6 +432,7 @@ async def reset_password(
     hashed_password = await get_password_hash(form_data.new_password)
     if not await Auths.update_user_password_by_id(user.id, hashed_password, db=db):
         raise HTTPException(status_code=400, detail='PASSWORD_RESET_FAILED')
+    await revoke_user_sessions(request, user.id, db=db)
 
     try:
         settings = await load_smtp_settings()

@@ -36,6 +36,7 @@ from open_webui.models.config import Config
 from open_webui.models.users import Users
 from open_webui.utils.access_control import has_permission
 from open_webui.utils.passwords import get_password_hash, validate_password, verify_password
+from open_webui.utils.session_security import token_auth_epoch_matches
 from pytz import UTC
 
 log = logging.getLogger(__name__)
@@ -325,6 +326,11 @@ async def get_current_user(
 
             user = await Users.get_user_by_id(data['id'])
             if user is None:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail=ERROR_MESSAGES.INVALID_TOKEN,
+                )
+            elif not token_auth_epoch_matches(data, user):
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail=ERROR_MESSAGES.INVALID_TOKEN,

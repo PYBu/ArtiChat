@@ -73,6 +73,7 @@ class User(Base):  # identity & profile
     oauth = Column(JSON, nullable=True)
     scim = Column(JSON, nullable=True)
     email_verified_at = Column(BigInteger, nullable=True)
+    auth_epoch = Column(String, nullable=True)
 
     # Timestamps (epoch seconds)
     last_active_at = Column(BigInteger)
@@ -111,6 +112,7 @@ class UserModel(BaseModel):
     oauth: dict | None = None
     scim: dict | None = None
     email_verified_at: int | None = None
+    auth_epoch: str | None = None
 
     last_active_at: int  # timestamp in epoch
     updated_at: int  # timestamp in epoch
