@@ -187,3 +187,19 @@ async def verify_email_challenge(
         await session.commit()
         await session.refresh(challenge)
         return EmailChallengeModel.model_validate(challenge)
+
+
+async def invalidate_email_challenge(
+    challenge_id: str,
+    *,
+    now: int,
+    db: AsyncSession | None = None,
+) -> EmailChallengeModel:
+    async with get_email_security_db_context(db) as session:
+        challenge = await session.get(EmailChallenge, challenge_id)
+        if challenge is None:
+            raise ValueError('EMAIL_CHALLENGE_NOT_FOUND')
+        challenge.consumed_at = now
+        await session.commit()
+        await session.refresh(challenge)
+        return EmailChallengeModel.model_validate(challenge)

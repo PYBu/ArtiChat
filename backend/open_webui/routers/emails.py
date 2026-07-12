@@ -10,6 +10,8 @@ from open_webui.env import WEBUI_SECRET_KEY
 from open_webui.internal.db import get_async_session
 from open_webui.models.config import Config
 from open_webui.models.email_security import EmailDeliveries, EmailTemplates
+from open_webui.models.subscriptions import now_ts
+from open_webui.models.users import Users
 from open_webui.utils.email_delivery import (
     DEFAULT_EMAIL_TEMPLATES,
     EMAIL_TEMPLATE_VARIABLES,
@@ -21,7 +23,13 @@ from open_webui.utils.email_delivery import (
     smtp_admin_settings,
     validate_email_template,
 )
-from open_webui.utils.email_security import normalize_allowed_domains
+from open_webui.utils.email_security import (
+    create_email_challenge,
+    generate_email_code,
+    invalidate_email_challenge,
+    is_registration_email_allowed,
+    normalize_allowed_domains,
+)
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -120,6 +128,11 @@ class RegistrationSettingsForm(BaseModel):
     sensitive_action_verification_enabled: bool = False
 
 
+class EmailChallengeRequestForm(BaseModel):
+    email: str
+    purpose: str
+
+
 async def load_smtp_settings() -> dict[str, Any]:
     values = await Config.get_many(*SMTP_CONFIG_KEYS.values())
     return {
@@ -201,6 +214,78 @@ async def update_registration_settings(
     }
     await Config.upsert(_registration_updates(normalized))
     return normalized
+
+
+@router.post('/challenges/request')
+async def request_email_challenge(
+    request: Request,
+    form_data: EmailChallengeRequestForm,
+    db: AsyncSession = Depends(get_async_session),
+):
+    purpose = form_data.purpose.strip().lower()
+    if purpose not in {'registration', 'login'}:
+        raise HTTPException(status_code=400, detail='EMAIL_CODE_PURPOSE_INVALID')
+
+    email = form_data.email.strip().lower()
+    registration = await load_registration_settings()
+    if purpose == 'registration':
+        if not registration['verification_enabled']:
+            raise HTTPException(status_code=400, detail='REGISTRATION_VERIFICATION_DISABLED')
+        if not is_registration_email_allowed(
+            email,
+            registration['allowed_domains'],
+            allow_subdomains=bool(registration['allow_subdomains']),
+        ):
+            raise HTTPException(status_code=400, detail='REGISTRATION_EMAIL_DOMAIN_NOT_ALLOWED')
+    elif not registration['email_code_login_enabled']:
+        raise HTTPException(status_code=400, detail='EMAIL_CODE_LOGIN_DISABLED')
+
+    user = await Users.get_user_by_email(email, db=db)
+    if (purpose == 'registration' and user is not None) or (purpose == 'login' and user is None):
+        return {'status': True}
+
+    settings = await load_smtp_settings()
+    if not settings.get('enabled'):
+        return {'status': True}
+
+    code = generate_email_code()
+    timestamp = now_ts()
+    try:
+        challenge = await create_email_challenge(
+            email=email,
+            purpose=purpose,
+            code=code,
+            secret_key=WEBUI_SECRET_KEY,
+            user_id=getattr(user, 'id', None),
+            ip_address=request.client.host if request.client else None,
+            now=timestamp,
+            db=db,
+        )
+    except ValueError as exc:
+        status_code = 429 if str(exc) in {
+            'EMAIL_CODE_RESEND_COOLDOWN',
+            'EMAIL_CODE_EMAIL_RATE_LIMIT',
+            'EMAIL_CODE_IP_RATE_LIMIT',
+        } else 400
+        raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+
+    delivery = await deliver_email(
+        template_key='registration_code' if purpose == 'registration' else 'login_code',
+        recipient=email,
+        variables={
+            'platform_name': settings.get('sender_name') or 'ArtiChat',
+            'platform_url': settings.get('public_url') or '',
+            'user_name': getattr(user, 'name', None) or email.split('@', 1)[0],
+            'code': code,
+            'expires_minutes': 10,
+        },
+        settings=settings,
+        secret_key=WEBUI_SECRET_KEY,
+        db=db,
+    )
+    if delivery.status != 'sent':
+        await invalidate_email_challenge(challenge.id, now=now_ts(), db=db)
+    return {'status': True}
 
 
 @router.get('/admin/settings')
