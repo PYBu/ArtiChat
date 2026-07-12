@@ -4,7 +4,7 @@
 
 它可以完全离线运行,兼容 OpenAI 风格 API 与本地 Ollama 模型,内置检索增强(RAG)、多用户与权限管理、插件扩展等能力,适合团队与个人搭建属于自己的 AI 工作台。
 
-> ArtiChat 基于开源项目 [Open WebUI](https://github.com/open-webui/open-webui) 二次开发,在其之上进行品牌化定制与功能演进。
+> ArtiChat 基于开源项目 [Open WebUI](https://github.com/open-webui/open-webui) 二次开发,最后使用的版本为0.10.2,在其之上进行品牌化定制与功能演进。
 
 ![SvelteKit](https://img.shields.io/badge/frontend-SvelteKit-ff3e00?logo=svelte&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/backend-FastAPI-009688?logo=fastapi&logoColor=white)
@@ -15,8 +15,8 @@
 
 ## 核心功能
 
-- **多模型接入** — 兼容任意 OpenAI 风格 API(OpenAI、OpenRouter、vLLM、Groq、Mistral 等),同时支持本地 Ollama 模型,自由混用不同来源的模型。
-- **检索增强(RAG)** — 内置文档解析与向量检索,可将本地文档、知识库注入对话上下文。
+- **原本兼容** — 原功能基本未改动，全部保留。
+- **用户管理** — ArtiChat针对用户做了很多改动，包括“订阅”、“用量”、“额度”。
 - **多用户与权限管理** — 基于角色的访问控制(RBAC)、用户组与细粒度权限,按团队需求分配访问范围。
 - **插件与扩展** — 通过 Filters、Actions、Pipes、Tools 扩展能力,并支持 MCP、OpenAPI 工具服务器等外部集成。
 - **智能体与模型编排** — 为基础模型叠加自定义指令、工具与知识,构建专用智能体。
