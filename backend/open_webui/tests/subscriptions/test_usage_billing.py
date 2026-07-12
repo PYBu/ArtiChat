@@ -1,4 +1,7 @@
+import asyncio
+
 import pytest
+from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from open_webui.models.subscriptions import (
     SubscriptionLedgers,
@@ -235,3 +238,37 @@ async def test_metered_billing_rolls_back_balance_and_ledger_when_usage_insert_f
     assert after.plan_balance_micros == before.plan_balance_micros
     assert after.check_balance_micros == before.check_balance_micros
     assert len(after_ledgers) == len(before_ledgers)
+
+
+@pytest.mark.asyncio
+async def test_concurrent_metered_usage_does_not_lose_a_debit(db_session):
+    await SubscriptionPlans.seed_defaults(db=db_session)
+    await ensure_subscription_current('concurrent-billing-user', now=1_720_000_000, db=db_session)
+    Session = async_sessionmaker(db_session.bind, expire_on_commit=False)
+
+    async def bill_once(request_id: str):
+        async with Session() as session:
+            return await bill_model_usage(
+                user_id='concurrent-billing-user',
+                model_id='metered-model',
+                quota_mode='metered',
+                usage_multiplier='1',
+                pricing={
+                    'input_chatpoint_per_million': '100',
+                    'output_chatpoint_per_million': '0',
+                    'cache_creation_chatpoint_per_million': '0',
+                    'cache_read_chatpoint_per_million': '0',
+                },
+                usage={'input_tokens': 100_000},
+                metadata={},
+                is_admin=False,
+                request_id=request_id,
+                now=1_720_000_001,
+                db=session,
+            )
+
+    await asyncio.gather(bill_once('concurrent-1'), bill_once('concurrent-2'))
+    db_session.expire_all()
+    subscription = await UserSubscriptions.get_by_user_id('concurrent-billing-user', db=db_session)
+
+    assert subscription.plan_balance_micros == chatpoint_to_micros(80)

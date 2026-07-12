@@ -295,8 +295,10 @@ async def request_email_challenge(
         raise HTTPException(status_code=400, detail='EMAIL_CODE_LOGIN_DISABLED')
 
     user = await Users.get_user_by_email(email, db=db)
-    if (purpose == 'registration' and user is not None) or (purpose == 'login' and user is None):
-        return {'status': True}
+    should_deliver = not (
+        (purpose == 'registration' and user is not None)
+        or (purpose == 'login' and user is None)
+    )
 
     settings = await load_smtp_settings()
     if not settings.get('enabled'):
@@ -322,6 +324,9 @@ async def request_email_challenge(
             'EMAIL_CODE_IP_RATE_LIMIT',
         } else 400
         raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+
+    if not should_deliver:
+        return {'status': True}
 
     delivery = await deliver_email(
         template_key='registration_code' if purpose == 'registration' else 'login_code',

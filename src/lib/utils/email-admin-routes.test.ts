@@ -25,4 +25,21 @@ describe('email admin routes', () => {
 		expect(shell).toContain('/admin/email/deliveries');
 		expect(shell).toContain('<select');
 	});
+
+	it('does not offer retry for expired security credentials', () => {
+		const deliveries = readFileSync(
+			resolve('src/lib/components/admin/Email/EmailDeliveries.svelte'),
+			'utf8'
+		);
+
+		for (const template of [
+			'registration_code',
+			'login_code',
+			'sensitive_action_code',
+			'password_reset'
+		]) {
+			expect(deliveries).toContain(template);
+		}
+		expect(deliveries).toContain('!nonRetryableTemplates.has(delivery.template_key)');
+	});
 });

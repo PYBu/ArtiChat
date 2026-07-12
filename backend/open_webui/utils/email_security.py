@@ -111,7 +111,19 @@ async def consume_password_reset_token(
             raise ValueError('PASSWORD_RESET_TOKEN_USED')
         if now > row.expires_at:
             raise ValueError('PASSWORD_RESET_TOKEN_EXPIRED')
-        row.consumed_at = now
+        claimed = await session.execute(
+            update(PasswordResetToken)
+            .where(
+                PasswordResetToken.id == row.id,
+                PasswordResetToken.consumed_at.is_(None),
+                PasswordResetToken.expires_at >= now,
+            )
+            .values(consumed_at=now)
+            .execution_options(synchronize_session=False)
+        )
+        if claimed.rowcount != 1:
+            await session.rollback()
+            raise ValueError('PASSWORD_RESET_TOKEN_USED')
         await session.commit()
         await session.refresh(row)
         return PasswordResetTokenModel.model_validate(row)
@@ -274,7 +286,20 @@ async def verify_email_challenge(
             await session.commit()
             raise ValueError('EMAIL_CODE_INVALID')
 
-        challenge.consumed_at = now
+        consumed = await session.execute(
+            update(EmailChallenge)
+            .where(
+                EmailChallenge.id == challenge.id,
+                EmailChallenge.consumed_at.is_(None),
+                EmailChallenge.expires_at >= now,
+                EmailChallenge.attempts < EmailChallenge.max_attempts,
+            )
+            .values(consumed_at=now)
+            .execution_options(synchronize_session=False)
+        )
+        if consumed.rowcount != 1:
+            await session.rollback()
+            raise ValueError('EMAIL_CODE_ALREADY_USED')
         await session.commit()
         await session.refresh(challenge)
         return EmailChallengeModel.model_validate(challenge)
@@ -305,7 +330,15 @@ async def claim_sensitive_action_grant(
             raise ValueError('SENSITIVE_ACTION_GRANT_EXPIRED')
         if challenge.claimed_at is not None:
             raise ValueError('SENSITIVE_ACTION_GRANT_USED')
-        challenge.claimed_at = now
+        claimed = await session.execute(
+            update(EmailChallenge)
+            .where(EmailChallenge.id == challenge.id, EmailChallenge.claimed_at.is_(None))
+            .values(claimed_at=now)
+            .execution_options(synchronize_session=False)
+        )
+        if claimed.rowcount != 1:
+            await session.rollback()
+            raise ValueError('SENSITIVE_ACTION_GRANT_USED')
         await session.commit()
         await session.refresh(challenge)
         return EmailChallengeModel.model_validate(challenge)
@@ -372,7 +405,15 @@ async def claim_email_verification_ticket(
             raise ValueError('EMAIL_VERIFICATION_TICKET_EXPIRED')
         if challenge.claimed_at is not None:
             raise ValueError('EMAIL_VERIFICATION_TICKET_USED')
-        challenge.claimed_at = now
+        claimed = await session.execute(
+            update(EmailChallenge)
+            .where(EmailChallenge.id == challenge.id, EmailChallenge.claimed_at.is_(None))
+            .values(claimed_at=now)
+            .execution_options(synchronize_session=False)
+        )
+        if claimed.rowcount != 1:
+            await session.rollback()
+            raise ValueError('EMAIL_VERIFICATION_TICKET_USED')
         await session.commit()
         await session.refresh(challenge)
         return EmailChallengeModel.model_validate(challenge)

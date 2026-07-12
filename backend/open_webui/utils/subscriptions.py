@@ -432,6 +432,7 @@ async def bill_model_usage(
         subscription = None
         if not is_admin:
             subscription = await ensure_subscription_current(user_id, now=current_time, db=session)
+            subscription = await UserSubscriptions.lock_for_billing(user_id, db=session)
 
         status = 'billed'
         cost_micros = 0

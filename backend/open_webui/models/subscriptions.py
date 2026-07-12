@@ -11,7 +11,7 @@ from typing import Any, AsyncIterator
 from open_webui.internal.db import Base, get_async_db_context
 from open_webui.models.users import User
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import BigInteger, Boolean, Column, Index, Integer, JSON, Text, or_, select
+from sqlalchemy import BigInteger, Boolean, Column, Index, Integer, JSON, Text, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 CHATPOINT_MICROS = 1_000_000
@@ -660,6 +660,24 @@ class UserSubscriptionsTable:
             result = await session.execute(select(UserSubscription).filter(UserSubscription.user_id == user_id))
             row = result.scalar_one_or_none()
             return UserSubscriptionModel.model_validate(row) if row else None
+
+    async def lock_for_billing(
+        self, user_id: str, db: AsyncSession | None = None
+    ) -> UserSubscriptionModel:
+        async with get_subscription_db_context(db) as session:
+            locked = await session.execute(
+                update(UserSubscription)
+                .where(UserSubscription.user_id == user_id)
+                .values(updated_at=UserSubscription.updated_at)
+            )
+            if locked.rowcount != 1:
+                raise ValueError(f'user subscription not found: {user_id}')
+            result = await session.execute(
+                select(UserSubscription)
+                .where(UserSubscription.user_id == user_id)
+                .execution_options(populate_existing=True)
+            )
+            return UserSubscriptionModel.model_validate(result.scalar_one())
 
     async def get_summaries_by_user_ids(
         self, user_ids: list[str], db: AsyncSession | None = None

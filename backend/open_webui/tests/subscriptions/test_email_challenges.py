@@ -1,4 +1,7 @@
+import asyncio
+
 import pytest
+from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from open_webui.models.users import User
 from open_webui.utils.email_security import (
@@ -280,3 +283,41 @@ async def test_sensitive_action_grant_is_bound_to_user_session_and_action(db_ses
             now=202,
             db=db_session,
         )
+
+
+@pytest.mark.asyncio
+async def test_verification_ticket_allows_only_one_concurrent_claim(db_session):
+    challenge = await create_email_challenge(
+        email='concurrent@example.com',
+        purpose='registration',
+        code='123456',
+        secret_key='test-secret',
+        now=100,
+        db=db_session,
+    )
+    await verify_email_challenge(
+        email='concurrent@example.com',
+        purpose='registration',
+        code='123456',
+        secret_key='test-secret',
+        now=101,
+        db=db_session,
+    )
+    Session = async_sessionmaker(db_session.bind, expire_on_commit=False)
+
+    async def claim_once():
+        async with Session() as session:
+            try:
+                await claim_email_verification_ticket(
+                    challenge.id,
+                    email='concurrent@example.com',
+                    purpose='registration',
+                    now=102,
+                    db=session,
+                )
+                return 'claimed'
+            except ValueError as exc:
+                return str(exc)
+
+    results = await asyncio.gather(claim_once(), claim_once())
+    assert sorted(results) == ['EMAIL_VERIFICATION_TICKET_USED', 'claimed']

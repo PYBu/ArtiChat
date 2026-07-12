@@ -57,7 +57,44 @@ async def test_delivery_seeds_templates_records_success_and_redacts_secrets(db_s
 
     stored = await EmailDeliveries.get(delivery.id, db=db_session)
     assert stored.status == 'sent'
+    assert '123456' not in stored.subject
+    assert '123456' not in stored.text_body
+    assert '123456' not in stored.html_body
+    assert '[redacted]' in stored.text_body
     assert len(await EmailTemplates.list_all(db=db_session)) == 9
+
+
+@pytest.mark.asyncio
+async def test_failed_security_delivery_cannot_resend_invalidated_credentials(db_session):
+    def failing_sender(**kwargs):
+        raise SMTPStageError('send', 'SMTP_SEND_FAILED')
+
+    failed = await deliver_email(
+        template_key='password_reset',
+        recipient='alice@example.com',
+        variables={
+            'platform_name': 'ArtiChat',
+            'user_name': 'Alice',
+            'reset_url': 'https://chat.example.com/reset?token=secret-token',
+            'expires_minutes': 30,
+        },
+        settings=configured_smtp(),
+        secret_key='primary-secret',
+        send_func=failing_sender,
+        now=100,
+        db=db_session,
+    )
+
+    assert 'secret-token' not in failed.text_body
+    assert 'secret-token' not in failed.html_body
+    with pytest.raises(ValueError, match='EMAIL_DELIVERY_NOT_RETRYABLE'):
+        await retry_email_delivery(
+            failed.id,
+            settings=configured_smtp(),
+            secret_key='primary-secret',
+            send_func=lambda **kwargs: None,
+            db=db_session,
+        )
 
 
 @pytest.mark.asyncio

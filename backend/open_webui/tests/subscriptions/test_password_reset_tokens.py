@@ -1,4 +1,7 @@
+import asyncio
+
 import pytest
+from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from open_webui.utils.email_security import (
     consume_password_reset_token,
@@ -111,3 +114,32 @@ async def test_password_reset_token_rejects_unknown_and_expired_values(db_sessio
             now=1901,
             db=db_session,
         )
+
+
+@pytest.mark.asyncio
+async def test_password_reset_token_allows_only_one_concurrent_consumer(db_session):
+    await create_password_reset_token(
+        email='alice@example.com',
+        user_id='user-concurrent',
+        token='concurrent-reset-secret',
+        secret_key='test-secret',
+        now=100,
+        db=db_session,
+    )
+    Session = async_sessionmaker(db_session.bind, expire_on_commit=False)
+
+    async def consume_once():
+        async with Session() as session:
+            try:
+                await consume_password_reset_token(
+                    'concurrent-reset-secret',
+                    secret_key='test-secret',
+                    now=101,
+                    db=session,
+                )
+                return 'consumed'
+            except ValueError as exc:
+                return str(exc)
+
+    results = await asyncio.gather(consume_once(), consume_once())
+    assert sorted(results) == ['PASSWORD_RESET_TOKEN_USED', 'consumed']

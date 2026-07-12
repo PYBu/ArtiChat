@@ -326,9 +326,10 @@ async def _attempt_delivery(
     send_func: Callable[..., None],
     now: int | None,
     db: AsyncSession | None,
+    rendered_override: RenderedEmail | None = None,
 ) -> EmailDeliveryModel:
     delivery = await EmailDeliveries.start_attempt(delivery.id, now=now, db=db)
-    rendered = RenderedEmail(
+    rendered = rendered_override or RenderedEmail(
         subject=delivery.subject,
         html_body=delivery.html_body,
         text_body=delivery.text_body,
@@ -374,13 +375,20 @@ async def deliver_email(
         markdown_body=template.markdown_body,
         variables=variables,
     )
+    stored_variables = _stored_delivery_variables(variables)
+    stored_rendered = render_email_template(
+        template_key=template.key,
+        subject=template.subject,
+        markdown_body=template.markdown_body,
+        variables=stored_variables,
+    )
     delivery = await EmailDeliveries.create(
         template_key=template.key,
         recipient=recipient,
-        subject=rendered.subject,
-        html_body=rendered.html_body,
-        text_body=rendered.text_body,
-        variables=_stored_delivery_variables(variables),
+        subject=stored_rendered.subject,
+        html_body=stored_rendered.html_body,
+        text_body=stored_rendered.text_body,
+        variables=stored_variables,
         now=now,
         db=db,
     )
@@ -391,6 +399,7 @@ async def deliver_email(
         send_func=send_func,
         now=now,
         db=db,
+        rendered_override=rendered,
     )
 
 
@@ -407,6 +416,8 @@ async def retry_email_delivery(
     if delivery is None:
         raise ValueError('EMAIL_DELIVERY_NOT_FOUND')
     if delivery.status != 'failed':
+        raise ValueError('EMAIL_DELIVERY_NOT_RETRYABLE')
+    if delivery.template_key in {'registration_code', 'login_code', 'sensitive_action_code', 'password_reset'}:
         raise ValueError('EMAIL_DELIVERY_NOT_RETRYABLE')
     return await _attempt_delivery(
         delivery,

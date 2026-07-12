@@ -21,6 +21,12 @@
 		sent: '已发送',
 		failed: '失败'
 	};
+	const nonRetryableTemplates = new Set([
+		'registration_code',
+		'login_code',
+		'sensitive_action_code',
+		'password_reset'
+	]);
 
 	let deliveries: EmailDelivery[] = [];
 	let loading = true;
@@ -101,7 +107,7 @@
 						{formatDate(delivery.sent_at ?? delivery.created_at)}
 					</div>
 					<div class="flex justify-end">
-						{#if delivery.status === 'failed'}
+						{#if delivery.status === 'failed' && !nonRetryableTemplates.has(delivery.template_key)}
 							<button
 								type="button"
 								class="rounded-lg border border-gray-200 px-3 py-1.5 text-xs hover:bg-gray-50 disabled:opacity-50 dark:border-gray-800 dark:hover:bg-gray-900"

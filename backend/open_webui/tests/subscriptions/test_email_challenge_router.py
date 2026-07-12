@@ -69,6 +69,19 @@ async def test_challenge_request_hides_account_existence(monkeypatch, db_session
     assert registration == login == {'status': True}
     assert sent == []
 
+    for email, purpose in [
+        ('existing@example.com', 'registration'),
+        ('missing@example.com', 'login'),
+    ]:
+        with pytest.raises(HTTPException) as exc_info:
+            await emails.request_email_challenge(
+                request_from(),
+                emails.EmailChallengeRequestForm(email=email, purpose=purpose),
+                db=db_session,
+            )
+        assert exc_info.value.status_code == 429
+        assert exc_info.value.detail == 'EMAIL_CODE_RESEND_COOLDOWN'
+
 
 @pytest.mark.asyncio
 async def test_registration_challenge_applies_domain_rule_and_sends_code(monkeypatch, db_session):
