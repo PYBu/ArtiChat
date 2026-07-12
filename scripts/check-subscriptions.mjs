@@ -14,7 +14,16 @@ const requiredFiles = [
 	'src/lib/components/chat/Settings/Usage.svelte',
 	'src/lib/components/AnnouncementModal.svelte',
 	'src/lib/components/layout/Sidebar/SubscriptionQuotaRing.svelte',
-	'src/lib/components/admin/Settings/Subscriptions.svelte',
+	'src/lib/components/admin/Subscriptions/SubscriptionPageShell.svelte',
+	'src/lib/components/admin/Subscriptions/SubscriptionHome.svelte',
+	'src/routes/(app)/admin/subscriptions/+page.svelte',
+	'src/routes/(app)/admin/subscriptions/plans/+page.svelte',
+	'src/routes/(app)/admin/subscriptions/models/+page.svelte',
+	'src/routes/(app)/admin/subscriptions/redeem-codes/+page.svelte',
+	'src/routes/(app)/admin/subscriptions/gift-cards/+page.svelte',
+	'src/routes/(app)/admin/subscriptions/announcements/+page.svelte',
+	'src/routes/(app)/admin/subscriptions/usage/+page.svelte',
+	'src/routes/(app)/admin/subscriptions/users/+page.svelte',
 	'src/lib/components/admin/Settings/Subscriptions/GiftCards.svelte',
 	'src/lib/components/admin/Settings/Subscriptions/Announcements.svelte',
 	'src/lib/components/workspace/Models/SubscriptionPolicy.svelte'
@@ -104,13 +113,22 @@ for (const marker of ['用量 / Usage', 'Plan Chatpoint', 'Check Chatpoint', 're
 if (ring.includes('免费版')) failures.push('Quota ring must use Free instead of 免费版');
 
 const adminSettings = read('src/lib/components/admin/Settings.svelte');
-for (const marker of ['订阅管理', "selectedTab === 'subscriptions'", '<Subscriptions']) {
-	if (!adminSettings.includes(marker)) failures.push(`Admin settings missing ${marker}`);
+if (adminSettings.includes("selectedTab === 'subscriptions'") || adminSettings.includes('<Subscriptions')) {
+	failures.push('Subscription operations must not remain embedded in admin settings');
 }
 
-const adminSubscriptions = read('src/lib/components/admin/Settings/Subscriptions.svelte');
-for (const marker of ['礼品卡', '公告', '<GiftCards', '<Announcements']) {
-	if (!adminSubscriptions.includes(marker)) failures.push(`Admin subscriptions missing ${marker}`);
+const adminLayout = read('src/routes/(app)/admin/+layout.svelte');
+for (const marker of ['href="/admin/subscriptions"', 'admin-mobile-section', 'goto(event.currentTarget.value)']) {
+	if (!adminLayout.includes(marker)) failures.push(`Admin navigation missing ${marker}`);
+}
+
+if (exists('src/lib/components/admin/Subscriptions/SubscriptionHome.svelte')) {
+	const subscriptionHome = read('src/lib/components/admin/Subscriptions/SubscriptionHome.svelte');
+	for (const route of ['plans', 'models', 'redeem-codes', 'gift-cards', 'announcements', 'users', 'usage']) {
+		if (!subscriptionHome.includes(`/admin/subscriptions/${route}`)) {
+			failures.push(`Subscription home missing route ${route}`);
+		}
+	}
 }
 
 const redeemCode = read('src/lib/components/chat/Settings/RedeemCode.svelte');

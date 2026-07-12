@@ -138,7 +138,7 @@
 										<button
 											type="button"
 											class="text-xs underline text-gray-500 hover:text-gray-900 dark:hover:text-gray-100"
-											on:click={() => goto(`/admin/settings/subscriptions?user=${selectedUser.id}`)}
+											on:click={() => goto(`/admin/subscriptions/users?user=${selectedUser.id}`)}
 										>
 											管理订阅
 										</button>

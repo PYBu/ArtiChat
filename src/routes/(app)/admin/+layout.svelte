@@ -12,6 +12,18 @@
 
 	let loaded = false;
 
+	$: adminSection = $page.url.pathname.startsWith('/admin/subscriptions')
+		? '/admin/subscriptions'
+		: $page.url.pathname.startsWith('/admin/analytics')
+			? '/admin/analytics'
+			: $page.url.pathname.startsWith('/admin/evaluations')
+				? '/admin/evaluations'
+				: $page.url.pathname.startsWith('/admin/functions')
+					? '/admin/functions'
+					: $page.url.pathname.startsWith('/admin/settings')
+						? '/admin/settings'
+						: '/admin';
+
 	onMount(async () => {
 		if ($user?.role !== 'admin') {
 			await goto('/');
@@ -55,10 +67,34 @@
 					</div>
 				{/if}
 
-				<div class=" flex w-full">
+				<div class="flex w-full min-w-0">
+					{#if $mobile}
+						<select
+							id="admin-mobile-section"
+							class="min-w-0 flex-1 rounded-lg border border-gray-100 bg-transparent px-3 py-2 text-sm dark:border-gray-850"
+							value={adminSection}
+							on:change={(event) => goto(event.currentTarget.value)}
+							aria-label="管理员功能"
+						>
+							<option value="/admin">用户</option>
+							{#if $config?.features.enable_admin_analytics ?? true}<option value="/admin/analytics">分析</option>{/if}
+							<option value="/admin/evaluations">评估</option>
+							<option value="/admin/functions">函数</option>
+							<option value="/admin/subscriptions">订阅运营</option>
+							<option value="/admin/settings">设置</option>
+						</select>
+					{:else}
 					<div
 						class="flex gap-1 scrollbar-none overflow-x-auto w-fit text-center text-sm font-medium rounded-full bg-transparent pt-1"
 					>
+						<a
+							draggable="false"
+							class="min-w-fit p-1.5 {$page.url.pathname.includes('/admin/subscriptions')
+								? ''
+								: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition select-none"
+							href="/admin/subscriptions">订阅运营</a
+						>
+
 						<a
 							draggable="false"
 							class="min-w-fit p-1.5 {$page.url.pathname.includes('/admin/users')
@@ -101,6 +137,7 @@
 							href="/admin/settings">{$i18n.t('Settings')}</a
 						>
 					</div>
+					{/if}
 				</div>
 			</div>
 		</nav>
