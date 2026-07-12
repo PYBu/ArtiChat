@@ -1135,6 +1135,7 @@ async def chat_completion(
             tool_servers = None
 
         metadata = {
+            'request_id': str(uuid4()),
             'user_id': user.id,
             'user_agent': request.headers.get('user-agent', '') or '',
             'chat_id': form_data.pop('chat_id', None) or '',
@@ -1500,6 +1501,7 @@ async def chat_completion(
         )
 
     async def process_chat(request, form_data, user, metadata, model, tasks=None):
+        request_started_at = time.perf_counter()
         try:
             form_data, metadata, events = await process_chat_payload(request, form_data, user, metadata, model)
 
@@ -1520,7 +1522,16 @@ async def chat_completion(
                     detail = f'Provider returned HTTP {response.status_code}'
                 raise Exception(detail)
 
-            ctx = await build_chat_response_context(request, form_data, user, model, metadata, tasks, events)
+            ctx = await build_chat_response_context(
+                request,
+                form_data,
+                user,
+                model,
+                metadata,
+                tasks,
+                events,
+                request_started_at=request_started_at,
+            )
 
             return await process_chat_response(response, ctx)
         except asyncio.CancelledError:
@@ -1632,6 +1643,7 @@ async def chat_completion(
             # Per-model metadata: own message_id + model
             per_model_metadata = {
                 **metadata,
+                'request_id': str(uuid4()),
                 'message_id': assistant_message_id,
                 'subscription_policy': metadata.get('subscription_policies', {}).get(target_model_id),
             }

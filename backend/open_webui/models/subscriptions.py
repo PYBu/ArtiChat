@@ -565,6 +565,7 @@ class SubscriptionLedgersTable:
         metadata: dict | None = None,
         created_by: str | None = None,
         created_at: int | None = None,
+        commit: bool = True,
         db: AsyncSession | None = None,
     ) -> SubscriptionLedgerModel:
         async with get_subscription_db_context(db) as session:
@@ -585,8 +586,11 @@ class SubscriptionLedgersTable:
                 created_at=created_at or now_ts(),
             )
             session.add(row)
-            await session.commit()
-            await session.refresh(row)
+            if commit:
+                await session.commit()
+                await session.refresh(row)
+            else:
+                await session.flush()
             return SubscriptionLedgerModel.model_validate(row)
 
     async def get_recent_for_user(
@@ -704,6 +708,7 @@ class UserSubscriptionsTable:
         check_delta_micros: int = 0,
         event_type: str,
         created_by: str | None,
+        commit: bool = True,
         db: AsyncSession | None = None,
     ) -> UserSubscriptionModel:
         async with get_subscription_db_context(db) as session:
@@ -722,8 +727,11 @@ class UserSubscriptionsTable:
             row.plan_balance_micros = sub.plan_balance_micros + plan_delta_micros
             row.check_balance_micros = sub.check_balance_micros + check_delta_micros
             row.updated_at = now_ts()
-            await session.commit()
-            await session.refresh(row)
+            if commit:
+                await session.commit()
+                await session.refresh(row)
+            else:
+                await session.flush()
             model = UserSubscriptionModel.model_validate(row)
             await SubscriptionLedgers.insert(
                 user_id=user_id,
@@ -735,6 +743,7 @@ class UserSubscriptionsTable:
                 plan_balance_after_micros=model.plan_balance_micros,
                 check_balance_after_micros=model.check_balance_micros,
                 created_by=created_by,
+                commit=commit,
                 db=session,
             )
             return model
@@ -1289,19 +1298,30 @@ class SubscriptionUsageModel(BaseModel):
     user_id: str
     chat_id: str | None = None
     message_id: str | None = None
+    request_id: str | None = None
     model_id: str
     tier: str
     quota_mode: str
     usage_multiplier: str
     input_tokens: int
     output_tokens: int
+    cache_creation_tokens: int | None = None
+    cache_read_tokens: int | None = None
     total_tokens: int
+    input_chatpoint_per_million: str | None = None
+    output_chatpoint_per_million: str | None = None
+    cache_creation_chatpoint_per_million: str | None = None
+    cache_read_chatpoint_per_million: str | None = None
     cost_micros: int
     plan_cost_micros: int
     check_cost_micros: int
     plan_balance_after_micros: int | None = None
     check_balance_after_micros: int | None = None
+    first_token_latency_ms: int | None = None
+    total_duration_ms: int | None = None
+    client_ip: str | None = None
     status: str
+    raw_usage: dict | None = None
     metadata: dict | None = Field(default=None, alias='meta')
     created_at: int
 
@@ -1313,21 +1333,33 @@ class SubscriptionUsagesTable:
         user_id: str,
         chat_id: str | None,
         message_id: str | None,
+        request_id: str | None = None,
         model_id: str,
         tier: str,
         quota_mode: str,
         usage_multiplier: str,
         input_tokens: int,
         output_tokens: int,
+        cache_creation_tokens: int | None = None,
+        cache_read_tokens: int | None = None,
         total_tokens: int,
+        input_chatpoint_per_million: str | None = None,
+        output_chatpoint_per_million: str | None = None,
+        cache_creation_chatpoint_per_million: str | None = None,
+        cache_read_chatpoint_per_million: str | None = None,
         cost_micros: int,
         plan_cost_micros: int,
         check_cost_micros: int,
         plan_balance_after_micros: int | None,
         check_balance_after_micros: int | None,
+        first_token_latency_ms: int | None = None,
+        total_duration_ms: int | None = None,
+        client_ip: str | None = None,
         status: str,
+        raw_usage: dict | None = None,
         metadata: dict | None,
         created_at: int,
+        commit: bool = True,
         db: AsyncSession | None = None,
     ) -> SubscriptionUsageModel:
         async with get_subscription_db_context(db) as session:
@@ -1336,25 +1368,39 @@ class SubscriptionUsagesTable:
                 user_id=user_id,
                 chat_id=chat_id,
                 message_id=message_id,
+                request_id=request_id,
                 model_id=model_id,
                 tier=tier,
                 quota_mode=quota_mode,
                 usage_multiplier=usage_multiplier,
                 input_tokens=input_tokens,
                 output_tokens=output_tokens,
+                cache_creation_tokens=cache_creation_tokens,
+                cache_read_tokens=cache_read_tokens,
                 total_tokens=total_tokens,
+                input_chatpoint_per_million=input_chatpoint_per_million,
+                output_chatpoint_per_million=output_chatpoint_per_million,
+                cache_creation_chatpoint_per_million=cache_creation_chatpoint_per_million,
+                cache_read_chatpoint_per_million=cache_read_chatpoint_per_million,
                 cost_micros=cost_micros,
                 plan_cost_micros=plan_cost_micros,
                 check_cost_micros=check_cost_micros,
                 plan_balance_after_micros=plan_balance_after_micros,
                 check_balance_after_micros=check_balance_after_micros,
+                first_token_latency_ms=first_token_latency_ms,
+                total_duration_ms=total_duration_ms,
+                client_ip=client_ip,
                 status=status,
+                raw_usage=json_safe_metadata(raw_usage),
                 meta=json_safe_metadata(metadata),
                 created_at=created_at,
             )
             session.add(row)
-            await session.commit()
-            await session.refresh(row)
+            if commit:
+                await session.commit()
+                await session.refresh(row)
+            else:
+                await session.flush()
             return SubscriptionUsageModel.model_validate(row)
 
     async def get_usage_summary(

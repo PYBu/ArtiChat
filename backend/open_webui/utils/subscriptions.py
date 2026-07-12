@@ -14,7 +14,9 @@ from open_webui.models.subscriptions import (
     UserSubscriptionModel,
     UserSubscriptions,
     calculate_cost_micros,
+    calculate_token_cost_micros,
     debit_balances,
+    get_subscription_db_context,
     now_ts,
 )
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -142,6 +144,8 @@ def normalize_billable_usage(usage: dict | None) -> NormalizedBillableUsage:
             break
 
     normal_input_tokens = max(input_tokens - cache_read_tokens, 0) if cache_is_included_in_input else input_tokens
+    if normal_input_tokens + output_tokens + cache_creation_tokens + cache_read_tokens == 0:
+        normal_input_tokens = _usage_int(raw_usage, 'total_tokens')
     total_tokens = normal_input_tokens + output_tokens + cache_creation_tokens + cache_read_tokens
     return NormalizedBillableUsage(
         input_tokens=normal_input_tokens,
@@ -152,6 +156,29 @@ def normalize_billable_usage(usage: dict | None) -> NormalizedBillableUsage:
         raw_usage=raw_usage,
         usage_present=bool(raw_usage),
     )
+
+
+def get_request_client_ip(request) -> str | None:
+    client = getattr(request, 'client', None)
+    host = getattr(client, 'host', None)
+    return str(host) if host else None
+
+
+def stream_event_has_content(data: dict | None) -> bool:
+    if not isinstance(data, dict):
+        return False
+    event_type = str(data.get('type') or '')
+    if event_type.endswith('.delta') and any(
+        marker in event_type for marker in ('output_text', 'reasoning', 'function_call_arguments')
+    ):
+        return bool(data.get('delta'))
+    for choice in data.get('choices') or []:
+        delta = choice.get('delta') or {}
+        if delta.get('content') or delta.get('reasoning_content') or delta.get('reasoning') or delta.get('thinking'):
+            return True
+        if delta.get('tool_calls'):
+            return True
+    return False
 
 
 def get_model_subscription_policy(model: dict) -> ModelSubscriptionPolicy:
@@ -379,111 +406,107 @@ async def bill_model_usage(
     usage: dict | None,
     metadata: dict,
     is_admin: bool,
+    pricing: dict | None = None,
+    request_id: str | None = None,
+    client_ip: str | None = None,
+    first_token_latency_ms: int | None = None,
+    total_duration_ms: int | None = None,
     now: int | None = None,
     db: AsyncSession | None = None,
 ):
     current_time = now if now is not None else now_ts()
-    input_tokens, output_tokens, total_tokens = extract_token_usage(usage)
-
-    if is_admin:
-        return await SubscriptionUsages.insert(
-            user_id=user_id,
-            chat_id=metadata.get('chat_id'),
-            message_id=metadata.get('message_id'),
-            model_id=model_id,
-            tier='admin',
-            quota_mode=quota_mode,
-            usage_multiplier=usage_multiplier,
-            input_tokens=input_tokens,
-            output_tokens=output_tokens,
-            total_tokens=total_tokens,
-            cost_micros=0,
-            plan_cost_micros=0,
-            check_cost_micros=0,
-            plan_balance_after_micros=None,
-            check_balance_after_micros=None,
-            status='admin_bypass',
-            metadata=metadata,
-            created_at=current_time,
-            db=db,
-        )
-
-    subscription = await ensure_subscription_current(user_id, now=current_time, db=db)
-
-    if quota_mode == 'unlimited':
-        return await SubscriptionUsages.insert(
-            user_id=user_id,
-            chat_id=metadata.get('chat_id'),
-            message_id=metadata.get('message_id'),
-            model_id=model_id,
-            tier=subscription.tier,
-            quota_mode=quota_mode,
-            usage_multiplier=usage_multiplier,
-            input_tokens=input_tokens,
-            output_tokens=output_tokens,
-            total_tokens=total_tokens,
-            cost_micros=0,
-            plan_cost_micros=0,
-            check_cost_micros=0,
-            plan_balance_after_micros=subscription.plan_balance_micros,
-            check_balance_after_micros=subscription.check_balance_micros,
-            status='unlimited',
-            metadata=metadata,
-            created_at=current_time,
-            db=db,
-        )
-
-    if total_tokens <= 0:
-        return await SubscriptionUsages.insert(
-            user_id=user_id,
-            chat_id=metadata.get('chat_id'),
-            message_id=metadata.get('message_id'),
-            model_id=model_id,
-            tier=subscription.tier,
-            quota_mode=quota_mode,
-            usage_multiplier=usage_multiplier,
-            input_tokens=input_tokens,
-            output_tokens=output_tokens,
-            total_tokens=total_tokens,
-            cost_micros=0,
-            plan_cost_micros=0,
-            check_cost_micros=0,
-            plan_balance_after_micros=subscription.plan_balance_micros,
-            check_balance_after_micros=subscription.check_balance_micros,
-            status='missing_usage',
-            metadata=metadata,
-            created_at=current_time,
-            db=db,
-        )
-
-    cost_micros = calculate_cost_micros(total_tokens, usage_multiplier)
-    debit = debit_balances(subscription.plan_balance_micros, subscription.check_balance_micros, cost_micros)
-    updated = await UserSubscriptions.adjust_balances(
-        user_id,
-        plan_delta_micros=-debit.plan_cost_micros,
-        check_delta_micros=-debit.check_cost_micros,
-        event_type='usage_debit',
-        created_by=None,
-        db=db,
+    policy = ModelSubscriptionPolicy.model_validate(
+        {'usage_multiplier': usage_multiplier, **(pricing or {})}
     )
-    return await SubscriptionUsages.insert(
-        user_id=user_id,
-        chat_id=metadata.get('chat_id'),
-        message_id=metadata.get('message_id'),
-        model_id=model_id,
-        tier=subscription.tier,
-        quota_mode=quota_mode,
-        usage_multiplier=usage_multiplier,
-        input_tokens=input_tokens,
-        output_tokens=output_tokens,
-        total_tokens=total_tokens,
-        cost_micros=cost_micros,
-        plan_cost_micros=debit.plan_cost_micros,
-        check_cost_micros=debit.check_cost_micros,
-        plan_balance_after_micros=updated.plan_balance_micros,
-        check_balance_after_micros=updated.check_balance_micros,
-        status='billed',
-        metadata=metadata,
-        created_at=current_time,
-        db=db,
-    )
+    normalized = normalize_billable_usage(usage)
+    prices = {
+        'input_chatpoint_per_million': policy.input_chatpoint_per_million,
+        'output_chatpoint_per_million': policy.output_chatpoint_per_million,
+        'cache_creation_chatpoint_per_million': policy.cache_creation_chatpoint_per_million,
+        'cache_read_chatpoint_per_million': policy.cache_read_chatpoint_per_million,
+    }
+    stored_metadata = dict(metadata or {})
+    stored_metadata.pop('client_ip', None)
+
+    async with get_subscription_db_context(db) as session:
+        subscription = None
+        if not is_admin:
+            subscription = await ensure_subscription_current(user_id, now=current_time, db=session)
+
+        status = 'billed'
+        cost_micros = 0
+        plan_cost_micros = 0
+        check_cost_micros = 0
+        plan_balance_after_micros = subscription.plan_balance_micros if subscription else None
+        check_balance_after_micros = subscription.check_balance_micros if subscription else None
+
+        if is_admin:
+            status = 'admin_bypass'
+        elif quota_mode == 'unlimited':
+            status = 'unlimited'
+        elif not normalized.usage_present:
+            status = 'missing_usage'
+        else:
+            cost_micros = calculate_token_cost_micros(
+                input_tokens=normalized.input_tokens,
+                output_tokens=normalized.output_tokens,
+                cache_creation_tokens=normalized.cache_creation_tokens,
+                cache_read_tokens=normalized.cache_read_tokens,
+                **prices,
+            )
+            if cost_micros > 0:
+                debit = debit_balances(
+                    subscription.plan_balance_micros,
+                    subscription.check_balance_micros,
+                    cost_micros,
+                )
+                updated = await UserSubscriptions.adjust_balances(
+                    user_id,
+                    plan_delta_micros=-debit.plan_cost_micros,
+                    check_delta_micros=-debit.check_cost_micros,
+                    event_type='usage_debit',
+                    created_by=None,
+                    commit=False,
+                    db=session,
+                )
+                plan_cost_micros = debit.plan_cost_micros
+                check_cost_micros = debit.check_cost_micros
+                plan_balance_after_micros = updated.plan_balance_micros
+                check_balance_after_micros = updated.check_balance_micros
+
+        try:
+            result = await SubscriptionUsages.insert(
+                user_id=user_id,
+                chat_id=metadata.get('chat_id'),
+                message_id=metadata.get('message_id'),
+                request_id=request_id or metadata.get('request_id'),
+                model_id=model_id,
+                tier='admin' if is_admin else subscription.tier,
+                quota_mode=quota_mode,
+                usage_multiplier=usage_multiplier,
+                input_tokens=normalized.input_tokens,
+                output_tokens=normalized.output_tokens,
+                cache_creation_tokens=normalized.cache_creation_tokens,
+                cache_read_tokens=normalized.cache_read_tokens,
+                total_tokens=normalized.total_tokens,
+                **prices,
+                cost_micros=cost_micros,
+                plan_cost_micros=plan_cost_micros,
+                check_cost_micros=check_cost_micros,
+                plan_balance_after_micros=plan_balance_after_micros,
+                check_balance_after_micros=check_balance_after_micros,
+                first_token_latency_ms=first_token_latency_ms,
+                total_duration_ms=total_duration_ms,
+                client_ip=client_ip,
+                status=status,
+                raw_usage=normalized.raw_usage,
+                metadata=stored_metadata,
+                created_at=current_time,
+                commit=False,
+                db=session,
+            )
+            await session.commit()
+            return result
+        except Exception:
+            await session.rollback()
+            raise
