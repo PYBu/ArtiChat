@@ -215,10 +215,23 @@ for (const file of themeLogoTargets) {
 }
 
 if (fs.existsSync(path.join(root, 'src/lib/components/common/ThemeLogo.svelte'))) {
-	const themeLogo = fileText('src/lib/components/common/ThemeLogo.svelte');
-	for (const marker of ['dark:hidden', 'hidden dark:block', 'favicon-dark.png', 'splash-dark.png']) {
-		if (!themeLogo.includes(marker)) findings.push(`ThemeLogo missing ${marker}`);
-	}
+const themeLogo = fileText('src/lib/components/common/ThemeLogo.svelte');
+for (const marker of ['dark:hidden', 'hidden dark:block', 'favicon-dark.png', 'splash-dark.png']) {
+	if (!themeLogo.includes(marker)) findings.push(`ThemeLogo missing ${marker}`);
+}
+for (const marker of ['$config?.branding?.logo_light', '$config?.branding?.logo_dark']) {
+	if (!themeLogo.includes(marker)) findings.push(`ThemeLogo missing platform branding marker ${marker}`);
+}
+
+const platformSettings = fileText('src/lib/components/admin/Settings/Platform.svelte');
+for (const marker of ['getPlatformSettings', 'setPlatformSettings', 'uploadPlatformLogo', 'about_title', 'about_content']) {
+	if (!platformSettings.includes(marker)) findings.push(`Platform settings missing ${marker}`);
+}
+
+const about = fileText('src/lib/components/chat/Settings/About.svelte');
+for (const marker of ['$config?.branding?.about_title', '$config?.branding?.about_content', 'ArtiChat v{WEBUI_DISPLAY_VERSION}']) {
+	if (!about.includes(marker)) findings.push(`About missing platform marker ${marker}`);
+}
 }
 
 if (missingFiles.length > 0) {

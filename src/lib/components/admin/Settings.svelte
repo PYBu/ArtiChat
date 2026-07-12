@@ -10,6 +10,7 @@
 
 	import Authentication from './Settings/Authentication.svelte';
 	import General from './Settings/General.svelte';
+	import Platform from './Settings/Platform.svelte';
 	import Pipelines from './Settings/Pipelines.svelte';
 	import Audio from './Settings/Audio.svelte';
 	import Images from './Settings/Images.svelte';
@@ -37,6 +38,7 @@
 		const tabFromPath = pathParts[pathParts.length - 1];
 		selectedTab = [
 			'general',
+			'platform',
 			'authentication',
 			'connections',
 			'models',
@@ -72,6 +74,7 @@
 	let filteredSettings = [];
 
 	const allSettings = [
+		{ id: 'platform', title: 'Platform', route: '/admin/settings/platform', keywords: ['platform', 'name', 'logo', 'about', 'brand'] },
 		{
 			id: 'general',
 			title: 'General',
@@ -563,6 +566,8 @@
 					await config.set(await getBackendConfig());
 				}}
 			/>
+		{:else if selectedTab === 'platform'}
+			<Platform />
 		{:else if selectedTab === 'authentication'}
 			<Authentication />
 		{:else if selectedTab === 'connections'}

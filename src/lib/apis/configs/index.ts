@@ -1,6 +1,36 @@
 import { WEBUI_API_BASE_URL, WEBUI_BASE_URL } from '$lib/constants';
 import type { Banner } from '$lib/types';
 
+const platformJsonFetch = async (url: string, token: string, options: RequestInit = {}) => {
+	const response = await fetch(url, {
+		...options,
+		headers: { authorization: `Bearer ${token}`, 'Content-Type': 'application/json', ...(options.headers ?? {}) }
+	});
+	if (!response.ok) throw (await response.json())?.detail ?? 'PLATFORM_SETTINGS_ERROR';
+	return response.json();
+};
+
+export const getPlatformSettings = async (token: string) =>
+	platformJsonFetch(`${WEBUI_API_BASE_URL}/configs/platform`, token);
+
+export const setPlatformSettings = async (token: string, settings: Record<string, unknown>) =>
+	platformJsonFetch(`${WEBUI_API_BASE_URL}/configs/platform`, token, {
+		method: 'POST',
+		body: JSON.stringify(settings)
+	});
+
+export const uploadPlatformLogo = async (token: string, theme: 'light' | 'dark', file: File) => {
+	const body = new FormData();
+	body.append('file', file);
+	const response = await fetch(`${WEBUI_API_BASE_URL}/configs/platform/logo/${theme}`, {
+		method: 'POST',
+		headers: { authorization: `Bearer ${token}` },
+		body
+	});
+	if (!response.ok) throw (await response.json())?.detail ?? 'PLATFORM_LOGO_UPLOAD_ERROR';
+	return response.json();
+};
+
 export const importConfig = async (token: string, config: object) => {
 	let error = null;
 

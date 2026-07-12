@@ -5,10 +5,11 @@ import logging
 from typing import Optional
 
 import aiohttp
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse
 from mcp.shared.auth import OAuthMetadata
 from open_webui.config import BannerModel
-from open_webui.env import AIOHTTP_CLIENT_SESSION_SSL, AIOHTTP_CLIENT_TIMEOUT
+from open_webui.env import AIOHTTP_CLIENT_SESSION_SSL, AIOHTTP_CLIENT_TIMEOUT, DATA_DIR
 from open_webui.events import EVENTS, publish_event
 from open_webui.models.config import Config
 from open_webui.models.oauth_sessions import OAuthSessions
@@ -26,6 +27,7 @@ from open_webui.utils.oauth import (
     recover_static_oauth_client_metadata,
     resolve_oauth_client_info,
 )
+from open_webui.utils.platform import normalize_platform_settings, save_platform_logo
 from open_webui.utils.tools import (
     bearer_auth_header,
     get_tool_server_data,
@@ -76,6 +78,84 @@ async def get_config_values(key_map: dict[str, str]) -> dict:
 
 def config_updates(data: dict, key_map: dict[str, str]) -> dict:
     return {key_map[field]: value for field, value in data.items() if field in key_map}
+
+
+PLATFORM_CONFIG_KEYS = {
+    'name': 'platform.name',
+    'about_title': 'platform.about_title',
+    'about_content': 'platform.about_content',
+    'logo_light': 'platform.logo_light',
+    'logo_dark': 'platform.logo_dark',
+}
+PLATFORM_ASSETS_DIR = DATA_DIR / 'platform-assets'
+
+
+class PlatformSettingsForm(BaseModel):
+    name: str
+    about_title: str = ''
+    about_content: str = ''
+
+
+async def platform_settings() -> dict:
+    values = await get_config_values(PLATFORM_CONFIG_KEYS)
+    return {
+        'name': values.get('name') or 'ArtiChat',
+        'about_title': values.get('about_title') or '',
+        'about_content': values.get('about_content') or '',
+        'logo_light': values.get('logo_light') or '/static/favicon.png',
+        'logo_dark': values.get('logo_dark') or '/static/favicon-dark.png',
+    }
+
+
+@router.get('/platform/public')
+async def get_public_platform_settings():
+    return await platform_settings()
+
+
+@router.get('/platform')
+async def get_platform_settings(user=Depends(get_admin_user)):
+    return await platform_settings()
+
+
+@router.post('/platform')
+async def set_platform_settings(request: Request, form_data: PlatformSettingsForm, user=Depends(get_admin_user)):
+    try:
+        normalized = normalize_platform_settings(form_data.model_dump())
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    await Config.upsert(config_updates(normalized, PLATFORM_CONFIG_KEYS))
+    request.app.state.WEBUI_NAME = normalized['name']
+    return await platform_settings()
+
+
+@router.post('/platform/logo/{theme}')
+async def upload_platform_logo(
+    theme: str,
+    file: UploadFile = File(...),
+    user=Depends(get_admin_user),
+):
+    try:
+        target = save_platform_logo(
+            content=await file.read(),
+            content_type=file.content_type or '',
+            theme=theme,
+            assets_dir=PLATFORM_ASSETS_DIR,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    url = f'/api/v1/configs/platform/logo/{theme}'
+    await Config.upsert({PLATFORM_CONFIG_KEYS[f'logo_{theme}']: url})
+    return {'url': url, 'filename': target.name}
+
+
+@router.get('/platform/logo/{theme}')
+async def get_platform_logo(theme: str):
+    if theme not in {'light', 'dark'}:
+        raise HTTPException(status_code=404, detail='PLATFORM_LOGO_NOT_FOUND')
+    target = PLATFORM_ASSETS_DIR / f'logo-{theme}.png'
+    if not target.exists():
+        raise HTTPException(status_code=404, detail='PLATFORM_LOGO_NOT_FOUND')
+    return FileResponse(target, media_type='image/png')
 
 
 ############################

@@ -1938,13 +1938,26 @@ async def get_app_config(request: Request):
         'ui.pending_user_overlay_title',
         'ui.pending_user_overlay_content',
         'ui.watermark',
+        'platform.name',
+        'platform.about_title',
+        'platform.about_content',
+        'platform.logo_light',
+        'platform.logo_dark',
     )
 
+    platform_name = config.get('platform.name') or app.state.WEBUI_NAME
+    app.state.WEBUI_NAME = platform_name
     return {
         **({'onboarding': True} if onboarding else {}),
         'status': True,
-        'name': app.state.WEBUI_NAME,
+        'name': platform_name,
         'version': VERSION,
+        'branding': {
+            'about_title': config.get('platform.about_title') or '',
+            'about_content': config.get('platform.about_content') or '',
+            'logo_light': config.get('platform.logo_light') or '/static/favicon.png',
+            'logo_dark': config.get('platform.logo_dark') or '/static/favicon-dark.png',
+        },
         'default_locale': str(DEFAULT_LOCALE),
         'oauth': {
             'providers': {name: config.get('name', name) for name, config in OAUTH_PROVIDERS.items()},
