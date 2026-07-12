@@ -341,11 +341,32 @@ export const userSignIn = async (email: string, password: string) => {
 	return res;
 };
 
+export const userEmailCodeSignIn = async (email: string, verificationToken: string) => {
+	let error = null;
+	const res = await fetch(`${WEBUI_API_BASE_URL}/auths/signin/email-code`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		credentials: 'include',
+		body: JSON.stringify({ email, verification_token: verificationToken })
+	})
+		.then(async (response) => {
+			if (!response.ok) throw await response.json();
+			return response.json();
+		})
+		.catch((reason) => {
+			error = reason.detail;
+			return null;
+		});
+	if (error) throw error;
+	return res;
+};
+
 export const userSignUp = async (
 	name: string,
 	email: string,
 	password: string,
-	profile_image_url: string
+	profile_image_url: string,
+	verificationToken: string | null = null
 ) => {
 	let error = null;
 
@@ -359,7 +380,8 @@ export const userSignUp = async (
 			name: name,
 			email: email,
 			password: password,
-			profile_image_url: profile_image_url
+			profile_image_url: profile_image_url,
+			verification_token: verificationToken
 		})
 	})
 		.then(async (res) => {

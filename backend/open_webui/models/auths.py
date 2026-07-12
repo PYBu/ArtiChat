@@ -62,6 +62,11 @@ class SigninForm(BaseModel):
     password: str
 
 
+class EmailCodeSigninForm(BaseModel):
+    email: str
+    verification_token: str
+
+
 class LdapForm(BaseModel):
     user: str
     password: str
@@ -81,6 +86,7 @@ class SignupForm(BaseModel):
     email: str
     password: str
     profile_image_url: str | None = '/user.png'
+    verification_token: str | None = None
 
     @field_validator('profile_image_url')
     @classmethod
@@ -108,6 +114,7 @@ class AuthsTable:
         profile_image_url: str = '/user.png',
         role: str = 'pending',
         oauth: dict | None = None,
+        email_verified_at: int | None = None,
         db: AsyncSession | None = None,
     ) -> UserModel | None:
         """Create an Auth + User pair inside a single transaction."""
@@ -131,6 +138,7 @@ class AuthsTable:
                 profile_image_url,
                 role,
                 oauth=oauth,
+                email_verified_at=email_verified_at,
                 db=session,
             )
             # persist both records and reload generated defaults

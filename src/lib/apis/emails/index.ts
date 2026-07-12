@@ -45,15 +45,17 @@ export type RegistrationSettings = {
 	sensitive_action_verification_enabled: boolean;
 };
 
-const jsonFetch = async <T>(url: string, token: string, options: RequestInit = {}): Promise<T> => {
+const jsonFetch = async <T>(
+	url: string,
+	token: string | null,
+	options: RequestInit = {}
+): Promise<T> => {
 	let error: unknown = null;
 	const headers = Object.assign(
-		{
-			'Content-Type': 'application/json',
-			authorization: `Bearer ${token}`
-		},
+		{ 'Content-Type': 'application/json' },
 		options.headers ?? {}
-	);
+	) as Record<string, string>;
+	if (token) headers.authorization = `Bearer ${token}`;
 	const response = await fetch(url, { ...options, headers })
 		.then(async (res) => {
 			if (!res.ok) throw await res.json();
@@ -144,4 +146,30 @@ export const updateRegistrationSettings = async (
 		method: 'PUT',
 		body: JSON.stringify(settings)
 	});
+};
+
+export const getPublicRegistrationSettings = async () => {
+	return jsonFetch<{
+		verification_enabled: boolean;
+		email_code_login_enabled: boolean;
+	}>(`${WEBUI_API_BASE_URL}/emails/registration/public`, null);
+};
+
+export const requestEmailChallenge = async (email: string, purpose: 'registration' | 'login') => {
+	return jsonFetch<{ status: boolean }>(`${WEBUI_API_BASE_URL}/emails/challenges/request`, null, {
+		method: 'POST',
+		body: JSON.stringify({ email, purpose })
+	});
+};
+
+export const verifyEmailChallenge = async (
+	email: string,
+	purpose: 'registration' | 'login',
+	code: string
+) => {
+	return jsonFetch<{ verification_token: string }>(
+		`${WEBUI_API_BASE_URL}/emails/challenges/verify`,
+		null,
+		{ method: 'POST', body: JSON.stringify({ email, purpose, code }) }
+	);
 };

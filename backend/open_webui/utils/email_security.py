@@ -141,6 +141,7 @@ async def create_email_challenge(
             attempts=0,
             max_attempts=EMAIL_CODE_MAX_ATTEMPTS,
             consumed_at=None,
+            claimed_at=None,
             created_at=now,
         )
         session.add(challenge)
@@ -200,6 +201,57 @@ async def invalidate_email_challenge(
         if challenge is None:
             raise ValueError('EMAIL_CHALLENGE_NOT_FOUND')
         challenge.consumed_at = now
+        await session.commit()
+        await session.refresh(challenge)
+        return EmailChallengeModel.model_validate(challenge)
+
+
+async def validate_email_verification_ticket(
+    ticket_id: str,
+    *,
+    email: str,
+    purpose: str,
+    now: int,
+    db: AsyncSession | None = None,
+) -> EmailChallengeModel:
+    async with get_email_security_db_context(db) as session:
+        challenge = await session.get(EmailChallenge, ticket_id)
+        if (
+            challenge is None
+            or challenge.email != email.strip().lower()
+            or challenge.purpose != purpose
+            or challenge.consumed_at is None
+        ):
+            raise ValueError('EMAIL_VERIFICATION_TICKET_INVALID')
+        if now > challenge.expires_at:
+            raise ValueError('EMAIL_VERIFICATION_TICKET_EXPIRED')
+        if challenge.claimed_at is not None:
+            raise ValueError('EMAIL_VERIFICATION_TICKET_USED')
+        return EmailChallengeModel.model_validate(challenge)
+
+
+async def claim_email_verification_ticket(
+    ticket_id: str,
+    *,
+    email: str,
+    purpose: str,
+    now: int,
+    db: AsyncSession | None = None,
+) -> EmailChallengeModel:
+    async with get_email_security_db_context(db) as session:
+        challenge = await session.get(EmailChallenge, ticket_id)
+        if (
+            challenge is None
+            or challenge.email != email.strip().lower()
+            or challenge.purpose != purpose
+            or challenge.consumed_at is None
+        ):
+            raise ValueError('EMAIL_VERIFICATION_TICKET_INVALID')
+        if now > challenge.expires_at:
+            raise ValueError('EMAIL_VERIFICATION_TICKET_EXPIRED')
+        if challenge.claimed_at is not None:
+            raise ValueError('EMAIL_VERIFICATION_TICKET_USED')
+        challenge.claimed_at = now
         await session.commit()
         await session.refresh(challenge)
         return EmailChallengeModel.model_validate(challenge)

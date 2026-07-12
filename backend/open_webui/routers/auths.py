@@ -38,6 +38,7 @@ from open_webui.models.auths import (
     AddUserForm,
     ApiKey,
     Auths,
+    EmailCodeSigninForm,
     LdapForm,
     SigninForm,
     SigninResponse,
@@ -72,6 +73,11 @@ from open_webui.utils.auth import (
 from open_webui.utils.groups import apply_default_group_assignment
 from open_webui.utils.misc import parse_duration, validate_email_format
 from open_webui.utils.rate_limit import RateLimiter
+from open_webui.utils.registration import resolve_signup_email_verified_at
+from open_webui.utils.email_security import (
+    claim_email_verification_ticket,
+    validate_email_verification_ticket,
+)
 from open_webui.utils.redis import get_redis_client
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -318,6 +324,51 @@ async def update_profile(
             raise HTTPException(400, detail=ERROR_MESSAGES.DEFAULT())
     else:
         raise HTTPException(400, detail=ERROR_MESSAGES.INVALID_CRED)
+
+
+@router.post('/signin/email-code', response_model=SessionUserResponse)
+async def signin_with_email_code(
+    request: Request,
+    response: Response,
+    form_data: EmailCodeSigninForm,
+    db: AsyncSession = Depends(get_async_session),
+):
+    email = form_data.email.strip().lower()
+    if not await Config.get('registration.email_code_login_enabled', False):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail='EMAIL_CODE_LOGIN_DISABLED')
+    if signin_rate_limiter.is_limited(email):
+        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, detail=ERROR_MESSAGES.RATE_LIMIT_EXCEEDED)
+
+    timestamp = int(time.time())
+    try:
+        await validate_email_verification_ticket(
+            form_data.verification_token,
+            email=email,
+            purpose='login',
+            now=timestamp,
+            db=db,
+        )
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    user = await Auths.authenticate_user_by_email(email, db=db)
+    if user is None:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=ERROR_MESSAGES.INVALID_CRED)
+
+    try:
+        await claim_email_verification_ticket(
+            form_data.verification_token,
+            email=email,
+            purpose='login',
+            now=timestamp,
+            db=db,
+        )
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    if user.email_verified_at is None:
+        user = await Users.update_user_by_id(user.id, {'email_verified_at': timestamp}, db=db) or user
+    return await create_session_response(request, user, db, response, set_cookie=True, source='email_code')
 
 
 ############################
@@ -769,6 +820,7 @@ async def signup_handler(
     *,
     db: AsyncSession,
     source: str = 'api',
+    email_verified_at: int | None = None,
 ) -> UserModel:
     """
     Core user-creation logic shared by the signup endpoint and
@@ -788,6 +840,7 @@ async def signup_handler(
         name=name,
         profile_image_url=profile_image_url,
         role=await Config.get('ui.default_user_role'),
+        email_verified_at=email_verified_at,
         db=db,
     )
     if not user:
@@ -844,11 +897,44 @@ async def signup(
     if await Users.get_user_by_email(form_data.email.lower(), db=db):
         raise HTTPException(400, detail=ERROR_MESSAGES.EMAIL_TAKEN)
 
+    registration_values = await Config.get_many(
+        'registration.allowed_domains',
+        'registration.allow_subdomains',
+        'registration.verification_enabled',
+    )
+    try:
+        email_verified_at = await resolve_signup_email_verified_at(
+            email=form_data.email,
+            has_users=has_users,
+            verification_token=form_data.verification_token,
+            registration_settings={
+                'allowed_domains': registration_values.get('registration.allowed_domains', []),
+                'allow_subdomains': registration_values.get('registration.allow_subdomains', False),
+                'verification_enabled': registration_values.get('registration.verification_enabled', False),
+            },
+            now=int(time.time()),
+            db=db,
+        )
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
     try:
         try:
             validate_password(form_data.password)
         except Exception as e:
             raise HTTPException(400, detail=str(e))
+
+        if has_users and form_data.verification_token and email_verified_at is not None:
+            try:
+                await claim_email_verification_ticket(
+                    form_data.verification_token,
+                    email=form_data.email,
+                    purpose='registration',
+                    now=int(time.time()),
+                    db=db,
+                )
+            except ValueError as exc:
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
         user = await signup_handler(
             request,
@@ -857,6 +943,7 @@ async def signup(
             form_data.name,
             form_data.profile_image_url,
             db=db,
+            email_verified_at=email_verified_at,
         )
         await publish_event(
             request,

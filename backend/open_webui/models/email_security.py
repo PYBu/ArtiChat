@@ -36,6 +36,7 @@ class EmailChallenge(Base):
     attempts = Column(Integer, nullable=False, default=0)
     max_attempts = Column(Integer, nullable=False, default=5)
     consumed_at = Column(BigInteger, nullable=True)
+    claimed_at = Column(BigInteger, nullable=True)
     created_at = Column(BigInteger, nullable=False)
     __table_args__ = (Index('email_challenge_lookup_idx', 'email', 'purpose', 'created_at'),)
 
@@ -102,6 +103,7 @@ class EmailChallengeModel(BaseModel):
     attempts: int
     max_attempts: int
     consumed_at: int | None = None
+    claimed_at: int | None = None
     created_at: int
 
 

@@ -1,6 +1,16 @@
 import pytest
 
-from open_webui.utils.email_security import create_email_challenge, verify_email_challenge
+from open_webui.models.users import User
+from open_webui.utils.email_security import (
+    claim_email_verification_ticket,
+    create_email_challenge,
+    validate_email_verification_ticket,
+    verify_email_challenge,
+)
+
+
+def test_user_table_tracks_email_verification_time():
+    assert 'email_verified_at' in User.__table__.columns
 
 
 @pytest.mark.asyncio
@@ -114,6 +124,69 @@ async def test_challenge_expires_and_locks_after_five_wrong_attempts(db_session)
             code='123456',
             secret_key='test-secret',
             now=210,
+            db=db_session,
+        )
+
+
+@pytest.mark.asyncio
+async def test_consumed_ticket_is_bound_to_email_purpose_and_expiry(db_session):
+    challenge = await create_email_challenge(
+        email='alice@example.com',
+        purpose='registration',
+        code='123456',
+        secret_key='test-secret',
+        now=100,
+        db=db_session,
+    )
+    await verify_email_challenge(
+        email='alice@example.com',
+        purpose='registration',
+        code='123456',
+        secret_key='test-secret',
+        now=200,
+        db=db_session,
+    )
+
+    ticket = await validate_email_verification_ticket(
+        challenge.id,
+        email='alice@example.com',
+        purpose='registration',
+        now=201,
+        db=db_session,
+    )
+    assert ticket.id == challenge.id
+
+    claimed = await claim_email_verification_ticket(
+        challenge.id,
+        email='alice@example.com',
+        purpose='registration',
+        now=202,
+        db=db_session,
+    )
+    assert claimed.claimed_at == 202
+    with pytest.raises(ValueError, match='EMAIL_VERIFICATION_TICKET_USED'):
+        await claim_email_verification_ticket(
+            challenge.id,
+            email='alice@example.com',
+            purpose='registration',
+            now=203,
+            db=db_session,
+        )
+
+    with pytest.raises(ValueError, match='EMAIL_VERIFICATION_TICKET_INVALID'):
+        await validate_email_verification_ticket(
+            challenge.id,
+            email='other@example.com',
+            purpose='registration',
+            now=201,
+            db=db_session,
+        )
+    with pytest.raises(ValueError, match='EMAIL_VERIFICATION_TICKET_EXPIRED'):
+        await validate_email_verification_ticket(
+            challenge.id,
+            email='alice@example.com',
+            purpose='registration',
+            now=701,
             db=db_session,
         )
 
