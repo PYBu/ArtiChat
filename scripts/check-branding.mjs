@@ -16,6 +16,7 @@ const files = [
 	'src/lib/components/layout/UpdateInfoToast.svelte',
 	'src/lib/components/layout/Sidebar/UserMenu.svelte',
 	'src/lib/components/chat/Settings/General.svelte',
+	'src/lib/components/common/ThemeLogo.svelte',
 	'src/routes/error/+page.svelte',
 	'static/static/site.webmanifest',
 	'backend/open_webui/static/site.webmanifest',
@@ -200,6 +201,25 @@ assertNotMatches(
 	/(?:__open_webui_valkey_never_match__|open_webui_vector_store_(?:batch_)?client)/,
 	'upstream Valkey client name'
 );
+
+const themeLogoTargets = [
+	'src/lib/components/layout/Sidebar.svelte',
+	'src/routes/auth/+page.svelte',
+	'src/lib/components/OnBoarding.svelte',
+	'src/lib/components/app/AppSidebar.svelte'
+];
+
+for (const file of themeLogoTargets) {
+	const text = fileText(file);
+	if (!text.includes('ThemeLogo')) findings.push(`${file}: must use ThemeLogo`);
+}
+
+if (fs.existsSync(path.join(root, 'src/lib/components/common/ThemeLogo.svelte'))) {
+	const themeLogo = fileText('src/lib/components/common/ThemeLogo.svelte');
+	for (const marker of ['dark:hidden', 'hidden dark:block', 'favicon-dark.png', 'splash-dark.png']) {
+		if (!themeLogo.includes(marker)) findings.push(`ThemeLogo missing ${marker}`);
+	}
+}
 
 if (missingFiles.length > 0) {
 	console.error('Missing files:');

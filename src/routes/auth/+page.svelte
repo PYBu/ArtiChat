@@ -25,6 +25,7 @@
 	import Spinner from '$lib/components/common/Spinner.svelte';
 	import OnBoarding from '$lib/components/OnBoarding.svelte';
 	import SensitiveInput from '$lib/components/common/SensitiveInput.svelte';
+	import ThemeLogo from '$lib/components/common/ThemeLogo.svelte';
 	import { redirect } from '@sveltejs/kit';
 
 	const i18n = getContext('i18n');
@@ -259,13 +260,7 @@
 						<div id="auth-login-card" class=" sm:max-w-md my-auto pb-10 w-full dark:text-gray-100">
 							{#if $config?.metadata?.auth_logo_position === 'center'}
 								<div class="flex justify-center mb-6">
-									<img
-										id="logo"
-										crossorigin="anonymous"
-										src="{WEBUI_BASE_URL}/static/favicon.png"
-										class="size-24 rounded-full"
-										alt="{$WEBUI_NAME} logo"
-									/>
+									<ThemeLogo kind="mark" className="size-24 rounded-full" alt="{$WEBUI_NAME} logo" />
 								</div>
 							{/if}
 							<form
@@ -611,13 +606,7 @@
 			<div class="fixed m-10 z-50">
 				<div class="flex space-x-2">
 					<div class=" self-center">
-						<img
-							id="logo"
-							crossorigin="anonymous"
-							src="{WEBUI_BASE_URL}/static/favicon.png"
-							class=" w-6 rounded-full"
-							alt=""
-						/>
+						<ThemeLogo kind="mark" className="w-6 rounded-full" />
 					</div>
 				</div>
 			</div>

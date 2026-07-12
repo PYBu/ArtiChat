@@ -1,41 +1,15 @@
 <script>
-	import { getContext, onMount } from 'svelte';
+	import { getContext } from 'svelte';
 	const i18n = getContext('i18n');
-
-	import { WEBUI_BASE_URL } from '$lib/constants';
 
 	import Marquee from './common/Marquee.svelte';
 	import SlideShow from './common/SlideShow.svelte';
+	import ThemeLogo from './common/ThemeLogo.svelte';
 	import ArrowRightCircle from './icons/ArrowRightCircle.svelte';
 
 	export let show = true;
 	export let getStartedHandler = () => {};
 
-	function setLogoImage() {
-		const logo = document.getElementById('logo');
-
-		if (logo) {
-			const isDarkMode = document.documentElement.classList.contains('dark');
-
-			if (isDarkMode) {
-				const darkImage = new Image();
-				darkImage.src = `${WEBUI_BASE_URL}/static/favicon-dark.png`;
-
-				darkImage.onload = () => {
-					logo.src = `${WEBUI_BASE_URL}/static/favicon-dark.png`;
-					logo.style.filter = ''; // Ensure no inversion is applied if splash-dark.png exists
-				};
-
-				darkImage.onerror = () => {
-					logo.style.filter = 'invert(1)'; // Invert image if splash-dark.png is missing
-				};
-			}
-		}
-	}
-
-	$: if (show) {
-		setLogoImage();
-	}
 </script>
 
 {#if show}
@@ -43,13 +17,7 @@
 		<div class="fixed m-10 z-50">
 			<div class="flex space-x-2">
 				<div class=" self-center">
-					<img
-						id="logo"
-						crossorigin="anonymous"
-						src="{WEBUI_BASE_URL}/static/favicon.png"
-						class=" w-6 rounded-full"
-						alt="logo"
-					/>
+					<ThemeLogo kind="mark" className="w-6 rounded-full" alt="logo" />
 				</div>
 			</div>
 		</div>
