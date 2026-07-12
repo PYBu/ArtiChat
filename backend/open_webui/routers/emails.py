@@ -29,6 +29,7 @@ from open_webui.utils.email_security import (
     invalidate_email_challenge,
     is_registration_email_allowed,
     normalize_allowed_domains,
+    verify_email_challenge,
 )
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -131,6 +132,12 @@ class RegistrationSettingsForm(BaseModel):
 class EmailChallengeRequestForm(BaseModel):
     email: str
     purpose: str
+
+
+class EmailChallengeVerifyForm(BaseModel):
+    email: str
+    purpose: str
+    code: str
 
 
 async def load_smtp_settings() -> dict[str, Any]:
@@ -286,6 +293,28 @@ async def request_email_challenge(
     if delivery.status != 'sent':
         await invalidate_email_challenge(challenge.id, now=now_ts(), db=db)
     return {'status': True}
+
+
+@router.post('/challenges/verify')
+async def verify_challenge_code(
+    form_data: EmailChallengeVerifyForm,
+    db: AsyncSession = Depends(get_async_session),
+):
+    purpose = form_data.purpose.strip().lower()
+    if purpose not in {'registration', 'login'}:
+        raise HTTPException(status_code=400, detail='EMAIL_CODE_PURPOSE_INVALID')
+    try:
+        challenge = await verify_email_challenge(
+            email=form_data.email,
+            purpose=purpose,
+            code=form_data.code,
+            secret_key=WEBUI_SECRET_KEY,
+            now=now_ts(),
+            db=db,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {'verification_token': challenge.id}
 
 
 @router.get('/admin/settings')

@@ -5,7 +5,7 @@ from fastapi import HTTPException
 from starlette.requests import Request
 
 from open_webui.routers import emails
-from open_webui.utils.email_security import verify_email_challenge
+from open_webui.utils.email_security import create_email_challenge, verify_email_challenge
 
 
 def request_from(ip_address='203.0.113.10'):
@@ -140,6 +140,40 @@ async def test_failed_mail_invalidates_the_created_challenge(monkeypatch, db_ses
             now=emails.now_ts(),
             db=db_session,
         )
+
+
+@pytest.mark.asyncio
+async def test_verify_endpoint_returns_a_consumed_verification_ticket(db_session):
+    timestamp = emails.now_ts()
+    await create_email_challenge(
+        email='alice@example.com',
+        purpose='registration',
+        code='123456',
+        secret_key=emails.WEBUI_SECRET_KEY,
+        now=timestamp,
+        db=db_session,
+    )
+
+    response = await emails.verify_challenge_code(
+        emails.EmailChallengeVerifyForm(
+            email='alice@example.com',
+            purpose='registration',
+            code='123456',
+        ),
+        db=db_session,
+    )
+
+    assert response['verification_token'].startswith('challenge_')
+    with pytest.raises(HTTPException) as exc_info:
+        await emails.verify_challenge_code(
+            emails.EmailChallengeVerifyForm(
+                email='alice@example.com',
+                purpose='registration',
+                code='123456',
+            ),
+            db=db_session,
+        )
+    assert exc_info.value.detail == 'EMAIL_CODE_ALREADY_USED'
 
 
 async def async_value(value):
