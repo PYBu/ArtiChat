@@ -82,6 +82,11 @@ class UpdatePasswordForm(BaseModel):
     verification_token: str | None = None
 
 
+class UpdateEmailForm(BaseModel):
+    email: str
+    verification_token: str | None = None
+
+
 class SignupForm(BaseModel):
     name: str
     email: str
@@ -203,16 +208,19 @@ class AuthsTable:
         self,
         user_id: str,
         email: str,
+        email_verified_at: int | None = None,
         db: AsyncSession | None = None,
     ) -> bool:
         """Set a new email on the auth record and propagate to the user row."""
         async with get_async_db_context(db) as session:
             auth_row = await session.get(Auth, user_id)
-            if auth_row is None:
+            user_row = await session.get(User, user_id)
+            if auth_row is None or user_row is None:
                 return False
             auth_row.email = email
+            user_row.email = email
+            user_row.email_verified_at = email_verified_at
             await session.commit()
-            await Users.update_user_by_id(user_id, {'email': email}, db=session)
             return True
         # --- password modification ---
 

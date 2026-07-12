@@ -27,6 +27,7 @@ from open_webui.utils.email_delivery import (
     validate_email_template,
 )
 from open_webui.utils.email_security import (
+    claim_sensitive_action_grant,
     consume_password_reset_token,
     create_password_reset_token,
     create_email_challenge,
@@ -41,6 +42,7 @@ from open_webui.utils.email_security import (
 from open_webui.utils.passwords import get_password_hash, validate_password
 from open_webui.utils.session_security import revoke_user_sessions
 from open_webui.utils.session_security import current_session_id
+from open_webui.utils.misc import validate_email_format
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -168,9 +170,20 @@ class SensitiveChallengeVerifyForm(SensitiveChallengeForm):
     code: str
 
 
+class NewEmailChallengeForm(BaseModel):
+    email: str
+    current_verification_token: str
+
+
+class NewEmailChallengeVerifyForm(BaseModel):
+    email: str
+    code: str
+
+
 SENSITIVE_ACTION_LABELS = {
     'password': '修改密码',
     'billing_address': '修改付款信息',
+    'email': '修改登录邮箱',
 }
 
 
@@ -481,6 +494,93 @@ async def verify_sensitive_challenge(
         challenge = await verify_email_challenge(
             email=user.email,
             purpose=f'sensitive:{action}',
+            code=form_data.code,
+            secret_key=WEBUI_SECRET_KEY,
+            user_id=user.id,
+            session_id=current_session_id(request),
+            now=now_ts(),
+            db=db,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {'verification_token': challenge.id}
+
+
+@router.post('/challenges/sensitive/email/request-new')
+async def request_new_email_challenge(
+    request: Request,
+    form_data: NewEmailChallengeForm,
+    user=Depends(get_email_current_user),
+    db: AsyncSession = Depends(get_async_session),
+):
+    email = form_data.email.strip().lower()
+    if not validate_email_format(email):
+        raise HTTPException(status_code=400, detail='EMAIL_FORMAT_INVALID')
+    if await Users.get_user_by_email(email, db=db) is not None:
+        raise HTTPException(status_code=400, detail='EMAIL_ALREADY_REGISTERED')
+    registration = await load_registration_settings()
+    if not registration['sensitive_action_verification_enabled']:
+        return {'status': True, 'verification_required': False}
+    settings = await load_smtp_settings()
+    if not settings.get('enabled'):
+        raise HTTPException(status_code=400, detail='EMAIL_DELIVERY_DISABLED')
+    try:
+        session_id = current_session_id(request)
+        await claim_sensitive_action_grant(
+            form_data.current_verification_token,
+            action='email',
+            user_id=user.id,
+            session_id=session_id,
+            expected_email=user.email,
+            now=now_ts(),
+            db=db,
+        )
+        code = generate_email_code()
+        challenge = await create_email_challenge(
+            email=email,
+            purpose='sensitive:email_new',
+            code=code,
+            secret_key=WEBUI_SECRET_KEY,
+            user_id=user.id,
+            session_id=session_id,
+            ip_address=request.client.host if request.client else None,
+            now=now_ts(),
+            db=db,
+        )
+        delivery = await deliver_email(
+            template_key='sensitive_action_code',
+            recipient=email,
+            variables={
+                'platform_name': settings.get('sender_name') or 'ArtiChat',
+                'platform_url': settings.get('public_url') or '',
+                'user_name': user.name or email.split('@', 1)[0],
+                'code': code,
+                'expires_minutes': 10,
+                'action_name': '确认新登录邮箱',
+            },
+            settings=settings,
+            secret_key=WEBUI_SECRET_KEY,
+            db=db,
+        )
+        if delivery.status != 'sent':
+            await invalidate_email_challenge(challenge.id, now=now_ts(), db=db)
+            raise ValueError('EMAIL_DELIVERY_FAILED')
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {'status': True, 'verification_required': True}
+
+
+@router.post('/challenges/sensitive/email/verify-new')
+async def verify_new_email_challenge(
+    request: Request,
+    form_data: NewEmailChallengeVerifyForm,
+    user=Depends(get_email_current_user),
+    db: AsyncSession = Depends(get_async_session),
+):
+    try:
+        challenge = await verify_email_challenge(
+            email=form_data.email,
+            purpose='sensitive:email_new',
             code=form_data.code,
             secret_key=WEBUI_SECRET_KEY,
             user_id=user.id,

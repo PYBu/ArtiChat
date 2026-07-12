@@ -286,6 +286,7 @@ async def claim_sensitive_action_grant(
     action: str,
     user_id: str,
     session_id: str,
+    expected_email: str | None = None,
     now: int,
     db: AsyncSession | None = None,
 ) -> EmailChallengeModel:
@@ -297,6 +298,7 @@ async def claim_sensitive_action_grant(
             or challenge.user_id != user_id
             or challenge.session_id != session_id
             or challenge.consumed_at is None
+            or (expected_email is not None and challenge.email != expected_email.strip().lower())
         ):
             raise ValueError('SENSITIVE_ACTION_GRANT_INVALID')
         if now > challenge.expires_at:

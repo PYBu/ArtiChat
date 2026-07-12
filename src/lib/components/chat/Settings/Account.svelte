@@ -17,6 +17,7 @@
 	import User from '$lib/components/icons/User.svelte';
 	import UserProfileImage from './Account/UserProfileImage.svelte';
 	import BillingAddress from './Account/BillingAddress.svelte';
+	import UpdateEmail from './Account/UpdateEmail.svelte';
 
 	const i18n = getContext('i18n');
 
@@ -246,6 +247,8 @@
 				</div>
 			</div>
 		{/if}
+
+		<UpdateEmail />
 
 		<BillingAddress />
 

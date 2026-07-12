@@ -247,6 +247,16 @@ async def test_sensitive_action_grant_is_bound_to_user_session_and_action(db_ses
             challenge.id,
             action='password',
             user_id='user-1',
+            session_id='session-1',
+            expected_email='other@example.com',
+            now=201,
+            db=db_session,
+        )
+    with pytest.raises(ValueError, match='SENSITIVE_ACTION_GRANT_INVALID'):
+        await claim_sensitive_action_grant(
+            challenge.id,
+            action='password',
+            user_id='user-1',
             session_id='session-2',
             now=201,
             db=db_session,

@@ -13,3 +13,5 @@ def test_password_and_billing_forms_accept_sensitive_action_grants():
     subscription_source = (root / 'routers' / 'subscriptions.py').read_text(encoding='utf-8')
     assert "action='password'" in auth_source
     assert "action='billing_address'" in subscription_source
+    assert "@router.post('/update/email'" in auth_source
+    assert "action='email_new'" in auth_source

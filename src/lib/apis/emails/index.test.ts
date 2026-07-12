@@ -8,6 +8,7 @@ import {
 	getRegistrationSettings,
 	getPublicRegistrationSettings,
 	requestEmailChallenge,
+	requestNewEmailChallenge,
 	requestSensitiveChallenge,
 	resetPassword,
 	retryEmailDelivery,
@@ -17,6 +18,7 @@ import {
 	updateEmailTemplate,
 	updateRegistrationSettings,
 	verifyEmailChallenge,
+	verifyNewEmailChallenge,
 	verifySensitiveChallenge
 } from './index';
 
@@ -55,6 +57,8 @@ describe('email admin api', () => {
 		await resetPassword('reset-token', 'New-password-123!');
 		await requestSensitiveChallenge('token', 'password');
 		await verifySensitiveChallenge('token', 'password', '123456');
+		await requestNewEmailChallenge('token', 'new@example.com', 'current-grant');
+		await verifyNewEmailChallenge('token', 'new@example.com', '654321');
 
 		expect(fetchMock.mock.calls.map(([url]) => String(url))).toEqual([
 			expect.stringContaining('/emails/admin/settings'),
@@ -73,7 +77,9 @@ describe('email admin api', () => {
 			expect.stringContaining('/emails/password/forgot'),
 			expect.stringContaining('/emails/password/reset'),
 			expect.stringContaining('/emails/challenges/sensitive/request'),
-			expect.stringContaining('/emails/challenges/sensitive/verify')
+			expect.stringContaining('/emails/challenges/sensitive/verify'),
+			expect.stringContaining('/emails/challenges/sensitive/email/request-new'),
+			expect.stringContaining('/emails/challenges/sensitive/email/verify-new')
 		]);
 		expect(fetchMock.mock.calls[1][1]).toMatchObject({
 			method: 'PUT',

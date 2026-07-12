@@ -14,6 +14,7 @@ async def authorize_sensitive_action(
     *,
     action: str,
     verification_token: str | None,
+    expected_email: str | None = None,
     db: AsyncSession | None = None,
 ) -> None:
     if not await Config.get('registration.sensitive_action_verification_enabled', False):
@@ -25,6 +26,7 @@ async def authorize_sensitive_action(
         action=action,
         user_id=user.id,
         session_id=current_session_id(request),
+        expected_email=expected_email,
         now=int(time.time()),
         db=db,
     )

@@ -553,6 +553,32 @@ export const updateUserPassword = async (
 	return res;
 };
 
+export const updateUserEmail = async (
+	token: string,
+	email: string,
+	verificationToken: string | null = null
+) => {
+	let error = null;
+	const response = await fetch(`${WEBUI_API_BASE_URL}/auths/update/email`, {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+			...(token && { authorization: `Bearer ${token}` })
+		},
+		body: JSON.stringify({ email, verification_token: verificationToken })
+	})
+		.then(async (res) => {
+			if (!res.ok) throw await res.json();
+			return res.json();
+		})
+		.catch((reason) => {
+			error = reason?.detail ?? reason;
+			return null;
+		});
+	if (error) throw error;
+	return response;
+};
+
 export const createAPIKey = async (token: string) => {
 	let error = null;
 

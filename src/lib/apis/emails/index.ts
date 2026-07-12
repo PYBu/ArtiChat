@@ -209,3 +209,26 @@ export const verifySensitiveChallenge = async (
 		{ method: 'POST', body: JSON.stringify({ action, code }) }
 	);
 };
+
+export const requestNewEmailChallenge = async (
+	token: string,
+	email: string,
+	currentVerificationToken: string
+) => {
+	return jsonFetch<{ status: boolean; verification_required: boolean }>(
+		`${WEBUI_API_BASE_URL}/emails/challenges/sensitive/email/request-new`,
+		token,
+		{
+			method: 'POST',
+			body: JSON.stringify({ email, current_verification_token: currentVerificationToken })
+		}
+	);
+};
+
+export const verifyNewEmailChallenge = async (token: string, email: string, code: string) => {
+	return jsonFetch<{ verification_token: string }>(
+		`${WEBUI_API_BASE_URL}/emails/challenges/sensitive/email/verify-new`,
+		token,
+		{ method: 'POST', body: JSON.stringify({ email, code }) }
+	);
+};

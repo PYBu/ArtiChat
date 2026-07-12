@@ -32,6 +32,7 @@ from open_webui.env import (
     WEBUI_AUTH_TRUSTED_GROUPS_HEADER,
     WEBUI_AUTH_TRUSTED_NAME_HEADER,
     WEBUI_AUTH_TRUSTED_ROLE_HEADER,
+    WEBUI_SECRET_KEY,
 )
 from open_webui.internal.db import get_async_session
 from open_webui.models.auths import (
@@ -45,6 +46,7 @@ from open_webui.models.auths import (
     SignupForm,
     Token,
     UpdatePasswordForm,
+    UpdateEmailForm,
 )
 from open_webui.models.config import Config
 from open_webui.models.groups import Groups
@@ -75,6 +77,7 @@ from open_webui.utils.misc import parse_duration, validate_email_format
 from open_webui.utils.rate_limit import RateLimiter
 from open_webui.utils.registration import resolve_signup_email_verified_at
 from open_webui.utils.sensitive_actions import authorize_sensitive_action
+from open_webui.utils.session_security import revoke_user_sessions
 from open_webui.utils.email_security import (
     claim_email_verification_ticket,
     validate_email_verification_ticket,
@@ -409,6 +412,70 @@ async def update_timezone(
 ############################
 # Update Password
 ############################
+
+
+@router.post('/update/email', response_model=bool)
+async def update_email(
+    request: Request,
+    form_data: UpdateEmailForm,
+    session_user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session),
+):
+    email = form_data.email.strip().lower()
+    if not validate_email_format(email):
+        raise HTTPException(status_code=400, detail='EMAIL_FORMAT_INVALID')
+    existing = await Users.get_user_by_email(email, db=db)
+    if existing is not None and existing.id != session_user.id:
+        raise HTTPException(status_code=400, detail='EMAIL_ALREADY_REGISTERED')
+    try:
+        await authorize_sensitive_action(
+            request,
+            session_user,
+            action='email_new',
+            verification_token=form_data.verification_token,
+            expected_email=email,
+            db=db,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    old_email = session_user.email
+    timestamp = int(time.time())
+    if not await Auths.update_email_by_id(
+        session_user.id,
+        email,
+        email_verified_at=timestamp,
+        db=db,
+    ):
+        raise HTTPException(status_code=400, detail='EMAIL_UPDATE_FAILED')
+    await revoke_user_sessions(request, session_user.id, db=db)
+
+    try:
+        from open_webui.routers.emails import load_smtp_settings
+        from open_webui.utils.email_delivery import deliver_email
+
+        settings = await load_smtp_settings()
+        if settings.get('enabled'):
+            variables = {
+                'platform_name': settings.get('sender_name') or 'ArtiChat',
+                'platform_url': settings.get('public_url') or '',
+                'user_name': session_user.name,
+                'old_email': old_email,
+                'new_email': email,
+                'changed_at': datetime.datetime.now(datetime.UTC).strftime('%Y-%m-%d %H:%M UTC'),
+            }
+            for recipient in {old_email, email}:
+                await deliver_email(
+                    template_key='email_changed',
+                    recipient=recipient,
+                    variables=variables,
+                    settings=settings,
+                    secret_key=WEBUI_SECRET_KEY,
+                    db=db,
+                )
+    except Exception:
+        log.warning('Email changed notice could not be dispatched', exc_info=True)
+    return True
 
 
 @router.post('/update/password', response_model=bool)
