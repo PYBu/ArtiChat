@@ -12,19 +12,27 @@
 	import {
 		ldapUserSignIn,
 		getSessionUser,
+		userEmailCodeSignIn,
 		userSignIn,
 		userSignUp,
 		updateUserTimezone
 	} from '$lib/apis/auths';
+	import {
+		getPublicRegistrationSettings,
+		requestEmailChallenge,
+		verifyEmailChallenge
+	} from '$lib/apis/emails';
 
 	import { WEBUI_API_BASE_URL, WEBUI_BASE_URL } from '$lib/constants';
 	import { WEBUI_NAME, config, user, socket } from '$lib/stores';
 
 	import { generateInitialsImage, canvasPixelTest, getUserTimezone } from '$lib/utils';
+	import { emailErrorMessage } from '$lib/utils/email-errors';
 
 	import Spinner from '$lib/components/common/Spinner.svelte';
 	import OnBoarding from '$lib/components/OnBoarding.svelte';
 	import SensitiveInput from '$lib/components/common/SensitiveInput.svelte';
+	import ThemeLogo from '$lib/components/common/ThemeLogo.svelte';
 	import { redirect } from '@sveltejs/kit';
 
 	const i18n = getContext('i18n');
@@ -39,6 +47,27 @@
 	let email = '';
 	let password = '';
 	let confirmPassword = '';
+	let emailCode = '';
+	let codeSent = false;
+	let resendSeconds = 0;
+	let codeExpiresSeconds = 0;
+	let verificationToken = '';
+	let registrationFeatures = { verification_enabled: false, email_code_login_enabled: false };
+	const resetEmailVerification = () => {
+		emailCode = '';
+		codeSent = false;
+		verificationToken = '';
+		resendSeconds = 0;
+		codeExpiresSeconds = 0;
+	};
+
+	onMount(() => {
+		const timer = window.setInterval(() => {
+			if (resendSeconds > 0) resendSeconds -= 1;
+			if (codeExpiresSeconds > 0) codeExpiresSeconds -= 1;
+		}, 1000);
+		return () => window.clearInterval(timer);
+	});
 
 	let ldapUsername = '';
 
@@ -70,10 +99,51 @@
 
 	const signInHandler = async () => {
 		const sessionUser = await userSignIn(email, password).catch((error) => {
-			toast.error(`${error}`);
+			toast.error(emailErrorMessage(error));
 			return null;
 		});
 
+		await setSessionUser(sessionUser);
+	};
+
+	const sendCode = async (purpose: 'registration' | 'login') => {
+		if (resendSeconds > 0) {
+			toast.error(`请等待 ${resendSeconds} 秒后重新发送验证码。`);
+			return null;
+		}
+		const result = await requestEmailChallenge(email, purpose).catch((error) => {
+			toast.error(emailErrorMessage(error));
+			return null;
+		});
+		if (result?.status) {
+			codeSent = true;
+			resendSeconds = 60;
+			codeExpiresSeconds = 600;
+			toast.success('验证码已发送。');
+		}
+		return result;
+	};
+
+	const verifyCode = async (purpose: 'registration' | 'login') => {
+		const result = await verifyEmailChallenge(email, purpose, emailCode).catch((error) => {
+			toast.error(emailErrorMessage(error));
+			return null;
+		});
+		verificationToken = result?.verification_token ?? '';
+		return verificationToken;
+	};
+
+	const emailCodeSignInHandler = async () => {
+		if (!codeSent) {
+			await sendCode('login');
+			return;
+		}
+		const token = await verifyCode('login');
+		if (!token) return;
+		const sessionUser = await userEmailCodeSignIn(email, token).catch((error) => {
+			toast.error(emailErrorMessage(error));
+			return null;
+		});
 		await setSessionUser(sessionUser);
 	};
 
@@ -84,13 +154,24 @@
 				return;
 			}
 		}
-
-		const sessionUser = await userSignUp(name, email, password, generateInitialsImage(name)).catch(
-			(error) => {
-				toast.error(`${error}`);
-				return null;
+		if (registrationFeatures.verification_enabled && !($config?.onboarding ?? false)) {
+			if (!codeSent) {
+				await sendCode('registration');
+				return;
 			}
-		);
+			if (!(await verifyCode('registration'))) return;
+		}
+
+		const sessionUser = await userSignUp(
+			name,
+			email,
+			password,
+			generateInitialsImage(name),
+			verificationToken || null
+		).catch((error) => {
+			toast.error(emailErrorMessage(error));
+			return null;
+		});
 
 		await setSessionUser(sessionUser);
 	};
@@ -106,6 +187,8 @@
 	const submitHandler = async () => {
 		if (mode === 'ldap') {
 			await ldapSignInHandler();
+		} else if (mode === 'email-code') {
+			await emailCodeSignInHandler();
 		} else if (mode === 'signin') {
 			await signInHandler();
 		} else {
@@ -181,6 +264,10 @@
 		}
 
 		await oauthCallbackHandler();
+		registrationFeatures = await getPublicRegistrationSettings().catch(() => registrationFeatures);
+		if (!$config?.features.enable_login_form && registrationFeatures.email_code_login_enabled) {
+			mode = 'email-code';
+		}
 		form = $page.url.searchParams.get('form');
 
 		// Auto-redirect to SSO when OAUTH_AUTO_REDIRECT is enabled and the
@@ -193,6 +280,7 @@
 				providers.length === 1 &&
 				$config?.features?.auth !== false &&
 				$config?.features?.enable_login_form === false &&
+				!registrationFeatures.email_code_login_enabled &&
 				!$config?.features?.enable_ldap &&
 				!$config?.features?.auth_trusted_header &&
 				!$config?.onboarding &&
@@ -259,11 +347,9 @@
 						<div id="auth-login-card" class=" sm:max-w-md my-auto pb-10 w-full dark:text-gray-100">
 							{#if $config?.metadata?.auth_logo_position === 'center'}
 								<div class="flex justify-center mb-6">
-									<img
-										id="logo"
-										crossorigin="anonymous"
-										src="{WEBUI_BASE_URL}/static/favicon.png"
-										class="size-24 rounded-full"
+									<ThemeLogo
+										kind="mark"
+										className="size-24 rounded-full"
 										alt="{$WEBUI_NAME} logo"
 									/>
 								</div>
@@ -281,7 +367,7 @@
 											{$i18n.t(`Get started with {{WEBUI_NAME}}`, { WEBUI_NAME: $WEBUI_NAME })}
 										{:else if mode === 'ldap'}
 											{$i18n.t(`Sign in to {{WEBUI_NAME}} with LDAP`, { WEBUI_NAME: $WEBUI_NAME })}
-										{:else if mode === 'signin'}
+										{:else if mode === 'signin' || mode === 'email-code'}
 											{$i18n.t(`Sign in to {{WEBUI_NAME}}`, { WEBUI_NAME: $WEBUI_NAME })}
 										{:else}
 											{$i18n.t(`Sign up to {{WEBUI_NAME}}`, { WEBUI_NAME: $WEBUI_NAME })}
@@ -298,7 +384,7 @@
 									{/if}
 								</div>
 
-								{#if $config?.features.enable_login_form || $config?.features.enable_ldap || form}
+								{#if $config?.features.enable_login_form || $config?.features.enable_ldap || registrationFeatures.email_code_login_enabled || form}
 									<div class="flex flex-col mt-4">
 										{#if mode === 'signup'}
 											<div class="mb-2">
@@ -312,9 +398,20 @@
 													class="my-0.5 w-full text-sm outline-hidden bg-transparent placeholder:text-gray-300 dark:placeholder:text-gray-600"
 													autocomplete="name"
 													placeholder={$i18n.t('Enter Your Full Name')}
-													required
-												/>
+												required
+											/>
+											<div class="mt-1 flex items-center justify-between text-xs text-gray-500">
+												<span>{codeExpiresSeconds > 0 ? `验证码将在 ${codeExpiresSeconds} 秒后过期` : '验证码已过期，请重新发送'}</span>
+												<button
+													type="button"
+													disabled={resendSeconds > 0}
+													class="font-medium underline disabled:no-underline disabled:opacity-50"
+													on:click={() => sendCode(mode === 'signup' ? 'registration' : 'login')}
+												>
+													{resendSeconds > 0 ? `${resendSeconds} 秒后可重发` : '重新发送'}
+												</button>
 											</div>
+										</div>
 										{/if}
 
 										{#if mode === 'ldap'}
@@ -351,23 +448,51 @@
 											</div>
 										{/if}
 
-										<div>
-											<label for="password" class="text-sm font-medium text-left mb-1 block"
-												>{$i18n.t('Password')}</label
-											>
-											<SensitiveInput
-												bind:value={password}
-												type="password"
-												id="password"
-												class="my-0.5 w-full text-sm outline-hidden bg-transparent placeholder:text-gray-300 dark:placeholder:text-gray-600"
-												placeholder={$i18n.t('Enter Your Password')}
-												autocomplete={mode === 'signup' ? 'new-password' : 'current-password'}
-												name="password"
-												screenReader={true}
-												required
-												aria-required="true"
-											/>
-										</div>
+										{#if mode !== 'email-code'}<div>
+												<label for="password" class="text-sm font-medium text-left mb-1 block"
+													>{$i18n.t('Password')}</label
+												>
+										<SensitiveInput
+													bind:value={password}
+													type="password"
+													id="password"
+													class="my-0.5 w-full text-sm outline-hidden bg-transparent placeholder:text-gray-300 dark:placeholder:text-gray-600"
+													placeholder={$i18n.t('Enter Your Password')}
+													autocomplete={mode === 'signup' ? 'new-password' : 'current-password'}
+													name="password"
+													screenReader={true}
+													required
+											aria-required="true"
+										/>
+										{#if mode === 'signin'}
+											<div class="mt-1 text-right">
+												<button
+													type="button"
+													class="text-xs font-medium text-gray-500 hover:text-gray-800 dark:hover:text-gray-200"
+													on:click={() => goto('/auth/forgot-password')}
+												>
+													忘记密码？
+												</button>
+											</div>
+										{/if}
+									</div>{/if}
+
+										{#if codeSent && (mode === 'email-code' || mode === 'signup')}
+											<div class="mt-2">
+												<label for="email-code" class="text-sm font-medium text-left mb-1 block"
+													>邮箱验证码</label
+												>
+												<input
+													bind:value={emailCode}
+													id="email-code"
+													inputmode="numeric"
+													maxlength="6"
+													pattern="[0-9]{6}"
+													class="my-0.5 w-full text-sm outline-hidden bg-transparent"
+													required
+												/>
+											</div>
+										{/if}
 
 										{#if mode === 'signup' && $config?.features?.enable_signup_password_confirmation}
 											<div class="mt-2">
@@ -391,7 +516,7 @@
 									</div>
 								{/if}
 								<div class="mt-5">
-									{#if $config?.features.enable_login_form || $config?.features.enable_ldap || form}
+									{#if $config?.features.enable_login_form || $config?.features.enable_ldap || registrationFeatures.email_code_login_enabled || form}
 										{#if mode === 'ldap'}
 											<button
 												class="bg-gray-700/5 hover:bg-gray-700/10 dark:bg-gray-100/5 dark:hover:bg-gray-100/10 dark:text-gray-300 dark:hover:text-white transition w-full rounded-full font-medium text-sm py-2.5"
@@ -406,9 +531,13 @@
 											>
 												{mode === 'signin'
 													? $i18n.t('Sign in')
-													: ($config?.onboarding ?? false)
-														? $i18n.t('Create Admin Account')
-														: $i18n.t('Create Account')}
+													: mode === 'email-code'
+														? codeSent
+															? '验证并登录'
+															: '发送登录验证码'
+														: ($config?.onboarding ?? false)
+															? $i18n.t('Create Admin Account')
+															: $i18n.t('Create Account')}
 											</button>
 
 											{#if $config?.features.enable_signup && !($config?.onboarding ?? false)}
@@ -426,9 +555,24 @@
 															} else {
 																mode = 'signin';
 															}
+															resetEmailVerification();
 														}}
 													>
 														{mode === 'signin' ? $i18n.t('Sign up') : $i18n.t('Sign in')}
+													</button>
+												</div>
+											{/if}
+											{#if registrationFeatures.email_code_login_enabled && (mode === 'signin' || mode === 'email-code')}
+												<div class="mt-3 text-sm text-center">
+													<button
+														class="font-medium underline"
+														type="button"
+														on:click={() => {
+															mode = mode === 'signin' ? 'email-code' : 'signin';
+															resetEmailVerification();
+														}}
+													>
+														{mode === 'signin' ? '使用邮箱验证码登录' : '使用密码登录'}
 													</button>
 												</div>
 											{/if}
@@ -611,13 +755,7 @@
 			<div class="fixed m-10 z-50">
 				<div class="flex space-x-2">
 					<div class=" self-center">
-						<img
-							id="logo"
-							crossorigin="anonymous"
-							src="{WEBUI_BASE_URL}/static/favicon.png"
-							class=" w-6 rounded-full"
-							alt=""
-						/>
+						<ThemeLogo kind="mark" className="w-6 rounded-full" />
 					</div>
 				</div>
 			</div>

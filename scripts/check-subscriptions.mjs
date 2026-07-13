@@ -14,7 +14,15 @@ const requiredFiles = [
 	'src/lib/components/chat/Settings/Usage.svelte',
 	'src/lib/components/AnnouncementModal.svelte',
 	'src/lib/components/layout/Sidebar/SubscriptionQuotaRing.svelte',
-	'src/lib/components/admin/Settings/Subscriptions.svelte',
+	'src/lib/components/admin/Subscriptions/SubscriptionPageShell.svelte',
+	'src/lib/components/admin/Subscriptions/SubscriptionHome.svelte',
+	'src/routes/(app)/admin/subscriptions/+page.svelte',
+	'src/routes/(app)/admin/subscriptions/plans/+page.svelte',
+	'src/routes/(app)/admin/subscriptions/models/+page.svelte',
+	'src/routes/(app)/admin/subscriptions/redeem-codes/+page.svelte',
+	'src/routes/(app)/admin/subscriptions/gift-cards/+page.svelte',
+	'src/routes/(app)/admin/subscriptions/announcements/+page.svelte',
+	'src/routes/(app)/admin/subscriptions/usage/+page.svelte',
 	'src/lib/components/admin/Settings/Subscriptions/GiftCards.svelte',
 	'src/lib/components/admin/Settings/Subscriptions/Announcements.svelte',
 	'src/lib/components/workspace/Models/SubscriptionPolicy.svelte'
@@ -56,6 +64,40 @@ if (exists('src/lib/apis/announcements/index.ts')) {
 	]) {
 		if (!api.includes(`export const ${name}`)) failures.push(`Missing announcement API helper ${name}`);
 	}
+	if (!api.includes('include_inactive')) failures.push('Announcement API must expose include_inactive');
+}
+
+const adminAnnouncements = read('src/lib/components/admin/Settings/Subscriptions/Announcements.svelte');
+for (const marker of ['showInactive', '显示已停用', "toast.success('公告已删除。')"]) {
+	if (!adminAnnouncements.includes(marker)) failures.push(`Announcement admin missing ${marker}`);
+}
+
+const modelAccess = read('src/lib/components/admin/Settings/Subscriptions/ModelAccess.svelte');
+for (const marker of ['updateAdminModelSubscriptionPolicies', 'dirty', '保存更改']) {
+	if (!modelAccess.includes(marker)) failures.push(`Model access bulk save missing ${marker}`);
+}
+if (modelAccess.includes('updateAdminModelSubscriptionPolicy(')) {
+	failures.push('Model access must not save one model at a time');
+}
+if ((modelAccess.match(/保存更改/g) ?? []).length !== 1) {
+	failures.push('Model access must contain exactly one 保存更改 command');
+}
+
+const pricingFields = [
+	'input_chatpoint_per_million',
+	'output_chatpoint_per_million',
+	'cache_creation_chatpoint_per_million',
+	'cache_read_chatpoint_per_million'
+];
+for (const file of [
+	'src/lib/components/admin/Settings/Subscriptions/ModelAccess.svelte',
+	'src/lib/components/workspace/Models/SubscriptionPolicy.svelte',
+	'src/lib/components/workspace/Models/ModelEditor.svelte'
+]) {
+	const text = read(file);
+	for (const field of pricingFields) {
+		if (!text.includes(field)) failures.push(`${file} missing ${field}`);
+	}
 }
 
 const settingsModal = read('src/lib/components/chat/SettingsModal.svelte');
@@ -87,13 +129,22 @@ for (const marker of ['用量 / Usage', 'Plan Chatpoint', 'Check Chatpoint', 're
 if (ring.includes('免费版')) failures.push('Quota ring must use Free instead of 免费版');
 
 const adminSettings = read('src/lib/components/admin/Settings.svelte');
-for (const marker of ['订阅管理', "selectedTab === 'subscriptions'", '<Subscriptions']) {
-	if (!adminSettings.includes(marker)) failures.push(`Admin settings missing ${marker}`);
+if (adminSettings.includes("selectedTab === 'subscriptions'") || adminSettings.includes('<Subscriptions')) {
+	failures.push('Subscription operations must not remain embedded in admin settings');
 }
 
-const adminSubscriptions = read('src/lib/components/admin/Settings/Subscriptions.svelte');
-for (const marker of ['礼品卡', '公告', '<GiftCards', '<Announcements']) {
-	if (!adminSubscriptions.includes(marker)) failures.push(`Admin subscriptions missing ${marker}`);
+const adminLayout = read('src/routes/(app)/admin/+layout.svelte');
+for (const marker of ['href="/admin/subscriptions"', 'admin-mobile-section', 'goto(event.currentTarget.value)']) {
+	if (!adminLayout.includes(marker)) failures.push(`Admin navigation missing ${marker}`);
+}
+
+if (exists('src/lib/components/admin/Subscriptions/SubscriptionHome.svelte')) {
+	const subscriptionHome = read('src/lib/components/admin/Subscriptions/SubscriptionHome.svelte');
+	for (const route of ['plans', 'models', 'redeem-codes', 'gift-cards', 'announcements', 'usage']) {
+		if (!subscriptionHome.includes(`/admin/subscriptions/${route}`)) {
+			failures.push(`Subscription home missing route ${route}`);
+		}
+	}
 }
 
 const redeemCode = read('src/lib/components/chat/Settings/RedeemCode.svelte');
@@ -106,13 +157,17 @@ for (const marker of ['自定义兑换码', 'deleteAdminRedemptionCode', 'code.c
 	if (!adminRedeemCodes.includes(marker)) failures.push(`Admin redeem codes missing ${marker}`);
 }
 
-const adminUsers = read('src/lib/components/admin/Settings/Subscriptions/UserSubscriptions.svelte');
-for (const marker of ['邮箱、用户名、显示名或用户 ID', 'row.user?.email']) {
-	if (!adminUsers.includes(marker)) failures.push(`Admin user subscriptions missing ${marker}`);
-}
-
 const usageLedger = read('src/lib/components/admin/Settings/Subscriptions/UsageLedger.svelte');
 if (!usageLedger.includes('user?.email')) failures.push('Usage ledger must display user email');
+for (const marker of [...pricingFields.map((field) => field.replace('_chatpoint_per_million', '_tokens')), 'client_ip', 'first_token_latency_ms', 'statusFilter']) {
+	if (!usageLedger.includes(marker)) failures.push(`Admin usage ledger missing ${marker}`);
+}
+
+const userUsage = read('src/lib/components/chat/Settings/Usage.svelte');
+for (const marker of [...pricingFields.map((field) => field.replace('_chatpoint_per_million', '_tokens')), 'first_token_latency_ms', 'total_duration_ms']) {
+	if (!userUsage.includes(marker)) failures.push(`User usage ledger missing ${marker}`);
+}
+if (userUsage.includes('client_ip')) failures.push('User usage ledger must not reference client_ip');
 
 const announcementModal = read('src/lib/components/AnnouncementModal.svelte');
 for (const marker of ['getActiveAnnouncements', 'sessionStorage', 'markAnnouncementViewed']) {
@@ -123,7 +178,24 @@ const modelEditor = read('src/lib/components/workspace/Models/ModelEditor.svelte
 if (!modelEditor.includes('SubscriptionPolicy')) failures.push('ModelEditor must include SubscriptionPolicy');
 
 const editUser = read('src/lib/components/admin/Users/UserList/EditUserModal.svelte');
-if (!editUser.includes('管理订阅')) failures.push('EditUserModal must link to subscription management');
+for (const marker of ['updateAdminUserSubscription', 'plan_chatpoint', 'check_chatpoint', 'expires_at_input']) {
+	if (!editUser.includes(marker)) failures.push(`EditUserModal subscription merge missing ${marker}`);
+}
+
+const userList = read('src/lib/components/admin/Users/UserList.svelte');
+for (const marker of ['user.subscription?.display_name', 'user.subscription?.expires_at']) {
+	if (!userList.includes(marker)) failures.push(`UserList subscription summary missing ${marker}`);
+}
+
+if (exists('src/routes/(app)/admin/subscriptions/users/+page.svelte')) {
+	failures.push('Standalone admin user subscriptions route must be removed');
+}
+if (exists('src/lib/components/admin/Settings/Subscriptions/UserSubscriptions.svelte')) {
+	failures.push('Standalone UserSubscriptions component must be removed');
+}
+if (read('src/lib/components/admin/Subscriptions/SubscriptionHome.svelte').includes('/admin/subscriptions/users')) {
+	failures.push('Subscription home must not link to standalone user subscriptions');
+}
 
 if (failures.length > 0) {
 	for (const failure of failures) console.error(failure);

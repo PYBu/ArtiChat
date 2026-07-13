@@ -12,6 +12,22 @@
 
 	let loaded = false;
 
+	$: adminSection = $page.url.pathname.startsWith('/admin/registration')
+		? '/admin/registration'
+		: $page.url.pathname.startsWith('/admin/email')
+			? '/admin/email'
+			: $page.url.pathname.startsWith('/admin/subscriptions')
+				? '/admin/subscriptions'
+				: $page.url.pathname.startsWith('/admin/analytics')
+					? '/admin/analytics'
+					: $page.url.pathname.startsWith('/admin/evaluations')
+						? '/admin/evaluations'
+						: $page.url.pathname.startsWith('/admin/functions')
+							? '/admin/functions'
+							: $page.url.pathname.startsWith('/admin/settings')
+								? '/admin/settings'
+								: '/admin';
+
 	onMount(async () => {
 		if ($user?.role !== 'admin') {
 			await goto('/');
@@ -55,52 +71,97 @@
 					</div>
 				{/if}
 
-				<div class=" flex w-full">
-					<div
-						class="flex gap-1 scrollbar-none overflow-x-auto w-fit text-center text-sm font-medium rounded-full bg-transparent pt-1"
-					>
-						<a
-							draggable="false"
-							class="min-w-fit p-1.5 {$page.url.pathname.includes('/admin/users')
-								? ''
-								: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition select-none"
-							href="/admin">{$i18n.t('Users')}</a
+				<div class="flex w-full min-w-0">
+					{#if $mobile}
+						<select
+							id="admin-mobile-section"
+							class="min-w-0 flex-1 rounded-lg border border-gray-100 bg-transparent px-3 py-2 text-sm dark:border-gray-850"
+							value={adminSection}
+							on:change={(event) => goto(event.currentTarget.value)}
+							aria-label="管理员功能"
 						>
-
-						{#if $config?.features.enable_admin_analytics ?? true}
+							<option value="/admin">用户</option>
+							{#if $config?.features.enable_admin_analytics ?? true}<option value="/admin/analytics"
+									>分析</option
+								>{/if}
+							<option value="/admin/evaluations">评估</option>
+							<option value="/admin/functions">函数</option>
+							<option value="/admin/subscriptions">订阅运营</option>
+							<option value="/admin/registration">注册管理</option>
+							<option value="/admin/email">邮箱</option>
+							<option value="/admin/settings">设置</option>
+						</select>
+					{:else}
+						<div
+							class="flex gap-1 scrollbar-none overflow-x-auto w-fit text-center text-sm font-medium rounded-full bg-transparent pt-1"
+						>
 							<a
 								draggable="false"
-								class="min-w-fit p-1.5 {$page.url.pathname.includes('/admin/analytics')
+								class="min-w-fit p-1.5 {$page.url.pathname.includes('/admin/registration')
 									? ''
 									: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition select-none"
-								href="/admin/analytics">{$i18n.t('Analytics')}</a
+								href="/admin/registration">注册管理</a
 							>
-						{/if}
 
-						<a
-							draggable="false"
-							class="min-w-fit p-1.5 {$page.url.pathname.includes('/admin/evaluations')
-								? ''
-								: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition select-none"
-							href="/admin/evaluations">{$i18n.t('Evaluations')}</a
-						>
+							<a
+								draggable="false"
+								class="min-w-fit p-1.5 {$page.url.pathname.includes('/admin/email')
+									? ''
+									: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition select-none"
+								href="/admin/email">邮箱</a
+							>
 
-						<a
-							draggable="false"
-							class="min-w-fit p-1.5 {$page.url.pathname.includes('/admin/functions')
-								? ''
-								: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition select-none"
-							href="/admin/functions">{$i18n.t('Functions')}</a
-						>
+							<a
+								draggable="false"
+								class="min-w-fit p-1.5 {$page.url.pathname.includes('/admin/subscriptions')
+									? ''
+									: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition select-none"
+								href="/admin/subscriptions">订阅运营</a
+							>
 
-						<a
-							draggable="false"
-							class="min-w-fit p-1.5 {$page.url.pathname.includes('/admin/settings')
-								? ''
-								: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition select-none"
-							href="/admin/settings">{$i18n.t('Settings')}</a
-						>
-					</div>
+							<a
+								draggable="false"
+								class="min-w-fit p-1.5 {$page.url.pathname.includes('/admin/users')
+									? ''
+									: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition select-none"
+								href="/admin">{$i18n.t('Users')}</a
+							>
+
+							{#if $config?.features.enable_admin_analytics ?? true}
+								<a
+									draggable="false"
+									class="min-w-fit p-1.5 {$page.url.pathname.includes('/admin/analytics')
+										? ''
+										: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition select-none"
+									href="/admin/analytics">{$i18n.t('Analytics')}</a
+								>
+							{/if}
+
+							<a
+								draggable="false"
+								class="min-w-fit p-1.5 {$page.url.pathname.includes('/admin/evaluations')
+									? ''
+									: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition select-none"
+								href="/admin/evaluations">{$i18n.t('Evaluations')}</a
+							>
+
+							<a
+								draggable="false"
+								class="min-w-fit p-1.5 {$page.url.pathname.includes('/admin/functions')
+									? ''
+									: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition select-none"
+								href="/admin/functions">{$i18n.t('Functions')}</a
+							>
+
+							<a
+								draggable="false"
+								class="min-w-fit p-1.5 {$page.url.pathname.includes('/admin/settings')
+									? ''
+									: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition select-none"
+								href="/admin/settings">{$i18n.t('Settings')}</a
+							>
+						</div>
+					{/if}
 				</div>
 			</div>
 		</nav>

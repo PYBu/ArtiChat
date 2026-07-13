@@ -32,18 +32,21 @@ from open_webui.env import (
     WEBUI_AUTH_TRUSTED_GROUPS_HEADER,
     WEBUI_AUTH_TRUSTED_NAME_HEADER,
     WEBUI_AUTH_TRUSTED_ROLE_HEADER,
+    WEBUI_SECRET_KEY,
 )
 from open_webui.internal.db import get_async_session
 from open_webui.models.auths import (
     AddUserForm,
     ApiKey,
     Auths,
+    EmailCodeSigninForm,
     LdapForm,
     SigninForm,
     SigninResponse,
     SignupForm,
     Token,
     UpdatePasswordForm,
+    UpdateEmailForm,
 )
 from open_webui.models.config import Config
 from open_webui.models.groups import Groups
@@ -72,6 +75,14 @@ from open_webui.utils.auth import (
 from open_webui.utils.groups import apply_default_group_assignment
 from open_webui.utils.misc import parse_duration, validate_email_format
 from open_webui.utils.rate_limit import RateLimiter
+from open_webui.utils.registration import resolve_signup_email_verified_at
+from open_webui.utils.sensitive_actions import authorize_sensitive_action
+from open_webui.utils.session_security import revoke_user_sessions
+from open_webui.utils.account_notifications import notify_user
+from open_webui.utils.email_security import (
+    claim_email_verification_ticket,
+    validate_email_verification_ticket,
+)
 from open_webui.utils.redis import get_redis_client
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -165,7 +176,7 @@ async def create_session_response(
         expires_at = int(time.time()) + int(expires_delta.total_seconds())
 
     token = create_token(
-        data={'id': user.id},
+        data={'id': user.id, 'auth_epoch': user.auth_epoch},
         expires_delta=expires_delta,
     )
 
@@ -320,6 +331,51 @@ async def update_profile(
         raise HTTPException(400, detail=ERROR_MESSAGES.INVALID_CRED)
 
 
+@router.post('/signin/email-code', response_model=SessionUserResponse)
+async def signin_with_email_code(
+    request: Request,
+    response: Response,
+    form_data: EmailCodeSigninForm,
+    db: AsyncSession = Depends(get_async_session),
+):
+    email = form_data.email.strip().lower()
+    if not await Config.get('registration.email_code_login_enabled', False):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail='EMAIL_CODE_LOGIN_DISABLED')
+    if signin_rate_limiter.is_limited(email):
+        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, detail=ERROR_MESSAGES.RATE_LIMIT_EXCEEDED)
+
+    timestamp = int(time.time())
+    try:
+        await validate_email_verification_ticket(
+            form_data.verification_token,
+            email=email,
+            purpose='login',
+            now=timestamp,
+            db=db,
+        )
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    user = await Auths.authenticate_user_by_email(email, db=db)
+    if user is None:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=ERROR_MESSAGES.INVALID_CRED)
+
+    try:
+        await claim_email_verification_ticket(
+            form_data.verification_token,
+            email=email,
+            purpose='login',
+            now=timestamp,
+            db=db,
+        )
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    if user.email_verified_at is None:
+        user = await Users.update_user_by_id(user.id, {'email_verified_at': timestamp}, db=db) or user
+    return await create_session_response(request, user, db, response, set_cookie=True, source='email_code')
+
+
 ############################
 # Update Timezone
 ############################
@@ -359,6 +415,70 @@ async def update_timezone(
 ############################
 
 
+@router.post('/update/email', response_model=bool)
+async def update_email(
+    request: Request,
+    form_data: UpdateEmailForm,
+    session_user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session),
+):
+    email = form_data.email.strip().lower()
+    if not validate_email_format(email):
+        raise HTTPException(status_code=400, detail='EMAIL_FORMAT_INVALID')
+    existing = await Users.get_user_by_email(email, db=db)
+    if existing is not None and existing.id != session_user.id:
+        raise HTTPException(status_code=400, detail='EMAIL_ALREADY_REGISTERED')
+    try:
+        await authorize_sensitive_action(
+            request,
+            session_user,
+            action='email_new',
+            verification_token=form_data.verification_token,
+            expected_email=email,
+            db=db,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    old_email = session_user.email
+    timestamp = int(time.time())
+    if not await Auths.update_email_by_id(
+        session_user.id,
+        email,
+        email_verified_at=timestamp,
+        db=db,
+    ):
+        raise HTTPException(status_code=400, detail='EMAIL_UPDATE_FAILED')
+    await revoke_user_sessions(request, session_user.id, db=db)
+
+    try:
+        from open_webui.routers.emails import load_smtp_settings
+        from open_webui.utils.email_delivery import deliver_email
+
+        settings = await load_smtp_settings()
+        if settings.get('enabled'):
+            variables = {
+                'platform_name': settings.get('sender_name') or 'ArtiChat',
+                'platform_url': settings.get('public_url') or '',
+                'user_name': session_user.name,
+                'old_email': old_email,
+                'new_email': email,
+                'changed_at': datetime.datetime.now(datetime.UTC).strftime('%Y-%m-%d %H:%M UTC'),
+            }
+            for recipient in {old_email, email}:
+                await deliver_email(
+                    template_key='email_changed',
+                    recipient=recipient,
+                    variables=variables,
+                    settings=settings,
+                    secret_key=WEBUI_SECRET_KEY,
+                    db=db,
+                )
+    except Exception:
+        log.warning('Email changed notice could not be dispatched', exc_info=True)
+    return True
+
+
 @router.post('/update/password', response_model=bool)
 async def update_password(
     request: Request,
@@ -381,6 +501,16 @@ async def update_password(
                 validate_password(form_data.new_password)
             except Exception as e:
                 raise HTTPException(400, detail=str(e))
+            try:
+                await authorize_sensitive_action(
+                    request,
+                    user,
+                    action='password',
+                    verification_token=form_data.verification_token,
+                    db=db,
+                )
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
             hashed = await get_password_hash(form_data.new_password)
             success = await Auths.update_user_password_by_id(user.id, hashed, db=db)
             if success:
@@ -390,6 +520,12 @@ async def update_password(
                     actor=user,
                     subject_id=user.id,
                     subject_type='user',
+                )
+                await notify_user(
+                    'password_changed',
+                    user,
+                    {'changed_at': datetime.datetime.now(datetime.UTC).strftime('%Y-%m-%d %H:%M UTC')},
+                    db=db,
                 )
             return success
         else:
@@ -769,6 +905,7 @@ async def signup_handler(
     *,
     db: AsyncSession,
     source: str = 'api',
+    email_verified_at: int | None = None,
 ) -> UserModel:
     """
     Core user-creation logic shared by the signup endpoint and
@@ -788,6 +925,7 @@ async def signup_handler(
         name=name,
         profile_image_url=profile_image_url,
         role=await Config.get('ui.default_user_role'),
+        email_verified_at=email_verified_at,
         db=db,
     )
     if not user:
@@ -844,11 +982,44 @@ async def signup(
     if await Users.get_user_by_email(form_data.email.lower(), db=db):
         raise HTTPException(400, detail=ERROR_MESSAGES.EMAIL_TAKEN)
 
+    registration_values = await Config.get_many(
+        'registration.allowed_domains',
+        'registration.allow_subdomains',
+        'registration.verification_enabled',
+    )
+    try:
+        email_verified_at = await resolve_signup_email_verified_at(
+            email=form_data.email,
+            has_users=has_users,
+            verification_token=form_data.verification_token,
+            registration_settings={
+                'allowed_domains': registration_values.get('registration.allowed_domains', []),
+                'allow_subdomains': registration_values.get('registration.allow_subdomains', False),
+                'verification_enabled': registration_values.get('registration.verification_enabled', False),
+            },
+            now=int(time.time()),
+            db=db,
+        )
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
     try:
         try:
             validate_password(form_data.password)
         except Exception as e:
             raise HTTPException(400, detail=str(e))
+
+        if has_users and form_data.verification_token and email_verified_at is not None:
+            try:
+                await claim_email_verification_ticket(
+                    form_data.verification_token,
+                    email=form_data.email,
+                    purpose='registration',
+                    now=int(time.time()),
+                    db=db,
+                )
+            except ValueError as exc:
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
         user = await signup_handler(
             request,
@@ -857,6 +1028,7 @@ async def signup(
             form_data.name,
             form_data.profile_image_url,
             db=db,
+            email_verified_at=email_verified_at,
         )
         await publish_event(
             request,
@@ -1060,7 +1232,10 @@ async def add_user(
             )
 
             expires_delta = parse_duration(await Config.get('auth.jwt_expiry'))
-            token = create_token(data={'id': user.id}, expires_delta=expires_delta)
+            token = create_token(
+                data={'id': user.id, 'auth_epoch': user.auth_epoch},
+                expires_delta=expires_delta,
+            )
             return {
                 'token': token,
                 'token_type': 'Bearer',

@@ -31,6 +31,7 @@ from open_webui.models.users import (
 from open_webui.models.access_grants import AccessGrants
 from open_webui.models.knowledge import Knowledges
 from open_webui.models.models import Models
+from open_webui.models.subscriptions import UserSubscriptions
 from open_webui.models.tools import Tools
 from open_webui.socket.main import disconnect_user_sessions
 from open_webui.utils.access_control import get_permissions, has_permission
@@ -90,6 +91,7 @@ async def get_users(
     # Fetch groups for all users in a single query to avoid N+1
     user_ids = [user.id for user in users]
     user_groups = await Groups.get_groups_by_member_ids(user_ids, db=db)
+    subscriptions = await UserSubscriptions.get_summaries_by_user_ids(user_ids, db=db)
 
     return {
         'users': [
@@ -97,6 +99,9 @@ async def get_users(
                 **{
                     **user.model_dump(),
                     'group_ids': [group.id for group in user_groups.get(user.id, [])],
+                    'subscription': (
+                        subscriptions[user.id].model_dump() if user.id in subscriptions else None
+                    ),
                 }
             )
             for user in users

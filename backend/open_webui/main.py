@@ -145,6 +145,7 @@ from open_webui.routers import (
     channels,
     chats,
     configs,
+    emails,
     evaluations,
     files,
     folders,
@@ -738,6 +739,7 @@ app.include_router(audio.router, prefix='/api/v1/audio', tags=['audio'])
 app.include_router(retrieval.router, prefix='/api/v1/retrieval', tags=['retrieval'])
 
 app.include_router(configs.router, prefix='/api/v1/configs', tags=['configs'])
+app.include_router(emails.router, prefix='/api/v1/emails', tags=['emails'])
 
 app.include_router(auths.router, prefix='/api/v1/auths', tags=['auths'])
 app.include_router(users.router, prefix='/api/v1/users', tags=['users'])
@@ -1135,6 +1137,7 @@ async def chat_completion(
             tool_servers = None
 
         metadata = {
+            'request_id': str(uuid4()),
             'user_id': user.id,
             'user_agent': request.headers.get('user-agent', '') or '',
             'chat_id': form_data.pop('chat_id', None) or '',
@@ -1500,6 +1503,7 @@ async def chat_completion(
         )
 
     async def process_chat(request, form_data, user, metadata, model, tasks=None):
+        request_started_at = time.perf_counter()
         try:
             form_data, metadata, events = await process_chat_payload(request, form_data, user, metadata, model)
 
@@ -1520,7 +1524,16 @@ async def chat_completion(
                     detail = f'Provider returned HTTP {response.status_code}'
                 raise Exception(detail)
 
-            ctx = await build_chat_response_context(request, form_data, user, model, metadata, tasks, events)
+            ctx = await build_chat_response_context(
+                request,
+                form_data,
+                user,
+                model,
+                metadata,
+                tasks,
+                events,
+                request_started_at=request_started_at,
+            )
 
             return await process_chat_response(response, ctx)
         except asyncio.CancelledError:
@@ -1632,6 +1645,7 @@ async def chat_completion(
             # Per-model metadata: own message_id + model
             per_model_metadata = {
                 **metadata,
+                'request_id': str(uuid4()),
                 'message_id': assistant_message_id,
                 'subscription_policy': metadata.get('subscription_policies', {}).get(target_model_id),
             }
@@ -1926,13 +1940,26 @@ async def get_app_config(request: Request):
         'ui.pending_user_overlay_title',
         'ui.pending_user_overlay_content',
         'ui.watermark',
+        'platform.name',
+        'platform.about_title',
+        'platform.about_content',
+        'platform.logo_light',
+        'platform.logo_dark',
     )
 
+    platform_name = config.get('platform.name') or app.state.WEBUI_NAME
+    app.state.WEBUI_NAME = platform_name
     return {
         **({'onboarding': True} if onboarding else {}),
         'status': True,
-        'name': app.state.WEBUI_NAME,
+        'name': platform_name,
         'version': VERSION,
+        'branding': {
+            'about_title': config.get('platform.about_title') or '',
+            'about_content': config.get('platform.about_content') or '',
+            'logo_light': config.get('platform.logo_light') or '/static/favicon.png',
+            'logo_dark': config.get('platform.logo_dark') or '/static/favicon-dark.png',
+        },
         'default_locale': str(DEFAULT_LOCALE),
         'oauth': {
             'providers': {name: config.get('name', name) for name, config in OAUTH_PROVIDERS.items()},

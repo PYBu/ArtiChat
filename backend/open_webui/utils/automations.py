@@ -508,7 +508,7 @@ async def execute_automation(app, automation: AutomationModel) -> None:
         except ValueError:
             expires_delta = None
         token = create_token(
-            data={'id': user.id, 'typ': 'automation'},
+            data={'id': user.id, 'typ': 'automation', 'auth_epoch': user.auth_epoch},
             expires_delta=expires_delta or timedelta(hours=1),
         )
         request = _build_request(app, token=token)

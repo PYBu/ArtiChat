@@ -11,11 +11,12 @@ from typing import Any, AsyncIterator
 from open_webui.internal.db import Base, get_async_db_context
 from open_webui.models.users import User
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import BigInteger, Boolean, Column, Index, Integer, JSON, Text, or_, select
+from sqlalchemy import BigInteger, Boolean, Column, Index, Integer, JSON, Text, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 CHATPOINT_MICROS = 1_000_000
 TOKENS_PER_CHATPOINT = 10_000
+TOKENS_PER_MILLION = 1_000_000
 
 FREE_TIER = 'free'
 PLUS_TIER = 'plus'
@@ -56,6 +57,35 @@ def calculate_cost_micros(total_tokens: int, usage_multiplier: str | Decimal | i
         return 0
 
     raw_chatpoints = Decimal(total_tokens) / Decimal(TOKENS_PER_CHATPOINT) * multiplier
+    return chatpoint_to_micros(raw_chatpoints)
+
+
+def calculate_token_cost_micros(
+    *,
+    input_tokens: int,
+    output_tokens: int,
+    cache_creation_tokens: int,
+    cache_read_tokens: int,
+    input_chatpoint_per_million: str | Decimal | int,
+    output_chatpoint_per_million: str | Decimal | int,
+    cache_creation_chatpoint_per_million: str | Decimal | int,
+    cache_read_chatpoint_per_million: str | Decimal | int,
+) -> int:
+    token_counts = [input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens]
+    prices = [
+        Decimal(str(input_chatpoint_per_million)),
+        Decimal(str(output_chatpoint_per_million)),
+        Decimal(str(cache_creation_chatpoint_per_million)),
+        Decimal(str(cache_read_chatpoint_per_million)),
+    ]
+    if any(value < 0 for value in token_counts):
+        raise ValueError('token counts must be greater than or equal to 0')
+    if any(not value.is_finite() or value < 0 for value in prices):
+        raise ValueError('token prices must be greater than or equal to 0')
+
+    raw_chatpoints = sum(Decimal(tokens) * price for tokens, price in zip(token_counts, prices)) / Decimal(
+        TOKENS_PER_MILLION
+    )
     return chatpoint_to_micros(raw_chatpoints)
 
 
@@ -262,19 +292,30 @@ class SubscriptionUsage(Base):
     user_id = Column(Text, nullable=False, index=True)
     chat_id = Column(Text, nullable=True)
     message_id = Column(Text, nullable=True)
+    request_id = Column(Text, nullable=True, index=True)
     model_id = Column(Text, nullable=False, index=True)
     tier = Column(Text, nullable=False)
     quota_mode = Column(Text, nullable=False)
     usage_multiplier = Column(Text, nullable=False, default='1')
     input_tokens = Column(Integer, nullable=False, default=0)
     output_tokens = Column(Integer, nullable=False, default=0)
+    cache_creation_tokens = Column(Integer, nullable=True)
+    cache_read_tokens = Column(Integer, nullable=True)
     total_tokens = Column(Integer, nullable=False, default=0)
+    input_chatpoint_per_million = Column(Text, nullable=True)
+    output_chatpoint_per_million = Column(Text, nullable=True)
+    cache_creation_chatpoint_per_million = Column(Text, nullable=True)
+    cache_read_chatpoint_per_million = Column(Text, nullable=True)
     cost_micros = Column(BigInteger, nullable=False, default=0)
     plan_cost_micros = Column(BigInteger, nullable=False, default=0)
     check_cost_micros = Column(BigInteger, nullable=False, default=0)
     plan_balance_after_micros = Column(BigInteger, nullable=True)
     check_balance_after_micros = Column(BigInteger, nullable=True)
+    first_token_latency_ms = Column(Integer, nullable=True)
+    total_duration_ms = Column(Integer, nullable=True)
+    client_ip = Column(Text, nullable=True)
     status = Column(Text, nullable=False)
+    raw_usage = Column(JSON, nullable=True)
     meta = Column('metadata', JSON, nullable=True)
     created_at = Column(BigInteger, nullable=False)
 
@@ -301,6 +342,7 @@ class SubscriptionPlansTable:
             existing = await session.execute(select(SubscriptionPlan))
             existing_plans = {plan.id: plan for plan in existing.scalars().all()}
             timestamp = now_ts()
+            defaults_changed = False
 
             defaults = [
                 (
@@ -365,10 +407,10 @@ class SubscriptionPlansTable:
                     plan = existing_plans[plan_id]
                     legacy_names, legacy_descriptions = legacy_defaults[plan_id]
                     changed = False
-                    if plan.display_name in legacy_names:
+                    if plan.display_name != display_name and plan.display_name in legacy_names:
                         plan.display_name = display_name
                         changed = True
-                    if plan.description in legacy_descriptions:
+                    if plan.description != description and plan.description in legacy_descriptions:
                         plan.description = description
                         changed = True
                     legacy_allowances = {chatpoint_to_micros(item) for item in LEGACY_PLAN_CHATPOINTS[plan_id]}
@@ -380,6 +422,7 @@ class SubscriptionPlansTable:
                         changed = True
                     if changed:
                         plan.updated_at = timestamp
+                        defaults_changed = True
                     continue
                 session.add(
                     SubscriptionPlan(
@@ -396,7 +439,9 @@ class SubscriptionPlansTable:
                         updated_at=timestamp,
                     )
                 )
-            await session.commit()
+                defaults_changed = True
+            if defaults_changed:
+                await session.commit()
 
     async def get_plans(self, db: AsyncSession | None = None) -> list[SubscriptionPlanModel]:
         async with get_subscription_db_context(db) as session:
@@ -471,6 +516,19 @@ class UserSubscriptionModel(BaseModel):
     updated_at: int
 
 
+class UserSubscriptionSummaryModel(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    user_id: str
+    tier: str
+    display_name: str
+    status: str
+    expires_at: int | None = None
+    plan_balance_micros: int
+    check_balance_micros: int
+    notes: str | None = None
+
+
 class SubscriptionLedgerModel(BaseModel):
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
@@ -524,6 +582,7 @@ class SubscriptionLedgersTable:
         metadata: dict | None = None,
         created_by: str | None = None,
         created_at: int | None = None,
+        commit: bool = True,
         db: AsyncSession | None = None,
     ) -> SubscriptionLedgerModel:
         async with get_subscription_db_context(db) as session:
@@ -544,8 +603,11 @@ class SubscriptionLedgersTable:
                 created_at=created_at or now_ts(),
             )
             session.add(row)
-            await session.commit()
-            await session.refresh(row)
+            if commit:
+                await session.commit()
+                await session.refresh(row)
+            else:
+                await session.flush()
             return SubscriptionLedgerModel.model_validate(row)
 
     async def get_recent_for_user(
@@ -602,6 +664,37 @@ class UserSubscriptionsTable:
             result = await session.execute(select(UserSubscription).filter(UserSubscription.user_id == user_id))
             row = result.scalar_one_or_none()
             return UserSubscriptionModel.model_validate(row) if row else None
+
+    async def lock_for_billing(
+        self, user_id: str, db: AsyncSession | None = None
+    ) -> UserSubscriptionModel:
+        async with get_subscription_db_context(db) as session:
+            locked = await session.execute(
+                update(UserSubscription)
+                .where(UserSubscription.user_id == user_id)
+                .values(updated_at=UserSubscription.updated_at)
+            )
+            if locked.rowcount != 1:
+                raise ValueError(f'user subscription not found: {user_id}')
+            result = await session.execute(
+                select(UserSubscription)
+                .where(UserSubscription.user_id == user_id)
+                .execution_options(populate_existing=True)
+            )
+            return UserSubscriptionModel.model_validate(result.scalar_one())
+
+    async def get_summaries_by_user_ids(
+        self, user_ids: list[str], db: AsyncSession | None = None
+    ) -> dict[str, UserSubscriptionSummaryModel]:
+        unique_ids = list(dict.fromkeys([item for item in user_ids if item]))
+        if not unique_ids:
+            return {}
+        async with get_subscription_db_context(db) as session:
+            result = await session.execute(select(UserSubscription).filter(UserSubscription.user_id.in_(unique_ids)))
+            return {
+                row.user_id: UserSubscriptionSummaryModel.model_validate(row)
+                for row in result.scalars().all()
+            }
 
     async def create_from_plan(
         self,
@@ -663,6 +756,7 @@ class UserSubscriptionsTable:
         check_delta_micros: int = 0,
         event_type: str,
         created_by: str | None,
+        commit: bool = True,
         db: AsyncSession | None = None,
     ) -> UserSubscriptionModel:
         async with get_subscription_db_context(db) as session:
@@ -681,8 +775,11 @@ class UserSubscriptionsTable:
             row.plan_balance_micros = sub.plan_balance_micros + plan_delta_micros
             row.check_balance_micros = sub.check_balance_micros + check_delta_micros
             row.updated_at = now_ts()
-            await session.commit()
-            await session.refresh(row)
+            if commit:
+                await session.commit()
+                await session.refresh(row)
+            else:
+                await session.flush()
             model = UserSubscriptionModel.model_validate(row)
             await SubscriptionLedgers.insert(
                 user_id=user_id,
@@ -694,6 +791,7 @@ class UserSubscriptionsTable:
                 plan_balance_after_micros=model.plan_balance_micros,
                 check_balance_after_micros=model.check_balance_micros,
                 created_by=created_by,
+                commit=commit,
                 db=session,
             )
             return model
@@ -839,23 +937,33 @@ class RedemptionCodesTable:
 
         timestamp = now or now_ts()
         resolved_batch_id = batch_id or new_id('batch')
-        raw_codes = []
-        code_ids = []
+        raw_codes: list[str] = []
+        code_hashes: list[str] = []
+        seen_hashes: set[str] = set()
+        for _ in range(quantity):
+            raw_code = normalize_redemption_code(custom_code) if custom_code else generate_redemption_code()
+            code_hash = hash_redemption_code(raw_code)
+            if code_hash in seen_hashes:
+                raise ValueError('REDEMPTION_CODE_DUPLICATE')
+            raw_codes.append(raw_code)
+            code_hashes.append(code_hash)
+            seen_hashes.add(code_hash)
 
         async with get_subscription_db_context(db) as session:
-            for _ in range(quantity):
-                raw_code = normalize_redemption_code(custom_code) if custom_code else generate_redemption_code()
-                existing = await session.execute(
-                    select(RedemptionCode).filter(RedemptionCode.code_hash == hash_redemption_code(raw_code))
-                )
-                if existing.scalar_one_or_none() is not None:
-                    raise ValueError('REDEMPTION_CODE_DUPLICATE')
+            existing = await session.execute(
+                select(RedemptionCode.code_hash).where(RedemptionCode.code_hash.in_(code_hashes))
+            )
+            if existing.first() is not None:
+                raise ValueError('REDEMPTION_CODE_DUPLICATE')
+
+            code_ids: list[str] = []
+            for raw_code, code_hash in zip(raw_codes, code_hashes):
                 code_id = new_id('code')
                 session.add(
                     RedemptionCode(
                         id=code_id,
                         code=raw_code,
-                        code_hash=hash_redemption_code(raw_code),
+                        code_hash=code_hash,
                         code_preview=preview_redemption_code(raw_code),
                         mode=mode,
                         max_uses=max_uses,
@@ -873,7 +981,6 @@ class RedemptionCodesTable:
                         updated_at=timestamp,
                     )
                 )
-                raw_codes.append(raw_code)
                 code_ids.append(code_id)
             await session.commit()
         return RedemptionCodeCreateResult(raw_codes=raw_codes, code_ids=code_ids)
@@ -1248,20 +1355,52 @@ class SubscriptionUsageModel(BaseModel):
     user_id: str
     chat_id: str | None = None
     message_id: str | None = None
+    request_id: str | None = None
     model_id: str
     tier: str
     quota_mode: str
     usage_multiplier: str
     input_tokens: int
     output_tokens: int
+    cache_creation_tokens: int | None = None
+    cache_read_tokens: int | None = None
     total_tokens: int
+    input_chatpoint_per_million: str | None = None
+    output_chatpoint_per_million: str | None = None
+    cache_creation_chatpoint_per_million: str | None = None
+    cache_read_chatpoint_per_million: str | None = None
     cost_micros: int
     plan_cost_micros: int
     check_cost_micros: int
     plan_balance_after_micros: int | None = None
     check_balance_after_micros: int | None = None
+    first_token_latency_ms: int | None = None
+    total_duration_ms: int | None = None
+    client_ip: str | None = None
     status: str
+    raw_usage: dict | None = None
     metadata: dict | None = Field(default=None, alias='meta')
+    created_at: int
+
+
+class SubscriptionUsagePublicModel(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    model_id: str
+    tier: str
+    quota_mode: str
+    input_tokens: int
+    output_tokens: int
+    cache_creation_tokens: int | None = None
+    cache_read_tokens: int | None = None
+    total_tokens: int
+    cost_micros: int
+    plan_cost_micros: int
+    check_cost_micros: int
+    first_token_latency_ms: int | None = None
+    total_duration_ms: int | None = None
+    status: str
     created_at: int
 
 
@@ -1272,21 +1411,33 @@ class SubscriptionUsagesTable:
         user_id: str,
         chat_id: str | None,
         message_id: str | None,
+        request_id: str | None = None,
         model_id: str,
         tier: str,
         quota_mode: str,
         usage_multiplier: str,
         input_tokens: int,
         output_tokens: int,
+        cache_creation_tokens: int | None = None,
+        cache_read_tokens: int | None = None,
         total_tokens: int,
+        input_chatpoint_per_million: str | None = None,
+        output_chatpoint_per_million: str | None = None,
+        cache_creation_chatpoint_per_million: str | None = None,
+        cache_read_chatpoint_per_million: str | None = None,
         cost_micros: int,
         plan_cost_micros: int,
         check_cost_micros: int,
         plan_balance_after_micros: int | None,
         check_balance_after_micros: int | None,
+        first_token_latency_ms: int | None = None,
+        total_duration_ms: int | None = None,
+        client_ip: str | None = None,
         status: str,
+        raw_usage: dict | None = None,
         metadata: dict | None,
         created_at: int,
+        commit: bool = True,
         db: AsyncSession | None = None,
     ) -> SubscriptionUsageModel:
         async with get_subscription_db_context(db) as session:
@@ -1295,25 +1446,39 @@ class SubscriptionUsagesTable:
                 user_id=user_id,
                 chat_id=chat_id,
                 message_id=message_id,
+                request_id=request_id,
                 model_id=model_id,
                 tier=tier,
                 quota_mode=quota_mode,
                 usage_multiplier=usage_multiplier,
                 input_tokens=input_tokens,
                 output_tokens=output_tokens,
+                cache_creation_tokens=cache_creation_tokens,
+                cache_read_tokens=cache_read_tokens,
                 total_tokens=total_tokens,
+                input_chatpoint_per_million=input_chatpoint_per_million,
+                output_chatpoint_per_million=output_chatpoint_per_million,
+                cache_creation_chatpoint_per_million=cache_creation_chatpoint_per_million,
+                cache_read_chatpoint_per_million=cache_read_chatpoint_per_million,
                 cost_micros=cost_micros,
                 plan_cost_micros=plan_cost_micros,
                 check_cost_micros=check_cost_micros,
                 plan_balance_after_micros=plan_balance_after_micros,
                 check_balance_after_micros=check_balance_after_micros,
+                first_token_latency_ms=first_token_latency_ms,
+                total_duration_ms=total_duration_ms,
+                client_ip=client_ip,
                 status=status,
+                raw_usage=json_safe_metadata(raw_usage),
                 meta=json_safe_metadata(metadata),
                 created_at=created_at,
             )
             session.add(row)
-            await session.commit()
-            await session.refresh(row)
+            if commit:
+                await session.commit()
+                await session.refresh(row)
+            else:
+                await session.flush()
             return SubscriptionUsageModel.model_validate(row)
 
     async def get_usage_summary(
@@ -1321,47 +1486,73 @@ class SubscriptionUsagesTable:
         *,
         user_id: str | None = None,
         model_id: str | None = None,
+        status: str | None = None,
         start_at: int | None = None,
         end_at: int | None = None,
         limit: int = 100,
         offset: int = 0,
         include_user: bool = False,
+        public: bool = False,
         db: AsyncSession | None = None,
     ) -> dict:
         async with get_subscription_db_context(db) as session:
+            filters = []
+            if user_id:
+                filters.append(SubscriptionUsage.user_id == user_id)
+            if model_id:
+                filters.append(SubscriptionUsage.model_id == model_id)
+            if status:
+                filters.append(SubscriptionUsage.status == status)
+            if start_at is not None:
+                filters.append(SubscriptionUsage.created_at >= start_at)
+            if end_at is not None:
+                filters.append(SubscriptionUsage.created_at <= end_at)
+
             if include_user:
                 stmt = select(SubscriptionUsage, User).outerjoin(User, User.id == SubscriptionUsage.user_id)
             else:
                 stmt = select(SubscriptionUsage)
-            if user_id:
-                stmt = stmt.filter(SubscriptionUsage.user_id == user_id)
-            if model_id:
-                stmt = stmt.filter(SubscriptionUsage.model_id == model_id)
-            if start_at is not None:
-                stmt = stmt.filter(SubscriptionUsage.created_at >= start_at)
-            if end_at is not None:
-                stmt = stmt.filter(SubscriptionUsage.created_at <= end_at)
+            stmt = stmt.where(*filters)
             result = await session.execute(
                 stmt.order_by(SubscriptionUsage.created_at.desc()).limit(limit).offset(offset)
             )
             if include_user:
+                usage_rows = result.all()
+                usage_models = [SubscriptionUsageModel.model_validate(usage) for usage, _ in usage_rows]
                 items = [
                     {
-                        'usage': SubscriptionUsageModel.model_validate(usage),
+                        'usage': usage_model,
                         'user': user_summary(user),
-                        **SubscriptionUsageModel.model_validate(usage).model_dump(by_alias=True),
+                        **usage_model.model_dump(by_alias=True),
                     }
-                    for usage, user in result.all()
+                    for usage_model, (_, user) in zip(usage_models, usage_rows)
                 ]
-                usage_models = [item['usage'] for item in items]
             else:
-                usage_models = [SubscriptionUsageModel.model_validate(row) for row in result.scalars().all()]
-                items = usage_models
+                rows = result.scalars().all()
+                usage_models = [SubscriptionUsageModel.model_validate(row) for row in rows]
+                if public:
+                    items = [SubscriptionUsagePublicModel.model_validate(row) for row in rows]
+                else:
+                    items = usage_models
+
+            totals = (
+                await session.execute(
+                    select(
+                        func.coalesce(func.sum(SubscriptionUsage.cost_micros), 0),
+                        func.coalesce(func.sum(SubscriptionUsage.input_tokens), 0),
+                        func.coalesce(func.sum(SubscriptionUsage.output_tokens), 0),
+                        func.coalesce(func.sum(SubscriptionUsage.cache_creation_tokens), 0),
+                        func.coalesce(func.sum(SubscriptionUsage.cache_read_tokens), 0),
+                    ).where(*filters)
+                )
+            ).one()
             return {
                 'items': items,
-                'total_cost_micros': sum(item.cost_micros for item in usage_models),
-                'total_input_tokens': sum(item.input_tokens for item in usage_models),
-                'total_output_tokens': sum(item.output_tokens for item in usage_models),
+                'total_cost_micros': int(totals[0]),
+                'total_input_tokens': int(totals[1]),
+                'total_output_tokens': int(totals[2]),
+                'total_cache_creation_tokens': int(totals[3]),
+                'total_cache_read_tokens': int(totals[4]),
             }
 
 

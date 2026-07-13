@@ -1942,7 +1942,7 @@ class OAuthManager:
                     )
 
             jwt_token = create_token(
-                data={'id': user.id},
+                data={'id': user.id, 'auth_epoch': user.auth_epoch},
                 expires_delta=parse_duration(auth_config.JWT_EXPIRES_IN),
             )
             if auth_config.ENABLE_OAUTH_GROUP_MANAGEMENT:

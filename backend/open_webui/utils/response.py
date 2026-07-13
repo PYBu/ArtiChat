@@ -41,12 +41,16 @@ def normalize_usage(usage: dict) -> dict:
     )
 
     total_tokens = usage.get('total_tokens') or (input_tokens + output_tokens)
+    cache_creation_tokens = usage.get('cache_creation_tokens') or usage.get('cache_creation_input_tokens') or 0
+    cache_read_tokens = usage.get('cache_read_tokens') or usage.get('cache_read_input_tokens') or 0
 
     # Add standardized fields to original data
     result = dict(usage)
     result['input_tokens'] = int(input_tokens)
     result['output_tokens'] = int(output_tokens)
     result['total_tokens'] = int(total_tokens)
+    result['cache_creation_tokens'] = int(cache_creation_tokens)
+    result['cache_read_tokens'] = int(cache_read_tokens)
 
     return result
 
@@ -57,6 +61,10 @@ USAGE_TOKEN_KEYS = {
     'total_tokens',
     'prompt_tokens',
     'completion_tokens',
+    'cache_creation_tokens',
+    'cache_read_tokens',
+    'cache_creation_input_tokens',
+    'cache_read_input_tokens',
 }
 
 USAGE_COST_KEYS = {

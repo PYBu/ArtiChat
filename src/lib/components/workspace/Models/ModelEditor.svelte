@@ -48,7 +48,11 @@
 	const DEFAULT_SUBSCRIPTION_POLICY = {
 		allowed_tiers: ['free', 'plus', 'chatpower'],
 		quota_mode: 'metered',
-		usage_multiplier: '1'
+		usage_multiplier: '1',
+		input_chatpoint_per_million: '100',
+		output_chatpoint_per_million: '100',
+		cache_creation_chatpoint_per_million: '0',
+		cache_read_chatpoint_per_million: '0'
 	};
 
 	let loading = false;

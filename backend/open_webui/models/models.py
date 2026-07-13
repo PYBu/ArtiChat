@@ -6,7 +6,7 @@ import time
 from typing import Optional
 
 from open_webui.internal.db import Base, JSONField, get_async_db_context
-from open_webui.models.access_grants import AccessGrantModel, AccessGrants
+from open_webui.models.access_grants import AccessGrant, AccessGrantModel, AccessGrants
 from open_webui.models.groups import Groups
 from open_webui.models.users import User, UserModel, UserResponse, Users
 from open_webui.utils.validate import validate_profile_image_url
@@ -489,6 +489,57 @@ class ModelsTable:
                 return await self._to_model_model(model, db=db)
             except Exception:
                 return None
+
+    async def update_model_subscription_policies(
+        self,
+        policies: dict[str, dict],
+        db: AsyncSession | None = None,
+    ) -> list[ModelModel]:
+        async def update_in_session(session: AsyncSession) -> list[ModelModel]:
+            ids = list(policies)
+            try:
+                result = await session.execute(select(Model).filter(Model.id.in_(ids)))
+                rows = {row.id: row for row in result.scalars().all()}
+                missing = [model_id for model_id in ids if model_id not in rows]
+                if missing:
+                    raise ValueError(f'MODEL_NOT_FOUND: {missing[0]}')
+
+                updated_at = int(time.time())
+                for model_id, policy in policies.items():
+                    row = rows[model_id]
+                    meta = dict(row.meta or {})
+                    meta['subscription'] = policy
+                    row.meta = meta
+                    row.updated_at = updated_at
+
+                await session.commit()
+            except Exception:
+                await session.rollback()
+                raise
+
+            grants_result = await session.execute(
+                select(AccessGrant).filter(
+                    AccessGrant.resource_type == 'model',
+                    AccessGrant.resource_id.in_(ids),
+                )
+            )
+            grants_map: dict[str, list[AccessGrantModel]] = {model_id: [] for model_id in ids}
+            for grant in grants_result.scalars().all():
+                grants_map[grant.resource_id].append(AccessGrantModel.model_validate(grant))
+
+            return [
+                await self._to_model_model(
+                    rows[model_id],
+                    access_grants=grants_map[model_id],
+                    db=session,
+                )
+                for model_id in ids
+            ]
+
+        if db is not None:
+            return await update_in_session(db)
+        async with get_async_db_context() as session:
+            return await update_in_session(session)
 
     async def update_model_by_id(self, id: str, model: ModelForm, db: AsyncSession | None = None) -> ModelModel | None:
         try:

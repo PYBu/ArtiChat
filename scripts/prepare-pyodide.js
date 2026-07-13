@@ -71,8 +71,10 @@ async function downloadPackages() {
 		return;
 	}
 
-	const packageJson = JSON.parse(await readFile('package.json'));
-	const pyodideVersion = packageJson.dependencies.pyodide.replace('^', '');
+	const installedPyodidePackageJson = JSON.parse(
+		await readFile('node_modules/pyodide/package.json')
+	);
+	const pyodideVersion = installedPyodidePackageJson.version;
 
 	try {
 		const pyodidePackageJson = JSON.parse(await readFile('static/pyodide/package.json'));

@@ -19,6 +19,10 @@
 
 <div id="tab-about" class="flex flex-col h-full justify-between space-y-3 text-sm">
 	<div class=" space-y-3 overflow-y-scroll max-h-[28rem] md:max-h-full">
+		{#if $config?.branding?.about_title || $config?.branding?.about_content}
+			<div class="space-y-2"><div class="text-base font-medium">{$config?.branding?.about_title}</div><div class="whitespace-pre-wrap text-xs text-gray-600 dark:text-gray-300">{$config?.branding?.about_content}</div></div>
+			<hr class="border-gray-100/30 dark:border-gray-850/30" />
+		{/if}
 		<div>
 			<div class=" mb-2.5 text-sm font-medium flex space-x-2 items-center">
 				<div>
@@ -87,5 +91,6 @@
 			<pre
 				class="text-xs text-gray-400 dark:text-gray-500">Copyright (c) {new Date().getFullYear()} Artivis | Artivis Studio. All rights reserved.</pre>
 		</div>
+		<div class="pt-2 text-xs text-gray-500">ArtiChat v{WEBUI_DISPLAY_VERSION}</div>
 	</div>
 </div>

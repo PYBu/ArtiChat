@@ -40,6 +40,7 @@ except ImportError:
     print('dotenv not installed, skipping...')
 
 DOCKER = os.getenv('DOCKER', 'False').lower() == 'true'
+TRUSTED_PROXY_IPS = os.getenv('TRUSTED_PROXY_IPS', '')
 
 USE_CUDA = os.getenv('USE_CUDA_DOCKER', 'false')
 DEVICE_TYPE = 'cpu'

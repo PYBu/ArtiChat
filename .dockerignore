@@ -4,12 +4,16 @@ docs
 kubernetes
 node_modules
 /.svelte-kit
+/build
+/deploy-backups
+/.pytest_cache
 /package
 .env
 .env.*
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
-__pycache__
+**/__pycache__
+**/*.pyc
 .idea
 venv
 _old

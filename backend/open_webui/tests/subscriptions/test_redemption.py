@@ -1,4 +1,7 @@
 import pytest
+from sqlalchemy import event
+
+import open_webui.models.subscriptions as subscription_models
 
 from open_webui.models.subscriptions import (
     CHATPOWER_TIER,
@@ -9,6 +12,42 @@ from open_webui.models.subscriptions import (
     chatpoint_to_micros,
 )
 from open_webui.utils.subscriptions import redeem_code
+
+
+@pytest.mark.asyncio
+async def test_batch_code_creation_checks_existing_hashes_once(db_session, monkeypatch):
+    generated = iter(['BATCH-CODE-001', 'BATCH-CODE-002', 'BATCH-CODE-003'])
+    monkeypatch.setattr(subscription_models, 'generate_redemption_code', lambda: next(generated))
+    statements: list[str] = []
+
+    def record_statement(_conn, _cursor, statement, _parameters, _context, _executemany):
+        statements.append(statement)
+
+    event.listen(db_session.bind.sync_engine, 'before_cursor_execute', record_statement)
+    try:
+        created = await RedemptionCodes.create_codes(
+            mode='single_use',
+            quantity=3,
+            max_uses=1,
+            tier=None,
+            duration_days=None,
+            plan_chatpoint_micros=0,
+            check_chatpoint_micros=0,
+            expires_at=None,
+            memo='batch query check',
+            created_by='admin',
+            db=db_session,
+        )
+    finally:
+        event.remove(db_session.bind.sync_engine, 'before_cursor_execute', record_statement)
+
+    duplicate_checks = [
+        statement
+        for statement in statements
+        if statement.lstrip().upper().startswith('SELECT') and 'redemption_code' in statement.lower()
+    ]
+    assert created.raw_codes == ['BATCH-CODE-001', 'BATCH-CODE-002', 'BATCH-CODE-003']
+    assert len(duplicate_checks) == 1
 
 
 @pytest.mark.asyncio

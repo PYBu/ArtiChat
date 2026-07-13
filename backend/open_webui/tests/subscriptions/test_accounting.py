@@ -3,6 +3,7 @@ from decimal import Decimal
 from open_webui.models.subscriptions import (
     CHATPOINT_MICROS,
     calculate_cost_micros,
+    calculate_token_cost_micros,
     chatpoint_to_micros,
     debit_balances,
     micros_to_chatpoint,
@@ -33,6 +34,68 @@ def test_negative_multiplier_is_rejected():
         assert 'usage_multiplier must be greater than or equal to 0' in str(exc)
     else:
         raise AssertionError('negative multiplier should fail')
+
+
+def test_four_part_cost_uses_independent_token_prices():
+    assert calculate_token_cost_micros(
+        input_tokens=1_000_000,
+        output_tokens=500_000,
+        cache_creation_tokens=250_000,
+        cache_read_tokens=100_000,
+        input_chatpoint_per_million='10',
+        output_chatpoint_per_million='20',
+        cache_creation_chatpoint_per_million='4',
+        cache_read_chatpoint_per_million='1',
+    ) == chatpoint_to_micros('21.1')
+
+
+def test_four_part_cost_rounds_up_to_one_chatpoint_micro():
+    assert calculate_token_cost_micros(
+        input_tokens=1,
+        output_tokens=0,
+        cache_creation_tokens=0,
+        cache_read_tokens=0,
+        input_chatpoint_per_million='0.000001',
+        output_chatpoint_per_million='0',
+        cache_creation_chatpoint_per_million='0',
+        cache_read_chatpoint_per_million='0',
+    ) == 1
+
+
+def test_four_part_cost_rejects_negative_counts_and_prices():
+    base = {
+        'input_tokens': 1,
+        'output_tokens': 1,
+        'cache_creation_tokens': 1,
+        'cache_read_tokens': 1,
+        'input_chatpoint_per_million': '1',
+        'output_chatpoint_per_million': '1',
+        'cache_creation_chatpoint_per_million': '1',
+        'cache_read_chatpoint_per_million': '1',
+    }
+
+    for field in ('input_tokens', 'output_tokens', 'cache_creation_tokens', 'cache_read_tokens'):
+        values = {**base, field: -1}
+        try:
+            calculate_token_cost_micros(**values)
+        except ValueError as exc:
+            assert 'token counts must be greater than or equal to 0' in str(exc)
+        else:
+            raise AssertionError(f'negative {field} should fail')
+
+    for field in (
+        'input_chatpoint_per_million',
+        'output_chatpoint_per_million',
+        'cache_creation_chatpoint_per_million',
+        'cache_read_chatpoint_per_million',
+    ):
+        values = {**base, field: '-1'}
+        try:
+            calculate_token_cost_micros(**values)
+        except ValueError as exc:
+            assert 'token prices must be greater than or equal to 0' in str(exc)
+        else:
+            raise AssertionError(f'negative {field} should fail')
 
 
 def test_debit_uses_plan_before_check():

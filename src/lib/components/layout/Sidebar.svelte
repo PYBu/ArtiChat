@@ -29,7 +29,8 @@
 		selectedFolder,
 		WEBUI_NAME,
 		sidebarWidth,
-		activeChatIds
+		activeChatIds,
+		subscriptionRefreshTick
 	} from '$lib/stores';
 	import { onMount, getContext, tick, onDestroy } from 'svelte';
 
@@ -57,6 +58,7 @@
 	import { createNewNote, getPinnedNoteList, toggleNotePinnedStatusById } from '$lib/apis/notes';
 	import { updateUserSettings } from '$lib/apis/users';
 	import { checkActiveChats } from '$lib/apis/tasks';
+	import { getPendingGiftCards } from '$lib/apis/subscriptions';
 	import { createNoteHandler } from '$lib/components/notes/utils';
 	import { WEBUI_API_BASE_URL, WEBUI_BASE_URL } from '$lib/constants';
 
@@ -68,6 +70,7 @@
 	import Loader from '../common/Loader.svelte';
 	import Folder from '../common/Folder.svelte';
 	import Tooltip from '../common/Tooltip.svelte';
+	import ThemeLogo from '../common/ThemeLogo.svelte';
 	import Folders from './Sidebar/Folders.svelte';
 	import SharedFolderItem from './Sidebar/SharedFolderItem.svelte';
 	import { getChannels, createNewChannel } from '$lib/apis/channels';
@@ -87,6 +90,16 @@
 
 	const BREAKPOINT = 768;
 	const DEFAULT_PINNED_ITEMS = ['notes', 'workspace'];
+	let hasPendingGift = false;
+
+	const loadPendingGiftCards = async () => {
+		if (!$user || !localStorage.token) {
+			hasPendingGift = false;
+			return;
+		}
+		const response = await getPendingGiftCards(localStorage.token).catch(() => ({ items: [] }));
+		hasPendingGift = (response?.items ?? []).length > 0;
+	};
 
 	let scrollTop = 0;
 
@@ -507,7 +520,9 @@
 		}
 	};
 
-	const onFocus = () => {};
+	const onFocus = () => {
+		loadPendingGiftCards();
+	};
 
 	const onBlur = () => {
 		shiftKey = false;
@@ -564,6 +579,9 @@
 		showSidebar.set(!$mobile ? localStorage.sidebar === 'true' : false);
 
 		const unsubscribers = [
+			subscriptionRefreshTick.subscribe(() => {
+				loadPendingGiftCards();
+			}),
 			mobile.subscribe((value) => {
 				if ($showSidebar && value) {
 					showSidebar.set(false);
@@ -846,11 +864,7 @@
 						aria-label={$showSidebar ? $i18n.t('Close Sidebar') : $i18n.t('Open Sidebar')}
 					>
 						<div class=" self-center flex items-center justify-center size-9">
-							<img
-								src="{WEBUI_BASE_URL}/static/favicon.png"
-								class="sidebar-new-chat-icon size-6 rounded-full group-hover:hidden"
-								alt=""
-							/>
+							<ThemeLogo kind="mark" className="sidebar-new-chat-icon size-6 rounded-full group-hover:hidden" />
 
 							<Sidebar className="size-5 hidden group-hover:flex" />
 						</div>
@@ -1056,12 +1070,7 @@
 					draggable="false"
 					on:click={newChatHandler}
 				>
-					<img
-						crossorigin="anonymous"
-						src="{WEBUI_BASE_URL}/static/favicon.png"
-						class="sidebar-new-chat-icon size-6 rounded-full"
-						alt=""
-					/>
+					<ThemeLogo kind="mark" className="sidebar-new-chat-icon size-6 rounded-full" />
 				</a>
 
 				<a href="/" class="flex flex-1 px-0.5" on:click={newChatHandler}>
@@ -1609,6 +1618,22 @@
 				></div>
 				<div class="flex flex-col font-primary">
 					{#if $user !== undefined && $user !== null}
+						{#if hasPendingGift}
+							<button
+								id="pending-gift-entry"
+								type="button"
+								class="mb-1 w-full rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-left text-xs font-medium text-green-800 transition hover:bg-green-100 dark:border-green-900 dark:bg-green-950/30 dark:text-green-200 dark:hover:bg-green-950/50"
+								on:click={async () => {
+									await showSettings.set('redeem_code');
+									if ($mobile) {
+										await tick();
+										showSidebar.set(false);
+									}
+								}}
+							>
+								可领取的礼品
+							</button>
+						{/if}
 						<UserMenu
 							role={$user?.role}
 							profile={$config?.features?.enable_user_status ?? true}

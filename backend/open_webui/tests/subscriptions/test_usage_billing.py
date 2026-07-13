@@ -1,6 +1,15 @@
-import pytest
+import asyncio
 
-from open_webui.models.subscriptions import SubscriptionPlans, UserSubscriptions, chatpoint_to_micros
+import pytest
+from sqlalchemy.ext.asyncio import async_sessionmaker
+
+from open_webui.models.subscriptions import (
+    SubscriptionLedgers,
+    SubscriptionPlans,
+    SubscriptionUsages,
+    UserSubscriptions,
+    chatpoint_to_micros,
+)
 from open_webui.utils.subscriptions import (
     assert_chatpoint_available,
     bill_model_usage,
@@ -147,3 +156,119 @@ async def test_usage_metadata_filters_runtime_values_before_insert(db_session):
         'nested': {'safe': 'value'},
         'items': [1, {'safe': True}],
     }
+
+
+@pytest.mark.asyncio
+async def test_four_part_prices_charge_cache_tokens_and_snapshot_audit_fields(db_session):
+    await SubscriptionPlans.seed_defaults(db=db_session)
+    await ensure_subscription_current('priced-user', now=1_720_000_000, db=db_session)
+
+    usage = await bill_model_usage(
+        user_id='priced-user',
+        model_id='priced-model',
+        quota_mode='metered',
+        usage_multiplier='1',
+        pricing={
+            'input_chatpoint_per_million': '10',
+            'output_chatpoint_per_million': '20',
+            'cache_creation_chatpoint_per_million': '4',
+            'cache_read_chatpoint_per_million': '1',
+        },
+        usage={
+            'input_tokens': 1_000_000,
+            'output_tokens': 500_000,
+            'cache_creation_input_tokens': 250_000,
+            'cache_read_input_tokens': 100_000,
+        },
+        metadata={'request_id': 'req-priced', 'client_ip': '10.0.0.4'},
+        is_admin=False,
+        request_id='req-priced',
+        client_ip='10.0.0.4',
+        first_token_latency_ms=120,
+        total_duration_ms=980,
+        now=1_720_000_000,
+        db=db_session,
+    )
+
+    assert usage.cost_micros == chatpoint_to_micros('21.1')
+    assert usage.cache_creation_tokens == 250_000
+    assert usage.cache_read_tokens == 100_000
+    assert usage.input_chatpoint_per_million == '10'
+    assert usage.cache_read_chatpoint_per_million == '1'
+    assert usage.request_id == 'req-priced'
+    assert usage.client_ip == '10.0.0.4'
+    assert usage.first_token_latency_ms == 120
+    assert usage.total_duration_ms == 980
+
+
+@pytest.mark.asyncio
+async def test_metered_billing_rolls_back_balance_and_ledger_when_usage_insert_fails(db_session, monkeypatch):
+    await SubscriptionPlans.seed_defaults(db=db_session)
+    await ensure_subscription_current('rollback-user', now=1_720_000_000, db=db_session)
+    before = await UserSubscriptions.get_by_user_id('rollback-user', db=db_session)
+    before_ledgers = await SubscriptionLedgers.search(user_id='rollback-user', db=db_session)
+
+    async def fail_insert(*args, **kwargs):
+        raise RuntimeError('usage insert failed')
+
+    monkeypatch.setattr(SubscriptionUsages, 'insert', fail_insert)
+
+    with pytest.raises(RuntimeError, match='usage insert failed'):
+        await bill_model_usage(
+            user_id='rollback-user',
+            model_id='rollback-model',
+            quota_mode='metered',
+            usage_multiplier='1',
+            pricing={
+                'input_chatpoint_per_million': '100',
+                'output_chatpoint_per_million': '100',
+                'cache_creation_chatpoint_per_million': '0',
+                'cache_read_chatpoint_per_million': '0',
+            },
+            usage={'input_tokens': 10_000},
+            metadata={},
+            is_admin=False,
+            request_id='req-rollback',
+            now=1_720_000_001,
+            db=db_session,
+        )
+
+    after = await UserSubscriptions.get_by_user_id('rollback-user', db=db_session)
+    after_ledgers = await SubscriptionLedgers.search(user_id='rollback-user', db=db_session)
+    assert after.plan_balance_micros == before.plan_balance_micros
+    assert after.check_balance_micros == before.check_balance_micros
+    assert len(after_ledgers) == len(before_ledgers)
+
+
+@pytest.mark.asyncio
+async def test_concurrent_metered_usage_does_not_lose_a_debit(db_session):
+    await SubscriptionPlans.seed_defaults(db=db_session)
+    await ensure_subscription_current('concurrent-billing-user', now=1_720_000_000, db=db_session)
+    Session = async_sessionmaker(db_session.bind, expire_on_commit=False)
+
+    async def bill_once(request_id: str):
+        async with Session() as session:
+            return await bill_model_usage(
+                user_id='concurrent-billing-user',
+                model_id='metered-model',
+                quota_mode='metered',
+                usage_multiplier='1',
+                pricing={
+                    'input_chatpoint_per_million': '100',
+                    'output_chatpoint_per_million': '0',
+                    'cache_creation_chatpoint_per_million': '0',
+                    'cache_read_chatpoint_per_million': '0',
+                },
+                usage={'input_tokens': 100_000},
+                metadata={},
+                is_admin=False,
+                request_id=request_id,
+                now=1_720_000_001,
+                db=session,
+            )
+
+    await asyncio.gather(bill_once('concurrent-1'), bill_once('concurrent-2'))
+    db_session.expire_all()
+    subscription = await UserSubscriptions.get_by_user_id('concurrent-billing-user', db=db_session)
+
+    assert subscription.plan_balance_micros == chatpoint_to_micros(80)

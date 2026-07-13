@@ -240,6 +240,12 @@
 				<tr class=" border-b-[1.5px] border-gray-50 dark:border-gray-850/30">
 					<th
 						scope="col"
+						class="px-2.5 py-2"
+					>订阅</th>
+					<th scope="col" class="px-2.5 py-2">到期</th>
+
+					<th
+						scope="col"
 						class="px-2.5 py-2 cursor-pointer select-none"
 						on:click={() => setSortKey('role')}
 					>
@@ -404,6 +410,12 @@
 							</div>
 						</td>
 						<td class=" px-3 py-1 max-w-48 truncate"> {user.email} </td>
+						<td class="px-3 py-1">{user.subscription?.display_name ?? '-'}</td>
+						<td class="px-3 py-1">
+							{user.subscription?.expires_at
+								? dayjs(user.subscription.expires_at * 1000).format('LL')
+								: '-'}
+						</td>
 
 						<td class=" px-3 py-1">
 							{dayjs(user.last_active_at * 1000).fromNow()}

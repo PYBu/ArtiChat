@@ -72,6 +72,8 @@ class User(Base):  # identity & profile
     settings = Column(JSON, nullable=True)
     oauth = Column(JSON, nullable=True)
     scim = Column(JSON, nullable=True)
+    email_verified_at = Column(BigInteger, nullable=True)
+    auth_epoch = Column(String, nullable=True)
 
     # Timestamps (epoch seconds)
     last_active_at = Column(BigInteger)
@@ -109,6 +111,8 @@ class UserModel(BaseModel):
 
     oauth: dict | None = None
     scim: dict | None = None
+    email_verified_at: int | None = None
+    auth_epoch: str | None = None
 
     last_active_at: int  # timestamp in epoch
     updated_at: int  # timestamp in epoch
@@ -179,6 +183,7 @@ class UpdateProfileForm(BaseModel):
 
 class UserGroupIdsModel(UserModel):
     group_ids: list[str] = []
+    subscription: dict | None = None
 
 
 class UserModelResponse(UserModel):
@@ -277,6 +282,7 @@ class UsersTable:
         role: str = 'pending',
         username: str | None = None,
         oauth: dict | None = None,
+        email_verified_at: int | None = None,
         db: AsyncSession | None = None,
     ) -> UserModel | None:
         try:
@@ -297,6 +303,7 @@ class UsersTable:
                     'updated_at': int(time.time()),
                     'username': username,
                     'oauth': oauth,
+                    'email_verified_at': email_verified_at,
                 }
             )
             result = User(**user.model_dump())

@@ -114,7 +114,11 @@ from open_webui.utils.payload import apply_system_prompt_to_body, resolve_system
 from open_webui.utils.plugin import load_function_module_by_id
 from open_webui.utils.response import merge_usage, normalize_usage
 from open_webui.utils.sanitize import sanitize_code
-from open_webui.utils.subscriptions import bill_model_usage
+from open_webui.utils.subscriptions import (
+    bill_model_usage,
+    get_request_client_ip,
+    stream_event_has_content,
+)
 from open_webui.utils.task import (
     get_task_model_id,
     rag_template,
@@ -2860,7 +2864,17 @@ async def get_event_emitter_and_caller(metadata):
     return event_emitter, event_caller
 
 
-async def build_chat_response_context(request, form_data, user, model, metadata, tasks, events):
+async def build_chat_response_context(
+    request,
+    form_data,
+    user,
+    model,
+    metadata,
+    tasks,
+    events,
+    *,
+    request_started_at: float | None = None,
+):
     event_emitter, event_caller = await get_event_emitter_and_caller(metadata)
     return {
         'request': request,
@@ -2872,6 +2886,8 @@ async def build_chat_response_context(request, form_data, user, model, metadata,
         'events': events,
         'event_emitter': event_emitter,
         'event_caller': event_caller,
+        'request_started_at': request_started_at,
+        'first_content_at': None,
     }
 
 
@@ -3430,14 +3446,29 @@ async def bill_subscription_usage_once(ctx, usage: dict | None):
     form_data = ctx.get('form_data') or {}
     model = ctx.get('model') or {}
     model_id = form_data.get('model') or model.get('id', '')
+    request_started_at = ctx.get('request_started_at')
+    first_content_at = ctx.get('first_content_at')
+    total_duration_ms = (
+        max(int((time.perf_counter() - request_started_at) * 1000), 0) if request_started_at is not None else None
+    )
+    first_token_latency_ms = (
+        max(int((first_content_at - request_started_at) * 1000), 0)
+        if request_started_at is not None and first_content_at is not None
+        else None
+    )
     await bill_model_usage(
         user_id=user.id,
         model_id=model_id,
         quota_mode=policy_data.get('quota_mode', 'metered'),
         usage_multiplier=policy_data.get('usage_multiplier', '1'),
+        pricing=policy_data,
         usage=usage,
         metadata=metadata,
         is_admin=(getattr(user, 'role', None) == 'admin'),
+        request_id=metadata.get('request_id'),
+        client_ip=get_request_client_ip(ctx.get('request')),
+        first_token_latency_ms=first_token_latency_ms,
+        total_duration_ms=total_duration_ms,
     )
     ctx['subscription_usage_billed'] = True
 
@@ -4071,6 +4102,8 @@ async def streaming_chat_response_handler(response, ctx):
                             )
 
                             if data:
+                                if ctx.get('first_content_at') is None and stream_event_has_content(data):
+                                    ctx['first_content_at'] = time.perf_counter()
                                 if 'event' in data and not getattr(request.state, 'direct', False):
                                     await event_emitter(data.get('event', {}))
 

@@ -88,10 +88,18 @@ async def mark_announcement_viewed(
 async def get_admin_announcements(
     limit: int = 100,
     offset: int = 0,
+    include_inactive: bool = False,
     user=Depends(get_admin_announcement_user),
     db: AsyncSession = Depends(get_async_session),
 ):
-    return {'items': await Announcements.list_all(limit=limit, offset=offset, db=db)}
+    return {
+        'items': await Announcements.list_all(
+            limit=limit,
+            offset=offset,
+            include_inactive=include_inactive,
+            db=db,
+        )
+    }
 
 
 @router.post('/admin')

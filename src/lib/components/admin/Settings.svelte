@@ -10,6 +10,7 @@
 
 	import Authentication from './Settings/Authentication.svelte';
 	import General from './Settings/General.svelte';
+	import Platform from './Settings/Platform.svelte';
 	import Pipelines from './Settings/Pipelines.svelte';
 	import Audio from './Settings/Audio.svelte';
 	import Images from './Settings/Images.svelte';
@@ -18,13 +19,11 @@
 	import Connections from './Settings/Connections.svelte';
 	import Documents from './Settings/Documents.svelte';
 	import WebSearch from './Settings/WebSearch.svelte';
-	import Subscriptions from './Settings/Subscriptions.svelte';
 
 	import Evaluations from './Settings/Evaluations.svelte';
 	import CodeExecution from './Settings/CodeExecution.svelte';
 	import Integrations from './Settings/Integrations.svelte';
 
-	import ChartBar from '../icons/ChartBar.svelte';
 	import DocumentChartBar from '../icons/DocumentChartBar.svelte';
 	import Search from '../icons/Search.svelte';
 	import XMark from '../icons/XMark.svelte';
@@ -39,6 +38,7 @@
 		const tabFromPath = pathParts[pathParts.length - 1];
 		selectedTab = [
 			'general',
+			'platform',
 			'authentication',
 			'connections',
 			'models',
@@ -51,7 +51,6 @@
 			'audio',
 			'images',
 			'pipelines',
-			'subscriptions',
 			'db'
 		].includes(tabFromPath)
 			? tabFromPath
@@ -75,6 +74,7 @@
 	let filteredSettings = [];
 
 	const allSettings = [
+		{ id: 'platform', title: 'Platform', route: '/admin/settings/platform', keywords: ['platform', 'name', 'logo', 'about', 'brand'] },
 		{
 			id: 'general',
 			title: 'General',
@@ -273,12 +273,6 @@
 			title: 'Pipelines',
 			route: '/admin/settings/pipelines',
 			keywords: ['pipelines', 'workflows', 'filters', 'valves', 'middleware']
-		},
-		{
-			id: 'subscriptions',
-			title: '订阅管理',
-			route: '/admin/settings/subscriptions',
-			keywords: ['subscriptions', 'plans', 'chatpoint', 'redeem', 'codes', 'usage', 'ledger']
 		},
 		{
 			id: 'db',
@@ -538,8 +532,6 @@
 								d="m10.933 19.231-7.668-4.13-1.37.739a.75.75 0 0 0 0 1.32l9.75 5.25c.221.12.489.12.71 0l9.75-5.25a.75.75 0 0 0 0-1.32l-1.37-.738-7.668 4.13a2.25 2.25 0 0 1-2.134-.001Z"
 							/>
 						</svg>
-					{:else if tab.id === 'subscriptions'}
-						<ChartBar />
 					{:else if tab.id === 'db'}
 						<svg
 							xmlns="http://www.w3.org/2000/svg"
@@ -574,6 +566,8 @@
 					await config.set(await getBackendConfig());
 				}}
 			/>
+		{:else if selectedTab === 'platform'}
+			<Platform />
 		{:else if selectedTab === 'authentication'}
 			<Authentication />
 		{:else if selectedTab === 'connections'}
@@ -645,8 +639,6 @@
 					toast.success($i18n.t('Settings saved successfully!'));
 				}}
 			/>
-		{:else if selectedTab === 'subscriptions'}
-			<Subscriptions />
 		{/if}
 	</div>
 </div>

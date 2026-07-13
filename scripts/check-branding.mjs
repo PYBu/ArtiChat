@@ -5,7 +5,6 @@ const files = [
 	'README.md',
 	'TROUBLESHOOTING.md',
 	'docs/SECURITY.md',
-	'Makefile',
 	'scripts/generate-sbom.sh',
 	'src/app.html',
 	'src/lib/constants.ts',
@@ -16,6 +15,7 @@ const files = [
 	'src/lib/components/layout/UpdateInfoToast.svelte',
 	'src/lib/components/layout/Sidebar/UserMenu.svelte',
 	'src/lib/components/chat/Settings/General.svelte',
+	'src/lib/components/common/ThemeLogo.svelte',
 	'src/routes/error/+page.svelte',
 	'static/static/site.webmanifest',
 	'backend/open_webui/static/site.webmanifest',
@@ -200,6 +200,38 @@ assertNotMatches(
 	/(?:__open_webui_valkey_never_match__|open_webui_vector_store_(?:batch_)?client)/,
 	'upstream Valkey client name'
 );
+
+const themeLogoTargets = [
+	'src/lib/components/layout/Sidebar.svelte',
+	'src/routes/auth/+page.svelte',
+	'src/lib/components/OnBoarding.svelte',
+	'src/lib/components/app/AppSidebar.svelte'
+];
+
+for (const file of themeLogoTargets) {
+	const text = fileText(file);
+	if (!text.includes('ThemeLogo')) findings.push(`${file}: must use ThemeLogo`);
+}
+
+if (fs.existsSync(path.join(root, 'src/lib/components/common/ThemeLogo.svelte'))) {
+const themeLogo = fileText('src/lib/components/common/ThemeLogo.svelte');
+for (const marker of ['dark:hidden', 'hidden dark:block', 'favicon-dark.png', 'splash-dark.png']) {
+	if (!themeLogo.includes(marker)) findings.push(`ThemeLogo missing ${marker}`);
+}
+for (const marker of ['$config?.branding?.logo_light', '$config?.branding?.logo_dark']) {
+	if (!themeLogo.includes(marker)) findings.push(`ThemeLogo missing platform branding marker ${marker}`);
+}
+
+const platformSettings = fileText('src/lib/components/admin/Settings/Platform.svelte');
+for (const marker of ['getPlatformSettings', 'setPlatformSettings', 'uploadPlatformLogo', 'about_title', 'about_content']) {
+	if (!platformSettings.includes(marker)) findings.push(`Platform settings missing ${marker}`);
+}
+
+const about = fileText('src/lib/components/chat/Settings/About.svelte');
+for (const marker of ['$config?.branding?.about_title', '$config?.branding?.about_content', 'ArtiChat v{WEBUI_DISPLAY_VERSION}']) {
+	if (!about.includes(marker)) findings.push(`About missing platform marker ${marker}`);
+}
+}
 
 if (missingFiles.length > 0) {
 	console.error('Missing files:');
