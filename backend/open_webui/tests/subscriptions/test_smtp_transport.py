@@ -139,6 +139,7 @@ def test_smtp_send_builds_multipart_message_and_reports_send_stage():
     assert message['From'] == 'ArtiChat <mailer@example.com>'
     assert message['Reply-To'] == 'support@example.com'
     assert message.is_multipart()
+    assert 'artichat-platform-logo' in message.as_string()
 
     failed_transport = FakeSMTP(fail_at='send')
     with pytest.raises(SMTPStageError) as exc_info:

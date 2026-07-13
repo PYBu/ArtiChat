@@ -10,7 +10,7 @@ def test_email_security_tables_expose_required_columns():
     assert {
         'id', 'email', 'user_id', 'token_hash', 'expires_at', 'consumed_at', 'ip_address', 'created_at'
     } <= set(PasswordResetToken.__table__.columns.keys())
-    assert {'key', 'subject', 'markdown_body', 'is_enabled', 'updated_at'} <= set(
+    assert {'key', 'subject', 'markdown_body', 'html_body', 'is_enabled', 'updated_at'} <= set(
         EmailTemplate.__table__.columns.keys()
     )
     assert {

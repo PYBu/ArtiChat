@@ -127,6 +127,50 @@ def test_template_rendering_escapes_user_values_in_html():
     assert '&lt;script&gt;' in rendered.html_body
 
 
+def test_html_template_uses_brand_card_logo_and_version_and_filters_dangerous_markup():
+    rendered = render_email_template(
+        template_key='registration_code',
+        subject='{{platform_name}} registration code',
+        html_body=(
+            '<h1>Hello {{user_name}}</h1><script>alert(1)</script>'
+            '<a href="{{platform_url}}">Open</a><div onclick="evil()">{{code}}</div>'
+        ),
+        variables={
+            'platform_name': 'Custom Chat',
+            'platform_url': 'https://chat.example.com',
+            'platform_version': '0.1.3',
+            'user_name': 'Alice',
+            'code': '123456',
+        },
+    )
+
+    assert 'Custom Chat' in rendered.html_body
+    assert 'v0.1.3' in rendered.html_body
+    assert 'cid:artichat-platform-logo' in rendered.html_body
+    assert '<script' not in rendered.html_body
+    assert 'onclick' not in rendered.html_body
+    assert 'https://chat.example.com' in rendered.text_body
+
+
+def test_default_html_templates_are_branded():
+    rendered = render_email_template(
+        template_key='registration_code',
+        subject=DEFAULT_EMAIL_TEMPLATES['registration_code']['subject'],
+        html_body=DEFAULT_EMAIL_TEMPLATES['registration_code']['html_body'],
+        variables={
+            'platform_name': 'ArtiChat',
+            'platform_version': '0.1.3',
+            'user_name': 'Alice',
+            'code': '123456',
+            'expires_minutes': 10,
+        },
+    )
+
+    assert '验证你的邮箱' in rendered.html_body
+    assert 'ArtiChat v0.1.3' in rendered.html_body
+    assert '<div style="font-size:32px' in rendered.html_body
+
+
 def test_password_reset_link_is_preserved_in_plain_text():
     rendered = render_email_template(
         template_key='password_reset',

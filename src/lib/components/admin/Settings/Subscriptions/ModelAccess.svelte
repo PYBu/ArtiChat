@@ -3,7 +3,9 @@
 	import { toast } from 'svelte-sonner';
 	import {
 		getAdminSubscriptionModels,
-		updateAdminModelSubscriptionPolicies
+		updateAdminModelSubscriptionPolicies,
+		type AdminSubscriptionModel,
+		type SubscriptionModelPolicy
 	} from '$lib/apis/subscriptions';
 
 	const tiers = [
@@ -12,12 +14,21 @@
 		{ id: 'chatpower', label: 'ChatPower' }
 	];
 
-	let rows: any[] = [];
+	type PriceField =
+		| 'input_chatpoint_per_million'
+		| 'output_chatpoint_per_million'
+		| 'cache_creation_chatpoint_per_million'
+		| 'cache_read_chatpoint_per_million';
+	type EditableSubscriptionModel = Omit<AdminSubscriptionModel, 'subscription'> & {
+		subscription: SubscriptionModelPolicy;
+	};
+
+	let rows: EditableSubscriptionModel[] = [];
 	let loading = true;
 	let saving = false;
 	let dirty = false;
 
-	const defaultPolicy = () => ({
+	const defaultPolicy = (): SubscriptionModelPolicy => ({
 		allowed_tiers: ['free', 'plus', 'chatpower'],
 		quota_mode: 'metered',
 		usage_multiplier: '1',
@@ -27,16 +38,16 @@
 		cache_read_chatpoint_per_million: '0'
 	});
 
-	const priceFields = [
+	const priceFields: Array<{ key: PriceField; label: string }> = [
 		{ key: 'input_chatpoint_per_million', label: '输入' },
 		{ key: 'output_chatpoint_per_million', label: '输出' },
 		{ key: 'cache_creation_chatpoint_per_million', label: '创建缓存' },
 		{ key: 'cache_read_chatpoint_per_million', label: '读取缓存' }
 	];
 
-	const normalize = (model: any) => ({
+	const normalize = (model: AdminSubscriptionModel): EditableSubscriptionModel => ({
 		...model,
-		subscription: { ...defaultPolicy(), ...(model.subscription ?? model.meta?.subscription ?? {}) }
+		subscription: { ...defaultPolicy(), ...(model.subscription ?? {}) }
 	});
 
 	const load = async () => {
@@ -56,14 +67,16 @@
 		rows = [...rows];
 	};
 
-	const toggleTier = (row: any, tier: string) => {
+	const toggleTier = (row: EditableSubscriptionModel, tier: string) => {
 		const allowed = new Set(row.subscription.allowed_tiers ?? []);
 		if (allowed.has(tier)) {
 			allowed.delete(tier);
 		} else {
 			allowed.add(tier);
 		}
-		row.subscription.allowed_tiers = tiers.map((item) => item.id).filter((item) => allowed.has(item));
+		row.subscription.allowed_tiers = tiers
+			.map((item) => item.id)
+			.filter((item) => allowed.has(item));
 		markDirty();
 	};
 
@@ -92,7 +105,9 @@
 	<div class="flex flex-wrap items-start justify-between gap-3">
 		<div>
 			<div class="text-base font-medium">模型权限</div>
-			<div class="text-xs text-gray-500">控制模型可见范围、扣费模式和每百万 Token 的 Chatpoint 价格。</div>
+			<div class="text-xs text-gray-500">
+				控制模型可见范围、扣费模式和每百万 Token 的 Chatpoint 价格。
+			</div>
 		</div>
 		<button
 			type="button"
@@ -107,9 +122,13 @@
 	{#if loading}
 		<div class="text-gray-500">加载中...</div>
 	{:else if rows.length === 0}
-		<div class="rounded-lg border border-gray-100 p-3 text-gray-500 dark:border-gray-850">暂无模型。</div>
+		<div class="rounded-lg border border-gray-100 p-3 text-gray-500 dark:border-gray-850">
+			暂无模型。
+		</div>
 	{:else}
-		<div class="flex flex-col divide-y divide-gray-100 rounded-lg border border-gray-100 dark:divide-gray-850 dark:border-gray-850">
+		<div
+			class="flex flex-col divide-y divide-gray-100 rounded-lg border border-gray-100 dark:divide-gray-850 dark:border-gray-850"
+		>
 			{#each rows as row (row.id)}
 				<div class="grid gap-3 p-3 lg:grid-cols-[1fr_15rem_11rem]">
 					<div class="min-w-0">
@@ -119,7 +138,9 @@
 
 					<div class="flex flex-wrap items-center gap-2">
 						{#each tiers as tier}
-							<label class="flex items-center gap-1 rounded-full bg-gray-50 px-2 py-1 text-xs dark:bg-gray-900">
+							<label
+								class="flex items-center gap-1 rounded-full bg-gray-50 px-2 py-1 text-xs dark:bg-gray-900"
+							>
 								<input
 									type="checkbox"
 									checked={(row.subscription.allowed_tiers ?? []).includes(tier.id)}
@@ -138,7 +159,6 @@
 						<option value="metered">按量扣费</option>
 						<option value="unlimited">无限使用</option>
 					</select>
-
 
 					<div class="grid grid-cols-2 gap-2 lg:col-span-3 lg:grid-cols-4">
 						{#each priceFields as field}

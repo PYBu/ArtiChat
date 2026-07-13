@@ -1,3 +1,8 @@
+from types import SimpleNamespace
+
+import pytest
+from pydantic import ValidationError
+
 from open_webui.routers import subscriptions
 
 
@@ -23,3 +28,24 @@ def test_router_exposes_user_and_admin_paths():
     assert '/admin/users/{user_id}' in paths
     assert '/admin/usage' in paths
     assert '/admin/ledger' in paths
+
+
+def test_admin_model_policy_projection_is_consistent_after_updates():
+    model = SimpleNamespace(
+        id='model-1',
+        name='Model One',
+        base_model_id='provider-model',
+        meta=SimpleNamespace(subscription={'allowed_tiers': ['free']}),
+    )
+
+    assert subscriptions._admin_model_policy_response(model) == {
+        'id': 'model-1',
+        'name': 'Model One',
+        'base_model_id': 'provider-model',
+        'subscription': {'allowed_tiers': ['free']},
+    }
+
+
+def test_admin_code_batch_size_is_bounded():
+    with pytest.raises(ValidationError):
+        subscriptions.AdminCodeCreateForm(mode='single_use', quantity=501)

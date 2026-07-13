@@ -1,4 +1,5 @@
 import { WEBUI_API_BASE_URL } from '$lib/constants';
+import { apiJsonFetch } from '$lib/apis/base';
 
 export type UpdateStage =
 	| 'idle'
@@ -43,37 +44,14 @@ export type UpdateInfo = {
 	error: string | null;
 };
 
-const jsonFetch = async <T>(url: string, token: string, options: RequestInit = {}): Promise<T> => {
-	let error = null;
-	const headers = Object.assign(
-		{
-			'Content-Type': 'application/json',
-			authorization: `Bearer ${token}`
-		},
-		options.headers ?? {}
-	);
-	const response = await fetch(url, { ...options, headers })
-		.then(async (res) => {
-			if (!res.ok) throw await res.json();
-			return res.json();
-		})
-		.catch((caught) => {
-			error = caught;
-			return null;
-		});
-
-	if (error) throw error;
-	return response as T;
-};
-
 export const getUpdateInfo = async (token: string, force = false): Promise<UpdateInfo> =>
-	jsonFetch(`${WEBUI_API_BASE_URL}/updates/check?force=${force}`, token);
+	apiJsonFetch(`${WEBUI_API_BASE_URL}/updates/check?force=${force}`, token);
 
 export const getUpdateStatus = async (token: string): Promise<UpdateState> =>
-	jsonFetch(`${WEBUI_API_BASE_URL}/updates/status`, token);
+	apiJsonFetch(`${WEBUI_API_BASE_URL}/updates/status`, token);
 
 export const deployUpdate = async (token: string, targetVersion: string): Promise<UpdateState> =>
-	jsonFetch(`${WEBUI_API_BASE_URL}/updates/deploy`, token, {
+	apiJsonFetch(`${WEBUI_API_BASE_URL}/updates/deploy`, token, {
 		method: 'POST',
 		body: JSON.stringify({ target_version: targetVersion })
 	});

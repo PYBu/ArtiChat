@@ -21,8 +21,12 @@ from open_webui.utils.email_delivery import (
     SMTPStageError,
     check_smtp_connection,
     deliver_email,
+    email_logo_data_uri,
+    email_template_content_html,
     normalize_smtp_settings,
+    render_email_template,
     retry_email_delivery,
+    sanitize_email_html,
     smtp_admin_settings,
     validate_email_template,
 )
@@ -94,6 +98,9 @@ SMTP_CONFIG_DEFAULTS = {
     SMTP_CONFIG_KEYS['public_url']: '',
     SMTP_CONFIG_KEYS['subscription_notifications']: True,
 }
+EMAIL_PLATFORM_CONFIG_KEYS = {
+    'name': 'platform.name',
+}
 REGISTRATION_CONFIG_KEYS = {
     'allowed_domains': 'registration.allowed_domains',
     'allow_subdomains': 'registration.allow_subdomains',
@@ -129,8 +136,9 @@ class TestEmailForm(BaseModel):
 
 
 class EmailTemplateUpdateForm(BaseModel):
-    subject: str
-    markdown_body: str
+    subject: str = Field(min_length=1, max_length=255)
+    html_body: str | None = Field(default=None, max_length=200_000)
+    markdown_body: str | None = Field(default=None, max_length=200_000)
     is_enabled: bool = True
 
 
@@ -185,14 +193,33 @@ SENSITIVE_ACTION_LABELS = {
     'billing_address': '修改付款信息',
     'email': '修改登录邮箱',
 }
+EMAIL_TEMPLATE_PREVIEW_VARIABLES = {
+    'platform_name': 'ArtiChat',
+    'platform_url': 'https://chat.example.com',
+    'user_name': '示例用户',
+    'code': '123456',
+    'expires_minutes': 10,
+    'action_name': '修改账户设置',
+    'reset_url': 'https://chat.example.com/auth/reset-password?token=preview',
+    'changed_at': '2026-07-13 12:00 UTC',
+    'old_email': 'old@example.com',
+    'new_email': 'new@example.com',
+    'subscription_name': 'Pro',
+    'expires_at': '2027-07-13 12:00 UTC',
+    'tested_at': '2026-07-13 12:00 UTC',
+}
 
 
 async def load_smtp_settings() -> dict[str, Any]:
-    values = await Config.get_many(*SMTP_CONFIG_KEYS.values())
-    return {
+    values = await Config.get_many(*SMTP_CONFIG_KEYS.values(), *EMAIL_PLATFORM_CONFIG_KEYS.values())
+    settings = {
         field: values.get(storage_key, SMTP_CONFIG_DEFAULTS[storage_key])
         for field, storage_key in SMTP_CONFIG_KEYS.items()
     }
+    settings['_platform_name'] = (
+        values.get(EMAIL_PLATFORM_CONFIG_KEYS['name']) or settings.get('sender_name') or 'ArtiChat'
+    )
+    return settings
 
 
 async def load_registration_settings() -> dict[str, Any]:
@@ -224,8 +251,27 @@ def _connection_test_settings(settings: dict[str, Any]) -> dict[str, Any]:
 def _template_response(template) -> dict[str, Any]:
     return {
         **template.model_dump(),
+        'html_body': email_template_content_html(
+            html_body=template.html_body,
+            markdown_body=template.markdown_body,
+        ),
         'allowed_variables': sorted(EMAIL_TEMPLATE_VARIABLES[template.key]),
     }
+
+
+def _template_form_html(form_data: EmailTemplateUpdateForm) -> str:
+    if form_data.html_body is not None:
+        html_body = sanitize_email_html(form_data.html_body)
+    elif form_data.markdown_body is not None:
+        html_body = email_template_content_html(
+            html_body=None,
+            markdown_body=form_data.markdown_body,
+        )
+    else:
+        raise ValueError('EMAIL_TEMPLATE_BODY_REQUIRED')
+    if not html_body:
+        raise ValueError('EMAIL_TEMPLATE_BODY_REQUIRED')
+    return html_body
 
 
 def _delivery_response(delivery) -> dict[str, Any]:
@@ -726,22 +772,56 @@ async def update_email_template(
     db: AsyncSession = Depends(get_async_session),
 ):
     try:
+        html_body = _template_form_html(form_data)
         validate_email_template(
             template_key=template_key,
             subject=form_data.subject,
-            markdown_body=form_data.markdown_body,
+            html_body=html_body,
         )
         await EmailTemplates.seed_defaults(DEFAULT_EMAIL_TEMPLATES, db=db)
         template = await EmailTemplates.update(
             template_key,
             subject=form_data.subject.strip(),
-            markdown_body=form_data.markdown_body.strip(),
+            markdown_body=(
+                form_data.markdown_body.strip() if form_data.markdown_body is not None else None
+            ),
+            html_body=html_body,
             is_enabled=form_data.is_enabled,
             db=db,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return _template_response(template)
+
+
+@router.post('/admin/templates/{template_key}/preview')
+async def preview_email_template(
+    template_key: str,
+    form_data: EmailTemplateUpdateForm,
+    user=Depends(get_email_admin_user),
+):
+    try:
+        html_body = _template_form_html(form_data)
+        settings = await load_smtp_settings()
+        variables = {
+            **EMAIL_TEMPLATE_PREVIEW_VARIABLES,
+            'platform_name': settings.get('_platform_name') or 'ArtiChat',
+            'platform_url': settings.get('public_url') or '',
+        }
+        rendered = render_email_template(
+            template_key=template_key,
+            subject=form_data.subject,
+            html_body=html_body,
+            variables=variables,
+            logo_src=email_logo_data_uri() or '/static/favicon.png',
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {
+        'subject': rendered.subject,
+        'html_body': rendered.html_body,
+        'text_body': rendered.text_body,
+    }
 
 
 @router.get('/admin/deliveries')

@@ -1,10 +1,10 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { toast } from 'svelte-sonner';
-	import { getMySubscriptionUsage } from '$lib/apis/subscriptions';
+	import { getMySubscriptionUsage, type SubscriptionUsageResponse } from '$lib/apis/subscriptions';
 	import { refreshSubscription } from '$lib/stores';
 
-	let data: any = null;
+	let data: SubscriptionUsageResponse | null = null;
 	let loading = true;
 
 	const formatChatpoint = (micros?: number | null) =>
@@ -15,7 +15,8 @@
 		value === null || value === undefined ? '-' : value.toLocaleString();
 	const formatLatency = (value?: number | null) =>
 		value === null || value === undefined ? '-' : `${value.toLocaleString()} ms`;
-	const formatDate = (value?: number | null) => (value ? new Date(value * 1000).toLocaleString() : '-');
+	const formatDate = (value?: number | null) =>
+		value ? new Date(value * 1000).toLocaleString() : '-';
 
 	onMount(async () => {
 		data = await getMySubscriptionUsage(localStorage.token).catch((error) => {
@@ -34,8 +35,18 @@
 		<div class="text-gray-500">加载中...</div>
 	{:else if data?.subscription}
 		<div class="grid gap-2 md:grid-cols-2">
-			<div class="border-b border-gray-100 py-2 dark:border-gray-850"><div class="text-xs text-gray-500">周期 Chatpoint</div><div class="mt-1 text-lg font-medium">{formatChatpoint(data.subscription.plan_balance_micros)}</div></div>
-			<div class="border-b border-gray-100 py-2 dark:border-gray-850"><div class="text-xs text-gray-500">充值 Chatpoint</div><div class="mt-1 text-lg font-medium">{formatChatpoint(data.subscription.check_balance_micros)}</div></div>
+			<div class="border-b border-gray-100 py-2 dark:border-gray-850">
+				<div class="text-xs text-gray-500">周期 Chatpoint</div>
+				<div class="mt-1 text-lg font-medium">
+					{formatChatpoint(data.subscription.plan_balance_micros)}
+				</div>
+			</div>
+			<div class="border-b border-gray-100 py-2 dark:border-gray-850">
+				<div class="text-xs text-gray-500">充值 Chatpoint</div>
+				<div class="mt-1 text-lg font-medium">
+					{formatChatpoint(data.subscription.check_balance_micros)}
+				</div>
+			</div>
 		</div>
 
 		<div>
@@ -43,7 +54,13 @@
 			{#if data.usage?.items?.length}
 				<div class="overflow-x-auto border-y border-gray-100 dark:border-gray-850">
 					<table class="min-w-[980px] w-full text-left text-xs">
-						<thead class="text-gray-500"><tr>{#each ['模型', '输入', '输出', '创建缓存', '读取缓存', '消耗 CP', '首字延迟', '总耗时', '时间', '状态'] as heading}<th class="px-2 py-2 font-medium">{heading}</th>{/each}</tr></thead>
+						<thead class="text-gray-500"
+							><tr
+								>{#each ['模型', '输入', '输出', '创建缓存', '读取缓存', '消耗 CP', '首字延迟', '总耗时', '时间', '状态'] as heading}<th
+										class="px-2 py-2 font-medium">{heading}</th
+									>{/each}</tr
+							></thead
+						>
 						<tbody class="divide-y divide-gray-100 dark:divide-gray-850">
 							{#each data.usage.items as item}
 								<tr>
@@ -63,15 +80,23 @@
 					</table>
 				</div>
 			{:else}
-				<div class="border-y border-gray-100 py-4 text-gray-500 dark:border-gray-850">暂无用量记录。</div>
+				<div class="border-y border-gray-100 py-4 text-gray-500 dark:border-gray-850">
+					暂无用量记录。
+				</div>
 			{/if}
 		</div>
 
 		<div>
 			<div class="mb-2 font-medium">余额记录</div>
-			<div class="divide-y divide-gray-100 border-y border-gray-100 dark:divide-gray-850 dark:border-gray-850">
+			<div
+				class="divide-y divide-gray-100 border-y border-gray-100 dark:divide-gray-850 dark:border-gray-850"
+			>
 				{#each data.ledger ?? [] as entry}
-					<div class="grid grid-cols-3 gap-2 py-2 text-xs"><div>{entry.event_type}</div><div>{formatChatpoint(entry.plan_delta_micros + entry.check_delta_micros)}</div><div class="text-right">{formatDate(entry.created_at)}</div></div>
+					<div class="grid grid-cols-3 gap-2 py-2 text-xs">
+						<div>{entry.event_type}</div>
+						<div>{formatChatpoint(entry.plan_delta_micros + entry.check_delta_micros)}</div>
+						<div class="text-right">{formatDate(entry.created_at)}</div>
+					</div>
 				{/each}
 			</div>
 		</div>

@@ -10,6 +10,7 @@ import {
 	requestEmailChallenge,
 	requestNewEmailChallenge,
 	requestSensitiveChallenge,
+	previewEmailTemplate,
 	resetPassword,
 	retryEmailDelivery,
 	sendEmailTest,
@@ -43,7 +44,12 @@ describe('email admin api', () => {
 		await getEmailTemplates('token');
 		await updateEmailTemplate('token', 'registration_code', {
 			subject: 'Registration',
-			markdown_body: '{{code}}',
+			html_body: '<strong>{{code}}</strong>',
+			is_enabled: true
+		});
+		await previewEmailTemplate('token', 'registration_code', {
+			subject: 'Registration',
+			html_body: '<strong>{{code}}</strong>',
 			is_enabled: true
 		});
 		await getEmailDeliveries('token', { limit: 50, offset: 10 });
@@ -67,6 +73,7 @@ describe('email admin api', () => {
 			expect.stringContaining('/emails/admin/test-email'),
 			expect.stringContaining('/emails/admin/templates'),
 			expect.stringContaining('/emails/admin/templates/registration_code'),
+			expect.stringContaining('/emails/admin/templates/registration_code/preview'),
 			expect.stringContaining('/emails/admin/deliveries?limit=50&offset=10'),
 			expect.stringContaining('/emails/admin/deliveries/mail_1/retry'),
 			expect.stringContaining('/emails/admin/registration'),

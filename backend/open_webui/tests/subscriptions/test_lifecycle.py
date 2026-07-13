@@ -1,3 +1,5 @@
+from unittest.mock import AsyncMock
+
 import pytest
 
 from open_webui.models.subscriptions import (
@@ -11,6 +13,18 @@ from open_webui.models.subscriptions import (
     chatpoint_to_micros,
 )
 from open_webui.utils.subscriptions import ensure_subscription_current
+
+
+@pytest.mark.asyncio
+async def test_current_plan_defaults_do_not_commit(db_session, monkeypatch):
+    await SubscriptionPlans.seed_defaults(db=db_session)
+    commit = AsyncMock()
+    monkeypatch.setattr(db_session, 'commit', commit)
+
+    await SubscriptionPlans.seed_defaults(db=db_session)
+
+    commit.assert_not_awaited()
+    await db_session.rollback()
 
 
 @pytest.mark.asyncio

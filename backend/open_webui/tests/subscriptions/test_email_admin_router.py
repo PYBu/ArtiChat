@@ -14,6 +14,7 @@ def test_email_admin_router_exposes_settings_templates_and_delivery_paths():
     assert '/admin/test-email' in paths
     assert '/admin/templates' in paths
     assert '/admin/templates/{template_key}' in paths
+    assert '/admin/templates/{template_key}/preview' in paths
     assert '/admin/deliveries' in paths
     assert '/admin/deliveries/{delivery_id}/retry' in paths
 
@@ -23,7 +24,7 @@ async def test_admin_settings_store_encrypted_password_and_return_only_mask(monk
     stored = {storage_key: default for storage_key, default in emails.SMTP_CONFIG_DEFAULTS.items()}
 
     async def get_many(*keys):
-        return {key: stored[key] for key in keys}
+        return {key: stored[key] for key in keys if key in stored}
 
     async def upsert(updates):
         stored.update(updates)

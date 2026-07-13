@@ -58,6 +58,7 @@ class EmailTemplate(Base):
     key = Column(Text, primary_key=True)
     subject = Column(Text, nullable=False)
     markdown_body = Column(Text, nullable=False)
+    html_body = Column(Text, nullable=True)
     is_enabled = Column(Boolean, nullable=False, default=True)
     updated_at = Column(BigInteger, nullable=False)
 
@@ -85,6 +86,7 @@ class EmailTemplateModel(BaseModel):
     key: str
     subject: str
     markdown_body: str
+    html_body: str | None = None
     is_enabled: bool
     updated_at: int
 
@@ -148,21 +150,33 @@ class EmailTemplatesTable:
     ) -> None:
         timestamp = now if now is not None else int(time.time())
         async with get_email_security_db_context(db) as session:
-            result = await session.execute(select(EmailTemplate.key))
-            existing = set(result.scalars().all())
+            result = await session.execute(select(EmailTemplate))
+            existing = {row.key: row for row in result.scalars().all()}
+            changed = False
             for key, template in defaults.items():
-                if key in existing:
-                    continue
-                session.add(
-                    EmailTemplate(
-                        key=key,
-                        subject=template['subject'],
-                        markdown_body=template['markdown_body'],
-                        is_enabled=bool(template.get('is_enabled', True)),
-                        updated_at=timestamp,
+                if key not in existing:
+                    session.add(
+                        EmailTemplate(
+                            key=key,
+                            subject=template['subject'],
+                            markdown_body=template['markdown_body'],
+                            html_body=template.get('html_body'),
+                            is_enabled=bool(template.get('is_enabled', True)),
+                            updated_at=timestamp,
+                        )
                     )
-                )
-            await session.commit()
+                    changed = True
+                    continue
+
+                row = existing[key]
+                if (
+                    row.html_body is None
+                    and row.markdown_body == template['markdown_body']
+                ):
+                    row.html_body = template.get('html_body')
+                    changed = True
+            if changed:
+                await session.commit()
 
     async def list_all(self, *, db: AsyncSession | None = None) -> list[EmailTemplateModel]:
         async with get_email_security_db_context(db) as session:
@@ -179,7 +193,8 @@ class EmailTemplatesTable:
         key: str,
         *,
         subject: str,
-        markdown_body: str,
+        markdown_body: str | None = None,
+        html_body: str | None = None,
         is_enabled: bool,
         now: int | None = None,
         db: AsyncSession | None = None,
@@ -190,7 +205,10 @@ class EmailTemplatesTable:
             if row is None:
                 raise ValueError('EMAIL_TEMPLATE_NOT_FOUND')
             row.subject = subject
-            row.markdown_body = markdown_body
+            if markdown_body is not None:
+                row.markdown_body = markdown_body
+            if html_body is not None:
+                row.html_body = html_body
             row.is_enabled = is_enabled
             row.updated_at = timestamp
             await session.commit()

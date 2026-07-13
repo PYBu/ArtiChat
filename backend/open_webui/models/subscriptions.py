@@ -11,7 +11,7 @@ from typing import Any, AsyncIterator
 from open_webui.internal.db import Base, get_async_db_context
 from open_webui.models.users import User
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import BigInteger, Boolean, Column, Index, Integer, JSON, Text, or_, select, update
+from sqlalchemy import BigInteger, Boolean, Column, Index, Integer, JSON, Text, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 CHATPOINT_MICROS = 1_000_000
@@ -342,6 +342,7 @@ class SubscriptionPlansTable:
             existing = await session.execute(select(SubscriptionPlan))
             existing_plans = {plan.id: plan for plan in existing.scalars().all()}
             timestamp = now_ts()
+            defaults_changed = False
 
             defaults = [
                 (
@@ -406,10 +407,10 @@ class SubscriptionPlansTable:
                     plan = existing_plans[plan_id]
                     legacy_names, legacy_descriptions = legacy_defaults[plan_id]
                     changed = False
-                    if plan.display_name in legacy_names:
+                    if plan.display_name != display_name and plan.display_name in legacy_names:
                         plan.display_name = display_name
                         changed = True
-                    if plan.description in legacy_descriptions:
+                    if plan.description != description and plan.description in legacy_descriptions:
                         plan.description = description
                         changed = True
                     legacy_allowances = {chatpoint_to_micros(item) for item in LEGACY_PLAN_CHATPOINTS[plan_id]}
@@ -421,6 +422,7 @@ class SubscriptionPlansTable:
                         changed = True
                     if changed:
                         plan.updated_at = timestamp
+                        defaults_changed = True
                     continue
                 session.add(
                     SubscriptionPlan(
@@ -437,7 +439,9 @@ class SubscriptionPlansTable:
                         updated_at=timestamp,
                     )
                 )
-            await session.commit()
+                defaults_changed = True
+            if defaults_changed:
+                await session.commit()
 
     async def get_plans(self, db: AsyncSession | None = None) -> list[SubscriptionPlanModel]:
         async with get_subscription_db_context(db) as session:
@@ -933,23 +937,33 @@ class RedemptionCodesTable:
 
         timestamp = now or now_ts()
         resolved_batch_id = batch_id or new_id('batch')
-        raw_codes = []
-        code_ids = []
+        raw_codes: list[str] = []
+        code_hashes: list[str] = []
+        seen_hashes: set[str] = set()
+        for _ in range(quantity):
+            raw_code = normalize_redemption_code(custom_code) if custom_code else generate_redemption_code()
+            code_hash = hash_redemption_code(raw_code)
+            if code_hash in seen_hashes:
+                raise ValueError('REDEMPTION_CODE_DUPLICATE')
+            raw_codes.append(raw_code)
+            code_hashes.append(code_hash)
+            seen_hashes.add(code_hash)
 
         async with get_subscription_db_context(db) as session:
-            for _ in range(quantity):
-                raw_code = normalize_redemption_code(custom_code) if custom_code else generate_redemption_code()
-                existing = await session.execute(
-                    select(RedemptionCode).filter(RedemptionCode.code_hash == hash_redemption_code(raw_code))
-                )
-                if existing.scalar_one_or_none() is not None:
-                    raise ValueError('REDEMPTION_CODE_DUPLICATE')
+            existing = await session.execute(
+                select(RedemptionCode.code_hash).where(RedemptionCode.code_hash.in_(code_hashes))
+            )
+            if existing.first() is not None:
+                raise ValueError('REDEMPTION_CODE_DUPLICATE')
+
+            code_ids: list[str] = []
+            for raw_code, code_hash in zip(raw_codes, code_hashes):
                 code_id = new_id('code')
                 session.add(
                     RedemptionCode(
                         id=code_id,
                         code=raw_code,
-                        code_hash=hash_redemption_code(raw_code),
+                        code_hash=code_hash,
                         code_preview=preview_redemption_code(raw_code),
                         mode=mode,
                         max_uses=max_uses,
@@ -967,7 +981,6 @@ class RedemptionCodesTable:
                         updated_at=timestamp,
                     )
                 )
-                raw_codes.append(raw_code)
                 code_ids.append(code_id)
             await session.commit()
         return RedemptionCodeCreateResult(raw_codes=raw_codes, code_ids=code_ids)
@@ -1483,33 +1496,37 @@ class SubscriptionUsagesTable:
         db: AsyncSession | None = None,
     ) -> dict:
         async with get_subscription_db_context(db) as session:
+            filters = []
+            if user_id:
+                filters.append(SubscriptionUsage.user_id == user_id)
+            if model_id:
+                filters.append(SubscriptionUsage.model_id == model_id)
+            if status:
+                filters.append(SubscriptionUsage.status == status)
+            if start_at is not None:
+                filters.append(SubscriptionUsage.created_at >= start_at)
+            if end_at is not None:
+                filters.append(SubscriptionUsage.created_at <= end_at)
+
             if include_user:
                 stmt = select(SubscriptionUsage, User).outerjoin(User, User.id == SubscriptionUsage.user_id)
             else:
                 stmt = select(SubscriptionUsage)
-            if user_id:
-                stmt = stmt.filter(SubscriptionUsage.user_id == user_id)
-            if model_id:
-                stmt = stmt.filter(SubscriptionUsage.model_id == model_id)
-            if status:
-                stmt = stmt.filter(SubscriptionUsage.status == status)
-            if start_at is not None:
-                stmt = stmt.filter(SubscriptionUsage.created_at >= start_at)
-            if end_at is not None:
-                stmt = stmt.filter(SubscriptionUsage.created_at <= end_at)
+            stmt = stmt.where(*filters)
             result = await session.execute(
                 stmt.order_by(SubscriptionUsage.created_at.desc()).limit(limit).offset(offset)
             )
             if include_user:
+                usage_rows = result.all()
+                usage_models = [SubscriptionUsageModel.model_validate(usage) for usage, _ in usage_rows]
                 items = [
                     {
-                        'usage': SubscriptionUsageModel.model_validate(usage),
+                        'usage': usage_model,
                         'user': user_summary(user),
-                        **SubscriptionUsageModel.model_validate(usage).model_dump(by_alias=True),
+                        **usage_model.model_dump(by_alias=True),
                     }
-                    for usage, user in result.all()
+                    for usage_model, (_, user) in zip(usage_models, usage_rows)
                 ]
-                usage_models = [item['usage'] for item in items]
             else:
                 rows = result.scalars().all()
                 usage_models = [SubscriptionUsageModel.model_validate(row) for row in rows]
@@ -1517,13 +1534,25 @@ class SubscriptionUsagesTable:
                     items = [SubscriptionUsagePublicModel.model_validate(row) for row in rows]
                 else:
                     items = usage_models
+
+            totals = (
+                await session.execute(
+                    select(
+                        func.coalesce(func.sum(SubscriptionUsage.cost_micros), 0),
+                        func.coalesce(func.sum(SubscriptionUsage.input_tokens), 0),
+                        func.coalesce(func.sum(SubscriptionUsage.output_tokens), 0),
+                        func.coalesce(func.sum(SubscriptionUsage.cache_creation_tokens), 0),
+                        func.coalesce(func.sum(SubscriptionUsage.cache_read_tokens), 0),
+                    ).where(*filters)
+                )
+            ).one()
             return {
                 'items': items,
-                'total_cost_micros': sum(item.cost_micros for item in usage_models),
-                'total_input_tokens': sum(item.input_tokens for item in usage_models),
-                'total_output_tokens': sum(item.output_tokens for item in usage_models),
-                'total_cache_creation_tokens': sum(item.cache_creation_tokens or 0 for item in usage_models),
-                'total_cache_read_tokens': sum(item.cache_read_tokens or 0 for item in usage_models),
+                'total_cost_micros': int(totals[0]),
+                'total_input_tokens': int(totals[1]),
+                'total_output_tokens': int(totals[2]),
+                'total_cache_creation_tokens': int(totals[3]),
+                'total_cache_read_tokens': int(totals[4]),
             }
 
 

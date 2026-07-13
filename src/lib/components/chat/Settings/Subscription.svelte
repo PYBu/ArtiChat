@@ -1,12 +1,12 @@
 <script lang="ts">
 	import { createEventDispatcher, onMount } from 'svelte';
 	import { toast } from 'svelte-sonner';
-	import { getSubscriptionPlans } from '$lib/apis/subscriptions';
+	import { getSubscriptionPlans, type SubscriptionPlan } from '$lib/apis/subscriptions';
 	import { refreshSubscription, subscription } from '$lib/stores';
 
 	const dispatch = createEventDispatcher();
 
-	let plans: any[] = [];
+	let plans: SubscriptionPlan[] = [];
 	let loading = true;
 
 	const tierLabel = (tier?: string, displayName?: string) => {
@@ -54,7 +54,10 @@
 <div id="tab-subscription" class="flex h-full flex-col gap-4 text-sm">
 	<div class="flex items-center justify-between gap-3">
 		<div class="text-base font-medium">订阅</div>
-		<button class="rounded-full px-3 py-1.5 text-xs font-medium hover:bg-gray-100 dark:hover:bg-gray-850" on:click={() => dispatch('redeem')}>
+		<button
+			class="rounded-full px-3 py-1.5 text-xs font-medium hover:bg-gray-100 dark:hover:bg-gray-850"
+			on:click={() => dispatch('redeem')}
+		>
 			兑换码
 		</button>
 	</div>
@@ -64,7 +67,9 @@
 	{:else if currentSubscription}
 		<div class="rounded-lg border border-gray-100 p-3 dark:border-gray-850">
 			<div class="flex items-center justify-between gap-3">
-				<div class="font-medium">{tierLabel(currentSubscription.tier, currentSubscription.display_name)}</div>
+				<div class="font-medium">
+					{tierLabel(currentSubscription.tier, currentSubscription.display_name)}
+				</div>
 				<div class="text-xs text-gray-500">{statusLabel(currentSubscription.status)}</div>
 			</div>
 			<div class="mt-3 grid grid-cols-2 gap-2 text-xs text-gray-600 dark:text-gray-300">
@@ -86,18 +91,26 @@
 
 	<div class="grid gap-3 md:grid-cols-3">
 		{#each plans as plan}
-			<div class="flex min-h-56 flex-col rounded-lg border border-gray-100 p-4 dark:border-gray-850">
+			<div
+				class="flex min-h-56 flex-col rounded-lg border border-gray-100 p-4 dark:border-gray-850"
+			>
 				<div class="flex items-start justify-between gap-3">
 					<div>
 						<div class="text-base font-medium">{tierLabel(plan.id, plan.display_name)}</div>
-						<div class="mt-1 text-xs text-gray-500">{plan.features?.subtitle ?? plan.description}</div>
+						<div class="mt-1 text-xs text-gray-500">
+							{plan.features?.subtitle ?? plan.description}
+						</div>
 					</div>
-					<div class="rounded-lg bg-gray-100 px-2 py-1 text-xs font-medium uppercase dark:bg-gray-850">
+					<div
+						class="rounded-lg bg-gray-100 px-2 py-1 text-xs font-medium uppercase dark:bg-gray-850"
+					>
 						{plan.features?.icon ?? 'plan'}
 					</div>
 				</div>
 
-				<div class="mt-4 text-xl font-semibold">{formatChatpoint(plan.plan_chatpoint_allowance_micros)}</div>
+				<div class="mt-4 text-xl font-semibold">
+					{formatChatpoint(plan.plan_chatpoint_allowance_micros)}
+				</div>
 				<div class="text-xs text-gray-500">每月 Plan Chatpoint</div>
 
 				<div class="mt-4 flex-1 space-y-2 text-xs text-gray-600 dark:text-gray-300">
@@ -115,7 +128,9 @@
 					class="mt-4 w-full rounded-full bg-gray-100 px-3 py-1.5 text-xs font-medium dark:bg-gray-850"
 					on:click={() => toast.info('购买功能暂未开放。')}
 				>
-					{currentSubscription?.tier === plan.id ? '当前订阅' : (plan.features?.cta_label ?? '购买')}
+					{currentSubscription?.tier === plan.id
+						? '当前订阅'
+						: (plan.features?.cta_label ?? '购买')}
 				</button>
 			</div>
 		{/each}

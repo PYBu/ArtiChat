@@ -216,6 +216,47 @@ async def test_admin_usage_filters_by_status(db_session):
 
 
 @pytest.mark.asyncio
+async def test_usage_totals_cover_full_filter_when_items_are_paginated(db_session):
+    for index in range(2):
+        await SubscriptionUsages.insert(
+            user_id='summary-user',
+            chat_id=None,
+            message_id=None,
+            model_id='summary-model',
+            tier='free',
+            quota_mode='metered',
+            usage_multiplier='1',
+            input_tokens=10 + index,
+            output_tokens=20 + index,
+            cache_creation_tokens=2,
+            cache_read_tokens=3,
+            total_tokens=30 + index * 2,
+            cost_micros=100 + index,
+            plan_cost_micros=100 + index,
+            check_cost_micros=0,
+            plan_balance_after_micros=0,
+            check_balance_after_micros=0,
+            status='billed',
+            metadata={},
+            created_at=1_720_000_000 + index,
+            db=db_session,
+        )
+
+    result = await SubscriptionUsages.get_usage_summary(
+        user_id='summary-user',
+        limit=1,
+        db=db_session,
+    )
+
+    assert len(result['items']) == 1
+    assert result['total_cost_micros'] == 201
+    assert result['total_input_tokens'] == 21
+    assert result['total_output_tokens'] == 41
+    assert result['total_cache_creation_tokens'] == 4
+    assert result['total_cache_read_tokens'] == 6
+
+
+@pytest.mark.asyncio
 async def test_admin_user_list_includes_subscription_summary(db_session):
     await SubscriptionPlans.seed_defaults(db=db_session)
     await create_user(db_session, 'summary-user', 'summary@example.com', 'summary', 'Summary User')

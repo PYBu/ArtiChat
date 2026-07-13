@@ -1,7 +1,11 @@
+from unittest.mock import AsyncMock
+
 import pytest
+from sqlalchemy import event
 
 from open_webui.models.email_security import EmailDeliveries, EmailTemplates
 from open_webui.utils.email_delivery import (
+    DEFAULT_EMAIL_TEMPLATES,
     SMTPStageError,
     deliver_email,
     normalize_smtp_settings,
@@ -21,6 +25,29 @@ def configured_smtp():
         },
         secret_key='primary-secret',
     )
+
+
+@pytest.mark.asyncio
+async def test_current_email_template_defaults_do_not_commit_or_run_per_template_queries(
+    db_session, monkeypatch
+):
+    await EmailTemplates.seed_defaults(DEFAULT_EMAIL_TEMPLATES, db=db_session)
+    statements: list[str] = []
+
+    def record_statement(_conn, _cursor, statement, _parameters, _context, _executemany):
+        statements.append(statement)
+
+    event.listen(db_session.bind.sync_engine, 'before_cursor_execute', record_statement)
+    commit = AsyncMock()
+    monkeypatch.setattr(db_session, 'commit', commit)
+    try:
+        await EmailTemplates.seed_defaults(DEFAULT_EMAIL_TEMPLATES, db=db_session)
+    finally:
+        event.remove(db_session.bind.sync_engine, 'before_cursor_execute', record_statement)
+        await db_session.rollback()
+
+    commit.assert_not_awaited()
+    assert len([statement for statement in statements if statement.lstrip().upper().startswith('SELECT')]) == 1
 
 
 @pytest.mark.asyncio
@@ -62,6 +89,9 @@ async def test_delivery_seeds_templates_records_success_and_redacts_secrets(db_s
     assert '123456' not in stored.html_body
     assert '[redacted]' in stored.text_body
     assert len(await EmailTemplates.list_all(db=db_session)) == 9
+    template = await EmailTemplates.get('registration_code', db=db_session)
+    assert template is not None
+    assert '<h1' in (template.html_body or '')
 
 
 @pytest.mark.asyncio

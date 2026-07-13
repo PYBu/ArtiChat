@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Literal
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from open_webui.internal.db import get_async_session
 from open_webui.models.models import Models
@@ -21,7 +22,7 @@ from open_webui.utils.subscriptions import ModelSubscriptionPolicy, ensure_subsc
 from open_webui.utils.sensitive_actions import authorize_sensitive_action
 from open_webui.utils.account_notifications import notify_subscription_changed, notify_user
 from open_webui.models.users import Users
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter()
@@ -61,10 +62,10 @@ class BillingAddressForm(BaseModel):
 
 
 class AdminCodeCreateForm(BaseModel):
-    code: str | None = None
-    mode: str
-    quantity: int = 1
-    max_uses: int = 1
+    code: str | None = Field(default=None, max_length=128)
+    mode: Literal['single_use', 'multi_use']
+    quantity: int = Field(default=1, ge=1, le=500)
+    max_uses: int = Field(default=1, ge=1, le=1_000_000)
     tier: str | None = None
     duration_days: int | None = None
     plan_chatpoint: str | int = 0
@@ -120,9 +121,9 @@ class AdminUserSubscriptionUpdateForm(BaseModel):
 
 
 class GiftCardCreateForm(BaseModel):
-    user_ids: list[str] = []
+    user_ids: list[str] = Field(default_factory=list, max_length=1000)
     all_users: bool = False
-    mode: str = 'single_use'
+    mode: Literal['single_use', 'multi_use'] = 'single_use'
     tier: str | None = None
     duration_days: int | None = None
     plan_chatpoint: str | int = 0
@@ -131,13 +132,28 @@ class GiftCardCreateForm(BaseModel):
     memo: str | None = None
 
 
+def _admin_model_policy_response(model) -> dict:
+    return {
+        'id': model.id,
+        'name': model.name,
+        'base_model_id': model.base_model_id,
+        'subscription': model.meta.subscription if model.meta else None,
+    }
+
+
 @router.get('/me')
-async def get_my_subscription(user=Depends(get_verified_subscription_user), db: AsyncSession = Depends(get_async_session)):
+async def get_my_subscription(
+    user=Depends(get_verified_subscription_user),
+    db: AsyncSession = Depends(get_async_session),
+):
     return await ensure_subscription_current(user.id, db=db)
 
 
 @router.get('/plans')
-async def get_subscription_plans(user=Depends(get_verified_subscription_user), db: AsyncSession = Depends(get_async_session)):
+async def get_subscription_plans(
+    user=Depends(get_verified_subscription_user),
+    db: AsyncSession = Depends(get_async_session),
+):
     await SubscriptionPlans.seed_defaults(db=db)
     return [plan for plan in await SubscriptionPlans.get_plans(db=db) if plan.is_active]
 
@@ -170,7 +186,10 @@ async def get_my_records(user=Depends(get_verified_subscription_user), db: Async
 
 
 @router.get('/gift-cards/pending')
-async def get_pending_gift_cards(user=Depends(get_verified_subscription_user), db: AsyncSession = Depends(get_async_session)):
+async def get_pending_gift_cards(
+    user=Depends(get_verified_subscription_user),
+    db: AsyncSession = Depends(get_async_session),
+):
     return {'items': await GiftCardGrants.list_pending_for_user(user.id, db=db)}
 
 
@@ -248,17 +267,12 @@ async def update_admin_plan(
 
 
 @router.get('/admin/models')
-async def get_admin_model_policies(user=Depends(get_admin_subscription_user), db: AsyncSession = Depends(get_async_session)):
+async def get_admin_model_policies(
+    user=Depends(get_admin_subscription_user),
+    db: AsyncSession = Depends(get_async_session),
+):
     models = await Models.get_all_models(db=db)
-    return [
-        {
-            'id': model.id,
-            'name': model.name,
-            'base_model_id': model.base_model_id,
-            'subscription': (model.meta.subscription if model.meta else None),
-        }
-        for model in models
-    ]
+    return [_admin_model_policy_response(model) for model in models]
 
 
 @router.put('/admin/models/bulk')
@@ -269,9 +283,10 @@ async def update_admin_model_policies(
 ):
     policies = {item.id: item.subscription.model_dump() for item in form_data.models}
     try:
-        return await Models.update_model_subscription_policies(policies, db=db)
+        updated = await Models.update_model_subscription_policies(policies, db=db)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return [_admin_model_policy_response(model) for model in updated]
 
 
 @router.put('/admin/models/{model_id}')
@@ -288,13 +303,13 @@ async def update_admin_model_policy(
         )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    return updated[0]
+    return _admin_model_policy_response(updated[0])
 
 
 @router.get('/admin/codes')
 async def get_admin_codes(
-    limit: int = 100,
-    offset: int = 0,
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
     user=Depends(get_admin_subscription_user),
     db: AsyncSession = Depends(get_async_session),
 ):
@@ -357,12 +372,20 @@ async def delete_admin_code(
 async def get_admin_gift_cards(
     batch_id: str | None = None,
     user_id: str | None = None,
-    limit: int = 100,
-    offset: int = 0,
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
     user=Depends(get_admin_subscription_user),
     db: AsyncSession = Depends(get_async_session),
 ):
-    return {'items': await GiftCardGrants.list_grants(batch_id=batch_id, user_id=user_id, limit=limit, offset=offset, db=db)}
+    return {
+        'items': await GiftCardGrants.list_grants(
+            batch_id=batch_id,
+            user_id=user_id,
+            limit=limit,
+            offset=offset,
+            db=db,
+        )
+    }
 
 
 @router.post('/admin/gift-cards')
@@ -415,12 +438,19 @@ async def revoke_admin_gift_card(
 @router.get('/admin/users')
 async def get_admin_user_subscriptions(
     query: str | None = None,
-    limit: int = 100,
-    offset: int = 0,
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
     user=Depends(get_admin_subscription_user),
     db: AsyncSession = Depends(get_async_session),
 ):
-    return {'items': await UserSubscriptions.list_subscriptions_with_users(query=query, limit=limit, offset=offset, db=db)}
+    return {
+        'items': await UserSubscriptions.list_subscriptions_with_users(
+            query=query,
+            limit=limit,
+            offset=offset,
+            db=db,
+        )
+    }
 
 
 @router.patch('/admin/users/{user_id}')
@@ -493,8 +523,8 @@ async def get_admin_usage(
     status: str | None = None,
     start_at: int | None = None,
     end_at: int | None = None,
-    limit: int = 100,
-    offset: int = 0,
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
     user=Depends(get_admin_subscription_user),
     db: AsyncSession = Depends(get_async_session),
 ):
@@ -515,8 +545,8 @@ async def get_admin_usage(
 async def get_admin_ledger(
     user_id: str | None = None,
     event_type: str | None = None,
-    limit: int = 100,
-    offset: int = 0,
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
     user=Depends(get_admin_subscription_user),
     db: AsyncSession = Depends(get_async_session),
 ):

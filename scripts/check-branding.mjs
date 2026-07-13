@@ -5,7 +5,6 @@ const files = [
 	'README.md',
 	'TROUBLESHOOTING.md',
 	'docs/SECURITY.md',
-	'Makefile',
 	'scripts/generate-sbom.sh',
 	'src/app.html',
 	'src/lib/constants.ts',

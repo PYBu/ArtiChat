@@ -1,4 +1,5 @@
 import { WEBUI_API_BASE_URL } from '$lib/constants';
+import { apiJsonFetch } from '$lib/apis/base';
 
 export type EmailSettings = {
 	enabled: boolean;
@@ -19,9 +20,16 @@ export type EmailTemplate = {
 	key: string;
 	subject: string;
 	markdown_body: string;
+	html_body: string;
 	is_enabled: boolean;
 	updated_at: number;
 	allowed_variables: string[];
+};
+
+export type EmailTemplatePreview = {
+	subject: string;
+	html_body: string;
+	text_body: string;
 };
 
 export type EmailDelivery = {
@@ -47,44 +55,19 @@ export type RegistrationSettings = {
 
 export type SensitiveAction = 'password' | 'billing_address' | 'email';
 
-const jsonFetch = async <T>(
-	url: string,
-	token: string | null,
-	options: RequestInit = {}
-): Promise<T> => {
-	let error: unknown = null;
-	const headers = Object.assign(
-		{ 'Content-Type': 'application/json' },
-		options.headers ?? {}
-	) as Record<string, string>;
-	if (token) headers.authorization = `Bearer ${token}`;
-	const response = await fetch(url, { ...options, headers })
-		.then(async (res) => {
-			if (!res.ok) throw await res.json();
-			return res.json();
-		})
-		.catch((reason) => {
-			error = reason?.detail?.code ?? reason?.detail ?? reason;
-			return null;
-		});
-
-	if (error) throw error;
-	return response as T;
-};
-
 export const getEmailSettings = async (token: string) => {
-	return jsonFetch<EmailSettings>(`${WEBUI_API_BASE_URL}/emails/admin/settings`, token);
+	return apiJsonFetch<EmailSettings>(`${WEBUI_API_BASE_URL}/emails/admin/settings`, token);
 };
 
 export const updateEmailSettings = async (token: string, settings: Partial<EmailSettings>) => {
-	return jsonFetch<EmailSettings>(`${WEBUI_API_BASE_URL}/emails/admin/settings`, token, {
+	return apiJsonFetch<EmailSettings>(`${WEBUI_API_BASE_URL}/emails/admin/settings`, token, {
 		method: 'PUT',
 		body: JSON.stringify(settings)
 	});
 };
 
 export const testEmailConnection = async (token: string) => {
-	return jsonFetch<{ ok: boolean; stage: string }>(
+	return apiJsonFetch<{ ok: boolean; stage: string }>(
 		`${WEBUI_API_BASE_URL}/emails/admin/connection-test`,
 		token,
 		{ method: 'POST' }
@@ -92,25 +75,38 @@ export const testEmailConnection = async (token: string) => {
 };
 
 export const sendEmailTest = async (token: string, recipient: string) => {
-	return jsonFetch<EmailDelivery>(`${WEBUI_API_BASE_URL}/emails/admin/test-email`, token, {
+	return apiJsonFetch<EmailDelivery>(`${WEBUI_API_BASE_URL}/emails/admin/test-email`, token, {
 		method: 'POST',
 		body: JSON.stringify({ recipient })
 	});
 };
 
 export const getEmailTemplates = async (token: string) => {
-	return jsonFetch<EmailTemplate[]>(`${WEBUI_API_BASE_URL}/emails/admin/templates`, token);
+	return apiJsonFetch<EmailTemplate[]>(`${WEBUI_API_BASE_URL}/emails/admin/templates`, token);
 };
 
 export const updateEmailTemplate = async (
 	token: string,
 	templateKey: string,
-	template: Pick<EmailTemplate, 'subject' | 'markdown_body' | 'is_enabled'>
+	template: Pick<EmailTemplate, 'subject' | 'html_body' | 'is_enabled'>
 ) => {
-	return jsonFetch<EmailTemplate>(
+	return apiJsonFetch<EmailTemplate>(
 		`${WEBUI_API_BASE_URL}/emails/admin/templates/${encodeURIComponent(templateKey)}`,
 		token,
 		{ method: 'PUT', body: JSON.stringify(template) }
+	);
+};
+
+export const previewEmailTemplate = async (
+	token: string,
+	templateKey: string,
+	template: Pick<EmailTemplate, 'subject' | 'html_body' | 'is_enabled'>,
+	signal?: AbortSignal
+) => {
+	return apiJsonFetch<EmailTemplatePreview>(
+		`${WEBUI_API_BASE_URL}/emails/admin/templates/${encodeURIComponent(templateKey)}/preview`,
+		token,
+		{ method: 'POST', body: JSON.stringify(template), signal }
 	);
 };
 
@@ -122,14 +118,14 @@ export const getEmailDeliveries = async (
 	if (options.limit !== undefined) params.set('limit', String(options.limit));
 	if (options.offset !== undefined) params.set('offset', String(options.offset));
 	const query = params.toString();
-	return jsonFetch<EmailDelivery[]>(
+	return apiJsonFetch<EmailDelivery[]>(
 		`${WEBUI_API_BASE_URL}/emails/admin/deliveries${query ? `?${query}` : ''}`,
 		token
 	);
 };
 
 export const retryEmailDelivery = async (token: string, deliveryId: string) => {
-	return jsonFetch<EmailDelivery>(
+	return apiJsonFetch<EmailDelivery>(
 		`${WEBUI_API_BASE_URL}/emails/admin/deliveries/${encodeURIComponent(deliveryId)}/retry`,
 		token,
 		{ method: 'POST' }
@@ -137,31 +133,42 @@ export const retryEmailDelivery = async (token: string, deliveryId: string) => {
 };
 
 export const getRegistrationSettings = async (token: string) => {
-	return jsonFetch<RegistrationSettings>(`${WEBUI_API_BASE_URL}/emails/admin/registration`, token);
+	return apiJsonFetch<RegistrationSettings>(
+		`${WEBUI_API_BASE_URL}/emails/admin/registration`,
+		token
+	);
 };
 
 export const updateRegistrationSettings = async (
 	token: string,
 	settings: Partial<RegistrationSettings>
 ) => {
-	return jsonFetch<RegistrationSettings>(`${WEBUI_API_BASE_URL}/emails/admin/registration`, token, {
-		method: 'PUT',
-		body: JSON.stringify(settings)
-	});
+	return apiJsonFetch<RegistrationSettings>(
+		`${WEBUI_API_BASE_URL}/emails/admin/registration`,
+		token,
+		{
+			method: 'PUT',
+			body: JSON.stringify(settings)
+		}
+	);
 };
 
 export const getPublicRegistrationSettings = async () => {
-	return jsonFetch<{
+	return apiJsonFetch<{
 		verification_enabled: boolean;
 		email_code_login_enabled: boolean;
 	}>(`${WEBUI_API_BASE_URL}/emails/registration/public`, null);
 };
 
 export const requestEmailChallenge = async (email: string, purpose: 'registration' | 'login') => {
-	return jsonFetch<{ status: boolean }>(`${WEBUI_API_BASE_URL}/emails/challenges/request`, null, {
-		method: 'POST',
-		body: JSON.stringify({ email, purpose })
-	});
+	return apiJsonFetch<{ status: boolean }>(
+		`${WEBUI_API_BASE_URL}/emails/challenges/request`,
+		null,
+		{
+			method: 'POST',
+			body: JSON.stringify({ email, purpose })
+		}
+	);
 };
 
 export const verifyEmailChallenge = async (
@@ -169,7 +176,7 @@ export const verifyEmailChallenge = async (
 	purpose: 'registration' | 'login',
 	code: string
 ) => {
-	return jsonFetch<{ verification_token: string }>(
+	return apiJsonFetch<{ verification_token: string }>(
 		`${WEBUI_API_BASE_URL}/emails/challenges/verify`,
 		null,
 		{ method: 'POST', body: JSON.stringify({ email, purpose, code }) }
@@ -177,21 +184,21 @@ export const verifyEmailChallenge = async (
 };
 
 export const forgotPassword = async (email: string) => {
-	return jsonFetch<{ status: boolean }>(`${WEBUI_API_BASE_URL}/emails/password/forgot`, null, {
+	return apiJsonFetch<{ status: boolean }>(`${WEBUI_API_BASE_URL}/emails/password/forgot`, null, {
 		method: 'POST',
 		body: JSON.stringify({ email })
 	});
 };
 
 export const resetPassword = async (token: string, newPassword: string) => {
-	return jsonFetch<{ status: boolean }>(`${WEBUI_API_BASE_URL}/emails/password/reset`, null, {
+	return apiJsonFetch<{ status: boolean }>(`${WEBUI_API_BASE_URL}/emails/password/reset`, null, {
 		method: 'POST',
 		body: JSON.stringify({ token, new_password: newPassword })
 	});
 };
 
 export const requestSensitiveChallenge = async (token: string, action: SensitiveAction) => {
-	return jsonFetch<{ status: boolean; verification_required: boolean }>(
+	return apiJsonFetch<{ status: boolean; verification_required: boolean }>(
 		`${WEBUI_API_BASE_URL}/emails/challenges/sensitive/request`,
 		token,
 		{ method: 'POST', body: JSON.stringify({ action }) }
@@ -203,7 +210,7 @@ export const verifySensitiveChallenge = async (
 	action: SensitiveAction,
 	code: string
 ) => {
-	return jsonFetch<{ verification_token: string }>(
+	return apiJsonFetch<{ verification_token: string }>(
 		`${WEBUI_API_BASE_URL}/emails/challenges/sensitive/verify`,
 		token,
 		{ method: 'POST', body: JSON.stringify({ action, code }) }
@@ -215,7 +222,7 @@ export const requestNewEmailChallenge = async (
 	email: string,
 	currentVerificationToken: string
 ) => {
-	return jsonFetch<{ status: boolean; verification_required: boolean }>(
+	return apiJsonFetch<{ status: boolean; verification_required: boolean }>(
 		`${WEBUI_API_BASE_URL}/emails/challenges/sensitive/email/request-new`,
 		token,
 		{
@@ -226,7 +233,7 @@ export const requestNewEmailChallenge = async (
 };
 
 export const verifyNewEmailChallenge = async (token: string, email: string, code: string) => {
-	return jsonFetch<{ verification_token: string }>(
+	return apiJsonFetch<{ verification_token: string }>(
 		`${WEBUI_API_BASE_URL}/emails/challenges/sensitive/email/verify-new`,
 		token,
 		{ method: 'POST', body: JSON.stringify({ email, code }) }

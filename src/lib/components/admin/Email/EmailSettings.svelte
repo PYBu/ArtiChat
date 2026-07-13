@@ -55,7 +55,8 @@
 
 	const persist = async (notify = true) => {
 		saving = true;
-		const { password_configured: _passwordConfigured, ...payload } = settings;
+		const payload: Partial<EmailSettings> = { ...settings };
+		delete payload.password_configured;
 		const saved = await updateEmailSettings(localStorage.token, payload).catch((error) => {
 			showError(error);
 			return null;
