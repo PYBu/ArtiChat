@@ -1,3 +1,4 @@
+![LOGO](artivis-ass/logo/artimage-mark-light.png)
 # ArtiChat
 
 **ArtiChat 是一个可私有化部署的 AI 对话平台，支持接入多种大模型，开箱即用，数据自主可控。**
