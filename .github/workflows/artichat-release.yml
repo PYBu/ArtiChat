@@ -75,6 +75,11 @@ jobs:
           docker buildx build \
             --platform linux/amd64 \
             --build-arg "BUILD_HASH=${GITHUB_SHA}" \
+            --build-arg "ALPINE_MIRROR=https://dl-cdn.alpinelinux.org/alpine" \
+            --build-arg "NPM_REGISTRY=https://registry.npmjs.org" \
+            --build-arg "PYPI_INDEX_URL=https://pypi.org/simple" \
+            --build-arg "DEBIAN_MIRROR=https://deb.debian.org/debian" \
+            --build-arg "DEBIAN_SECURITY_MIRROR=https://deb.debian.org/debian-security" \
             --tag "${IMAGE}:${VERSION}" \
             --tag "${IMAGE}:latest" \
             --cache-from "type=registry,ref=${IMAGE}:buildcache" \
