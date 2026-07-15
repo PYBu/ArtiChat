@@ -10,6 +10,11 @@ from sqlalchemy import BigInteger, Boolean, Column, Index, Text, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
+DEFAULT_ANNOUNCEMENT_IMAGE_URL = '/assets/images/space.jpg'
+DEFAULT_ANNOUNCEMENT_VIEW_LABEL = '查看公告'
+DEFAULT_ANNOUNCEMENT_CLOSE_LABEL = '关闭'
+
+
 @asynccontextmanager
 async def get_announcement_db_context(db: AsyncSession | None = None) -> AsyncIterator[AsyncSession]:
     if db is not None:
@@ -24,7 +29,11 @@ class Announcement(Base):
 
     id = Column(Text, primary_key=True)
     title = Column(Text, nullable=False)
+    summary = Column(Text, nullable=False, default='')
     body = Column(Text, nullable=False)
+    image_url = Column(Text, nullable=True, default=DEFAULT_ANNOUNCEMENT_IMAGE_URL)
+    view_button_label = Column(Text, nullable=False, default=DEFAULT_ANNOUNCEMENT_VIEW_LABEL)
+    close_button_label = Column(Text, nullable=False, default=DEFAULT_ANNOUNCEMENT_CLOSE_LABEL)
     display_mode = Column(Text, nullable=False)
     button_label = Column(Text, nullable=False, default='知道了')
     icon = Column(Text, nullable=True)
@@ -53,7 +62,11 @@ class AnnouncementModel(BaseModel):
 
     id: str
     title: str
+    summary: str
     body: str
+    image_url: str | None = None
+    view_button_label: str
+    close_button_label: str
     display_mode: str
     button_label: str
     icon: str | None = None
@@ -93,6 +106,10 @@ class AnnouncementsTable:
         ends_at: int | None,
         sort_order: int,
         created_by: str,
+        summary: str | None = None,
+        image_url: str | None = DEFAULT_ANNOUNCEMENT_IMAGE_URL,
+        view_button_label: str = DEFAULT_ANNOUNCEMENT_VIEW_LABEL,
+        close_button_label: str | None = None,
         now: int | None = None,
         db: AsyncSession | None = None,
     ) -> AnnouncementModel:
@@ -102,7 +119,11 @@ class AnnouncementsTable:
             row = Announcement(
                 id=new_id('ann'),
                 title=title,
+                summary=summary or body,
                 body=body,
+                image_url=image_url or DEFAULT_ANNOUNCEMENT_IMAGE_URL,
+                view_button_label=view_button_label or DEFAULT_ANNOUNCEMENT_VIEW_LABEL,
+                close_button_label=close_button_label or button_label or DEFAULT_ANNOUNCEMENT_CLOSE_LABEL,
                 display_mode=display_mode,
                 button_label=button_label or '知道了',
                 icon=icon,
@@ -143,7 +164,11 @@ class AnnouncementsTable:
         announcement_id: str,
         *,
         title: str | None = None,
+        summary: str | None = None,
         body: str | None = None,
+        image_url: str | None = None,
+        view_button_label: str | None = None,
+        close_button_label: str | None = None,
         display_mode: str | None = None,
         button_label: str | None = None,
         icon: str | None = None,
@@ -161,8 +186,16 @@ class AnnouncementsTable:
                 raise ValueError('ANNOUNCEMENT_NOT_FOUND')
             if title is not None:
                 row.title = title
+            if summary is not None:
+                row.summary = summary
             if body is not None:
                 row.body = body
+            if image_url is not None:
+                row.image_url = image_url
+            if view_button_label is not None:
+                row.view_button_label = view_button_label
+            if close_button_label is not None:
+                row.close_button_label = close_button_label
             if display_mode is not None:
                 row.display_mode = display_mode
             if button_label is not None:

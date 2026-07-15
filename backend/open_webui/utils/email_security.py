@@ -201,7 +201,10 @@ async def create_email_challenge(
     async with get_email_security_db_context(db) as session:
         latest_result = await session.execute(
             select(EmailChallenge)
-            .where(EmailChallenge.email == normalized_email)
+            .where(
+                EmailChallenge.email == normalized_email,
+                EmailChallenge.purpose == purpose,
+            )
             .order_by(EmailChallenge.created_at.desc())
             .limit(1)
         )

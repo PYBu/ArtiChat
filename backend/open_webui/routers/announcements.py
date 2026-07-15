@@ -36,7 +36,11 @@ def get_admin_announcement_user(user=Depends(get_announcement_current_user)):
 
 class AnnouncementForm(BaseModel):
     title: str
+    summary: str | None = None
     body: str
+    image_url: str | None = '/assets/images/space.jpg'
+    view_button_label: str = '查看公告'
+    close_button_label: str | None = None
     display_mode: str = 'once'
     button_label: str = '知道了'
     icon: str | None = None
@@ -48,7 +52,11 @@ class AnnouncementForm(BaseModel):
 
 class AnnouncementUpdateForm(BaseModel):
     title: str | None = None
+    summary: str | None = None
     body: str | None = None
+    image_url: str | None = None
+    view_button_label: str | None = None
+    close_button_label: str | None = None
     display_mode: str | None = None
     button_label: str | None = None
     icon: str | None = None
@@ -111,7 +119,11 @@ async def create_admin_announcement(
     try:
         return await Announcements.create(
             title=form_data.title,
+            summary=form_data.summary,
             body=form_data.body,
+            image_url=form_data.image_url,
+            view_button_label=form_data.view_button_label,
+            close_button_label=form_data.close_button_label,
             display_mode=form_data.display_mode,
             button_label=form_data.button_label,
             icon=form_data.icon,
@@ -138,7 +150,11 @@ async def update_admin_announcement(
         return await Announcements.update(
             announcement_id,
             title=form_data.title,
+            summary=form_data.summary,
             body=form_data.body,
+            image_url=form_data.image_url,
+            view_button_label=form_data.view_button_label,
+            close_button_label=form_data.close_button_label,
             display_mode=form_data.display_mode,
             button_label=form_data.button_label,
             icon=form_data.icon,

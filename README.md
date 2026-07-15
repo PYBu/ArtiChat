@@ -1,26 +1,49 @@
+
+
+<p align="center"><img src="artivis-ass/title.png" alt="演示图片" width="100%"></p>
+
 # ArtiChat
 
 **ArtiChat 是一个可私有化部署的 AI 对话平台，支持接入多种大模型，开箱即用，数据自主可控。**
 
-它可以完全离线运行，兼容 OpenAI 风格 API 与本地 Ollama 模型，内置检索增强（RAG）、多用户与权限管理、插件扩展等能力，适合团队与个人搭建自己的 AI 工作台。
+它基于 <a href="https://github.com/open-webui/open-webui">OpenWebUI</a> ，是一个可以完全离线运行，兼容 OpenAI 风格 API ，内置检索增强（RAG）、多用户与权限管理、插件扩展等能力，适合团队与个人搭建自己的 AI 工作台。
+> 以 OpenWebUI 0.10.2 作为二次开发版本
+> Powered By Artivis Studio | <a href="https://chat.artivis.cc">Web ArtiChat</a>
 
 ![SvelteKit](https://img.shields.io/badge/frontend-SvelteKit-ff3e00?logo=svelte&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/backend-FastAPI-009688?logo=fastapi&logoColor=white)
 ![Docker](https://img.shields.io/badge/deploy-Docker-2496ed?logo=docker&logoColor=white)
 ![Python](https://img.shields.io/badge/python-3.11+-3776ab?logo=python&logoColor=white)
 
+
+
 ![ArtiChat 界面](artivis-ass/b6b57ca1dac196f47880bdfdba3bc0e8.png)
 
 ## 核心功能
 
-- **上游兼容**：保留原有对话、知识库、工具和模型接入能力。
+- **上游兼容**：保留原OpenWebUI的全部功能，但是剔除了Ollama功能。
 - **订阅与用量**：支持订阅计划、Chatpoint 额度、四类 Token 计价和用量审计。
+<img src="/artivis-ass/5f1d3fbf73802d221dc80af588ea6875.png">
+
+> 定价方式已重写，改为类似模型官方API四类定价（输入/输出/创缓/读缓）
+
 - **用户与权限**：支持角色访问控制（RBAC）、用户组、管理员用户管理和细粒度模型权限。
 - **注册与邮件**：支持注册域名限制、邮箱验证码登录、密码重置、SMTP 和邮件模板管理。
-- **插件与扩展**：通过 Filters、Actions、Pipes、Tools 扩展能力，并支持 MCP、OpenAPI 工具服务器等外部集成。
-- **智能体与模型编排**：为基础模型叠加自定义指令、工具与知识，构建专用智能体。
-- **笔记工作区**：独立于对话的内容创作区，支持富文本编辑与 AI 改写，并可挂载到任意对话。
-- **私有化与离线**：全部功能可在本地或内网环境运行，数据保留在自己的部署中。
+- **兑换码/礼品卡**: 新增兑换码功能，可以发放订阅/余额，并且加入礼品卡，可以直接给特定用户发放或是全体用户。
+- **公告系统**: 增添公告系统，可以给全体or特定的用户组发放一次/每次登录等公告。（！已知UI美观问题将于0.1.4版本修复）
+- **平台自定义**：搭建后包括平台名称、LOGO资源、关于页面均可自定义修改。
+- **用量管理**：管理员后台/用户后台可以清晰的得知用量信息，管理员端可见用户IP。
+<img src="artivis-ass/4dea05393d4fcaa23bedee1d19481ca9.png">
+<img src="artivis-ass/4fde7dee62fd3b77b9026bbe3eda62d1.png">
+<img src="artivis-ass/a90b2eb989b596b71ef046eb5868569a.png" height="200">
+
+> 用户用量用环状图显示，包括两种Point，订阅分配的可以月刷新的Point以及充值的不参与重置的Point。优先使用可刷新Point。
+
+## 未来企划（计划的0.2版本更新与开发）
+- Github 开源了 Claude Code 的代码，我将二次开发为 ArtiCode （开源Agent工具，已在内测）。
+- ArtiCode 将 ArtiChat 的账号、额度系统，让人人都能拥有自己的Agent软件并分化使用（画饼ing）。
+- ArtiCode 数据（Token）将从 ArtiChat 的根服务器传输并且计费，请求直接打到上游或是你自己的Ollama，相当于为每个用户开通了独立的API（类中转站）服务。
+- 本项目配合 Sub2API/CLIProxyAPI/NewAPI/ChatGPT2API 等项目达到最佳。本项目不做号池服务。
 
 ## 技术栈
 
@@ -117,3 +140,8 @@ ArtiChat/
 ## 许可证
 
 本项目沿用上游的多许可证约定，详见 [`LICENSE`](LICENSE) 与 [`LICENSE_NOTICE`](LICENSE_NOTICE)。使用与分发前请阅读相关许可条款。
+本项目并未获得OpenWebUI的商用许可证，若您的部署用户超过50人或用于商业请移步OpenWebUI官方获取商用版权，本项目品牌&样式仅作参考。
+致谢OpenWebUI项目组的开源。
+
+## 推荐社区
+<a href="https://linux.do/">LinuxDo</a> | 本软件无任何版权，仅为个人（代表Artivis团队）二次开发且维护分享，商用请申请 OpenWebUI 的商用许可！

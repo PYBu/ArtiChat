@@ -23,6 +23,11 @@ const packages = [
 // Packages already provided by the Pyodide distribution (click, platformdirs,
 // typing_extensions, etc.) do NOT need to be listed here.
 const pypiPackages = ['black', 'pathspec', 'mypy_extensions', 'pytokens'];
+const pypiIndexUrl = (
+	process.env.PYODIDE_PYPI_INDEX_URL ||
+	process.env.PIP_INDEX_URL ||
+	'https://pypi.org/simple'
+).replace(/\/+$/, '');
 
 import { loadPyodide } from 'pyodide';
 import { setGlobalDispatcher, ProxyAgent } from 'undici';
@@ -56,6 +61,40 @@ function initNetworkProxyFromEnv() {
 	const dispatcher = new ProxyAgent({ uri: preferedProxyURL });
 	setGlobalDispatcher(dispatcher);
 	console.log(`Initialized network proxy "${preferedProxy}" from env`);
+}
+
+async function fetchWithRetry(url, attempts = 5) {
+	let lastError;
+	for (let attempt = 1; attempt <= attempts; attempt += 1) {
+		try {
+			const response = await fetch(url);
+			if (response.ok || response.status < 500) return response;
+			lastError = new Error(`HTTP ${response.status} for ${url}`);
+		} catch (error) {
+			lastError = error;
+		}
+		if (attempt < attempts) {
+			await new Promise((resolve) => setTimeout(resolve, attempt * 2000));
+		}
+	}
+	throw lastError;
+}
+
+async function installPackage(micropip, pkg) {
+	let lastError;
+	for (let attempt = 1; attempt <= 3; attempt += 1) {
+		try {
+			await micropip.install(pkg);
+			return;
+		} catch (error) {
+			lastError = error;
+			if (attempt < 3) {
+				console.warn(`Retrying ${pkg} after package download failure (${attempt}/3)`);
+				await new Promise((resolve) => setTimeout(resolve, attempt * 3000));
+			}
+		}
+	}
+	throw lastError;
 }
 
 async function downloadPackages() {
@@ -98,7 +137,7 @@ async function downloadPackages() {
 		try {
 			for (const pkg of packages) {
 				console.log(`Installing package: ${pkg}`);
-				await micropip.install(pkg);
+				await installPackage(micropip, pkg);
 			}
 		} catch (err) {
 			console.error('Package installation failed:', err);
@@ -116,6 +155,40 @@ async function downloadPackages() {
 	} catch (err) {
 		console.error('Failed to load or install micropip:', err);
 	}
+}
+
+async function findPurePythonWheel(pkg) {
+	const response = await fetchWithRetry(`${pypiIndexUrl}/${pkg}/`);
+	if (!response.ok) {
+		console.error(`Failed to fetch PyPI index for ${pkg}: ${response.status}`);
+		return null;
+	}
+
+	const html = await response.text();
+	const links = [...html.matchAll(/href=["']([^"']+\.whl(?:#[^"']*)?)["']/gi)];
+	const normalizedPackage = pkg.toLowerCase().replace(/[-_.]+/g, '-');
+	const wheels = links
+		.map((match) => {
+			const url = new URL(match[1].replaceAll('&amp;', '&'), `${pypiIndexUrl}/${pkg}/`);
+			const filename = decodeURIComponent(url.pathname.split('/').at(-1) || '');
+			const normalizedFilename = filename.toLowerCase().replace(/[-_.]+/g, '-');
+			if (
+				!normalizedFilename.startsWith(`${normalizedPackage}-`) ||
+				!filename.endsWith('py3-none-any.whl')
+			) {
+				return null;
+			}
+			const version = filename.match(/^[^-]+-([^-]+)-/)?.[1] || '';
+			return {
+				filename,
+				version,
+				url: url.toString(),
+				sha256: url.hash.startsWith('#sha256=') ? url.hash.slice('#sha256='.length) : ''
+			};
+		})
+		.filter(Boolean);
+
+	return wheels.at(-1) || null;
 }
 
 async function copyPyodide() {
@@ -143,22 +216,12 @@ async function downloadPyPIWheels() {
 
 	for (const pkg of pypiPackages) {
 		console.log(`Fetching PyPI metadata for: ${pkg}`);
-		const res = await fetch(`https://pypi.org/pypi/${pkg}/json`);
-		if (!res.ok) {
-			console.error(`Failed to fetch PyPI metadata for ${pkg}: ${res.status}`);
-			continue;
-		}
-		const meta = await res.json();
-		const version = meta.info.version;
-		const files = meta.urls || [];
-		// Find the pure-Python wheel (py3-none-any)
-		const wheel = files.find(
-			(f) => f.filename.endsWith('.whl') && f.filename.includes('py3-none-any')
-		);
+		const wheel = await findPurePythonWheel(pkg);
 		if (!wheel) {
-			console.warn(`No pure-Python wheel found for ${pkg}==${version}, skipping`);
+			console.warn(`No pure-Python wheel found for ${pkg}, skipping`);
 			continue;
 		}
+		const version = wheel.version;
 		const dest = `static/pyodide/${wheel.filename}`;
 		// Download wheel if not already present
 		try {
@@ -166,7 +229,7 @@ async function downloadPyPIWheels() {
 			console.log(`  Already exists: ${wheel.filename}`);
 		} catch {
 			console.log(`  Downloading: ${wheel.filename}`);
-			const wheelRes = await fetch(wheel.url);
+			const wheelRes = await fetchWithRetry(wheel.url);
 			if (!wheelRes.ok) {
 				console.error(`  Failed to download ${wheel.filename}: ${wheelRes.status}`);
 				continue;
@@ -184,7 +247,7 @@ async function downloadPyPIWheels() {
 				version: version,
 				file_name: wheel.filename,
 				install_dir: 'site',
-				sha256: wheel.digests?.sha256 || '',
+				sha256: wheel.sha256,
 				package_type: 'package',
 				imports: [normalizedName],
 				depends: []

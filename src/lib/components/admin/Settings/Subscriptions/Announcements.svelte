@@ -16,10 +16,12 @@
 	let showInactive = false;
 	let form: AnnouncementInput = {
 		title: '',
+		summary: '',
 		body: '',
+		image_url: '/assets/images/space.jpg',
+		view_button_label: '查看公告',
+		close_button_label: '关闭',
 		display_mode: 'once',
-		button_label: '知道了',
-		icon: 'sparkles',
 		is_active: true
 	};
 
@@ -51,6 +53,7 @@
 		if (created) {
 			toast.success('公告已创建。');
 			form.title = '';
+			form.summary = '';
 			form.body = '';
 			await load();
 		}
@@ -60,10 +63,12 @@
 	const save = async (row: Announcement) => {
 		const updated = await updateAdminAnnouncement(localStorage.token, row.id, {
 			title: row.title,
+			summary: row.summary,
 			body: row.body,
+			image_url: row.image_url,
+			view_button_label: row.view_button_label,
+			close_button_label: row.close_button_label,
 			display_mode: row.display_mode,
-			button_label: row.button_label,
-			icon: row.icon,
 			is_active: row.is_active,
 			sort_order: Number(row.sort_order ?? 0)
 		}).catch((error) => {
@@ -105,15 +110,15 @@
 	</div>
 
 	<div class="rounded-lg border border-gray-100 p-3 dark:border-gray-850">
-		<div class="grid gap-2 md:grid-cols-4">
-			<label class="flex flex-col gap-1">
+		<div class="grid gap-3 md:grid-cols-2">
+			<label class="flex min-w-0 flex-col gap-1">
 				<span class="text-xs text-gray-500">标题</span>
 				<input
 					class="rounded-lg border border-gray-100 bg-transparent px-2 py-1 dark:border-gray-850"
 					bind:value={form.title}
 				/>
 			</label>
-			<label class="flex flex-col gap-1">
+			<label class="flex min-w-0 flex-col gap-1">
 				<span class="text-xs text-gray-500">弹出规则</span>
 				<select
 					class="rounded-lg border border-gray-100 bg-transparent px-2 py-1 dark:border-gray-850"
@@ -124,24 +129,38 @@
 					<option value="new_user">新用户</option>
 				</select>
 			</label>
-			<label class="flex flex-col gap-1">
-				<span class="text-xs text-gray-500">Icon</span>
-				<input
-					class="rounded-lg border border-gray-100 bg-transparent px-2 py-1 dark:border-gray-850"
-					bind:value={form.icon}
-				/>
-			</label>
-			<label class="flex flex-col gap-1">
-				<span class="text-xs text-gray-500">按钮文案</span>
-				<input
-					class="rounded-lg border border-gray-100 bg-transparent px-2 py-1 dark:border-gray-850"
-					bind:value={form.button_label}
-				/>
-			</label>
-			<label class="flex flex-col gap-1 md:col-span-4">
-				<span class="text-xs text-gray-500">内容</span>
+			<label class="flex min-w-0 flex-col gap-1 md:col-span-2">
+				<span class="text-xs text-gray-500">摘要</span>
 				<textarea
-					class="min-h-24 rounded-lg border border-gray-100 bg-transparent px-2 py-1 dark:border-gray-850"
+					class="min-h-20 rounded-lg border border-gray-100 bg-transparent px-2 py-1 dark:border-gray-850"
+					bind:value={form.summary}
+				></textarea>
+			</label>
+			<label class="flex min-w-0 flex-col gap-1 md:col-span-2">
+				<span class="text-xs text-gray-500">封面图片地址</span>
+				<input
+					class="rounded-lg border border-gray-100 bg-transparent px-2 py-1 dark:border-gray-850"
+					bind:value={form.image_url}
+				/>
+			</label>
+			<label class="flex min-w-0 flex-col gap-1">
+				<span class="text-xs text-gray-500">查看按钮文案</span>
+				<input
+					class="rounded-lg border border-gray-100 bg-transparent px-2 py-1 dark:border-gray-850"
+					bind:value={form.view_button_label}
+				/>
+			</label>
+			<label class="flex min-w-0 flex-col gap-1">
+				<span class="text-xs text-gray-500">关闭按钮文案</span>
+				<input
+					class="rounded-lg border border-gray-100 bg-transparent px-2 py-1 dark:border-gray-850"
+					bind:value={form.close_button_label}
+				/>
+			</label>
+			<label class="flex min-w-0 flex-col gap-1 md:col-span-2">
+				<span class="text-xs text-gray-500">展开内容</span>
+				<textarea
+					class="min-h-36 rounded-lg border border-gray-100 bg-transparent px-2 py-1 dark:border-gray-850"
 					bind:value={form.body}
 				></textarea>
 			</label>
@@ -150,7 +169,12 @@
 			<button
 				type="button"
 				class="rounded-full bg-black px-3 py-1.5 text-white dark:bg-white dark:text-black"
-				disabled={creating || !form.title || !form.body}
+				disabled={creating ||
+					!form.title ||
+					!form.summary ||
+					!form.body ||
+					!form.view_button_label ||
+					!form.close_button_label}
 				on:click={create}
 			>
 				{creating ? '创建中' : '创建公告'}
@@ -168,15 +192,15 @@
 		<div class="flex flex-col gap-2">
 			{#each rows as row (row.id)}
 				<div class="rounded-lg border border-gray-100 p-3 dark:border-gray-850">
-					<div class="grid gap-2 md:grid-cols-4">
-						<label class="flex flex-col gap-1">
+					<div class="grid gap-3 md:grid-cols-2">
+						<label class="flex min-w-0 flex-col gap-1">
 							<span class="text-xs text-gray-500">标题</span>
 							<input
 								class="rounded-lg border border-gray-100 bg-transparent px-2 py-1 dark:border-gray-850"
 								bind:value={row.title}
 							/>
 						</label>
-						<label class="flex flex-col gap-1">
+						<label class="flex min-w-0 flex-col gap-1">
 							<span class="text-xs text-gray-500">弹出规则</span>
 							<select
 								class="rounded-lg border border-gray-100 bg-transparent px-2 py-1 dark:border-gray-850"
@@ -187,7 +211,7 @@
 								<option value="new_user">新用户</option>
 							</select>
 						</label>
-						<label class="flex flex-col gap-1">
+						<label class="flex min-w-0 flex-col gap-1">
 							<span class="text-xs text-gray-500">排序</span>
 							<input
 								type="number"
@@ -195,26 +219,47 @@
 								bind:value={row.sort_order}
 							/>
 						</label>
-						<label class="flex items-end gap-2 pb-1">
+						<label class="flex min-w-0 items-end gap-2 pb-1">
 							<input type="checkbox" bind:checked={row.is_active} />
 							<span>启用</span>
 						</label>
-						<label class="flex flex-col gap-1">
-							<span class="text-xs text-gray-500">Icon</span>
+						<label class="flex min-w-0 flex-col gap-1 md:col-span-2">
+							<span class="text-xs text-gray-500">摘要</span>
+							<textarea
+								class="min-h-20 rounded-lg border border-gray-100 bg-transparent px-2 py-1 dark:border-gray-850"
+								bind:value={row.summary}
+							></textarea>
+						</label>
+						<label class="flex min-w-0 flex-col gap-1 md:col-span-2">
+							<span class="text-xs text-gray-500">封面图片地址</span>
 							<input
 								class="rounded-lg border border-gray-100 bg-transparent px-2 py-1 dark:border-gray-850"
-								bind:value={row.icon}
+								bind:value={row.image_url}
 							/>
 						</label>
-						<label class="flex flex-col gap-1">
-							<span class="text-xs text-gray-500">按钮文案</span>
+						<label class="flex min-w-0 flex-col gap-1">
+							<span class="text-xs text-gray-500">查看按钮文案</span>
 							<input
 								class="rounded-lg border border-gray-100 bg-transparent px-2 py-1 dark:border-gray-850"
-								bind:value={row.button_label}
+								bind:value={row.view_button_label}
 							/>
+						</label>
+						<label class="flex min-w-0 flex-col gap-1">
+							<span class="text-xs text-gray-500">关闭按钮文案</span>
+							<input
+								class="rounded-lg border border-gray-100 bg-transparent px-2 py-1 dark:border-gray-850"
+								bind:value={row.close_button_label}
+							/>
+						</label>
+						<label class="flex min-w-0 flex-col gap-1 md:col-span-2">
+							<span class="text-xs text-gray-500">展开内容</span>
+							<textarea
+								class="min-h-36 rounded-lg border border-gray-100 bg-transparent px-2 py-1 dark:border-gray-850"
+								bind:value={row.body}
+							></textarea>
 						</label>
 						<div class="flex items-end text-xs text-gray-500">{modeLabel(row.display_mode)}</div>
-						<div class="flex items-end justify-end gap-2">
+						<div class="flex flex-wrap items-end justify-end gap-2">
 							<button
 								type="button"
 								class="rounded-full bg-black px-3 py-1.5 text-white dark:bg-white dark:text-black"
@@ -230,13 +275,6 @@
 								删除
 							</button>
 						</div>
-						<label class="flex flex-col gap-1 md:col-span-4">
-							<span class="text-xs text-gray-500">内容</span>
-							<textarea
-								class="min-h-24 rounded-lg border border-gray-100 bg-transparent px-2 py-1 dark:border-gray-850"
-								bind:value={row.body}
-							></textarea>
-						</label>
 					</div>
 				</div>
 			{/each}

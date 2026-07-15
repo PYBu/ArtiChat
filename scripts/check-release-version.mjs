@@ -64,7 +64,7 @@ if (!dockerfile.includes('ENV WEBUI_BUILD_HASH=${BUILD_HASH}')) {
 if (dockerfile.includes('ENV WEBUI_BUILD_VERSION=${BUILD_HASH}')) {
 	failures.push('Docker image still uses the unread WEBUI_BUILD_VERSION variable');
 }
-const frontendNpmInstall = dockerfile.indexOf('RUN npm ci --force');
+const frontendNpmInstall = dockerfile.indexOf('npm ci --force');
 const skipOnnxRuntimeCuda = dockerfile.indexOf('ENV ONNXRUNTIME_NODE_INSTALL_CUDA=skip');
 if (skipOnnxRuntimeCuda === -1 || skipOnnxRuntimeCuda > frontendNpmInstall) {
 	failures.push('Docker frontend dependencies must skip the unused onnxruntime CUDA download');

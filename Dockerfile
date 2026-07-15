@@ -26,6 +26,9 @@ ARG GID=0
 ######## WebUI frontend ########
 FROM --platform=$BUILDPLATFORM node:22-alpine3.20 AS build
 ARG BUILD_HASH
+ARG ALPINE_MIRROR=https://mirrors.tuna.tsinghua.edu.cn/alpine
+ARG NPM_REGISTRY=https://registry.npmmirror.com
+ARG PYPI_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
 
 # Set Node.js options (heap limit Allocation failed - JavaScript heap out of memory)
 # ENV NODE_OPTIONS="--max-old-space-size=4096"
@@ -33,14 +36,31 @@ ARG BUILD_HASH
 WORKDIR /app
 
 # to store git revision in build
-RUN apk add --no-cache git
+RUN set -eux; \
+    sed -i "s|https://dl-cdn.alpinelinux.org/alpine|${ALPINE_MIRROR}|g" /etc/apk/repositories; \
+    for attempt in 1 2 3 4 5; do \
+        if apk add --no-cache git; then exit 0; fi; \
+        sleep $((attempt * 2)); \
+    done; \
+    exit 1
 
 COPY package.json package-lock.json ./
 ENV ONNXRUNTIME_NODE_INSTALL_CUDA=skip
-RUN npm ci --force
+RUN --mount=type=cache,target=/root/.npm \
+    set -eux; \
+    npm config set registry "${NPM_REGISTRY}"; \
+    npm config set fetch-retries 10; \
+    npm config set fetch-retry-mintimeout 10000; \
+    npm config set fetch-retry-maxtimeout 120000; \
+    for attempt in 1 2 3; do \
+        if npm ci --force --prefer-offline; then exit 0; fi; \
+        sleep $((attempt * 5)); \
+    done; \
+    exit 1
 
 COPY . .
 ENV APP_BUILD_HASH=${BUILD_HASH}
+ENV PYODIDE_PYPI_INDEX_URL=${PYPI_INDEX_URL}
 RUN npm run build
 
 ######## WebUI backend ########
