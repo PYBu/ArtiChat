@@ -68,6 +68,40 @@ async def test_challenge_enforces_resend_cooldown_and_hourly_email_limit(db_sess
 
 
 @pytest.mark.asyncio
+async def test_challenge_resend_cooldown_is_scoped_to_purpose(db_session):
+    purposes = [
+        'registration',
+        'login',
+        'sensitive:password',
+        'sensitive:billing_address',
+        'sensitive:email',
+    ]
+
+    for offset, purpose in enumerate(purposes):
+        challenge = await create_email_challenge(
+            email='alice@example.com',
+            purpose=purpose,
+            code=f'{offset + 1:06d}',
+            secret_key='test-secret',
+            ip_address='203.0.113.10',
+            now=100 + offset,
+            db=db_session,
+        )
+        assert challenge.purpose == purpose
+
+    with pytest.raises(ValueError, match='EMAIL_CODE_RESEND_COOLDOWN'):
+        await create_email_challenge(
+            email='alice@example.com',
+            purpose='sensitive:billing_address',
+            code='999999',
+            secret_key='test-secret',
+            ip_address='203.0.113.10',
+            now=159,
+            db=db_session,
+        )
+
+
+@pytest.mark.asyncio
 async def test_challenge_consumes_on_success_and_cannot_be_replayed(db_session):
     await create_email_challenge(
         email='alice@example.com',

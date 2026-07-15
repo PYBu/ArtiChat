@@ -6,7 +6,11 @@ export type AnnouncementDisplayMode = 'once' | 'every_login' | 'new_user';
 export type Announcement = {
 	id: string;
 	title: string;
+	summary: string;
 	body: string;
+	image_url: string | null;
+	view_button_label: string;
+	close_button_label: string;
 	display_mode: AnnouncementDisplayMode;
 	button_label: string;
 	icon: string | null;
@@ -21,7 +25,14 @@ export type Announcement = {
 
 export type AnnouncementInput = Pick<
 	Announcement,
-	'title' | 'body' | 'display_mode' | 'button_label' | 'icon' | 'is_active'
+	| 'title'
+	| 'summary'
+	| 'body'
+	| 'image_url'
+	| 'view_button_label'
+	| 'close_button_label'
+	| 'display_mode'
+	| 'is_active'
 > &
 	Partial<Pick<Announcement, 'starts_at' | 'ends_at' | 'sort_order'>>;
 

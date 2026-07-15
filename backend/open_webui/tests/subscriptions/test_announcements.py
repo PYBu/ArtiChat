@@ -14,7 +14,11 @@ async def test_once_announcement_is_hidden_after_viewed(db_session):
     Announcements = announcements()
     announcement = await Announcements.create(
         title='Welcome',
+        summary='A short welcome',
         body='Welcome to ArtiChat',
+        image_url='/assets/images/earth.jpg',
+        view_button_label='查看详情',
+        close_button_label='稍后再看',
         display_mode='once',
         button_label='知道了',
         icon='sparkles',
@@ -42,7 +46,35 @@ async def test_once_announcement_is_hidden_after_viewed(db_session):
     )
 
     assert [item.id for item in active] == [announcement.id]
+    assert announcement.summary == 'A short welcome'
+    assert announcement.image_url == '/assets/images/earth.jpg'
+    assert announcement.view_button_label == '查看详情'
+    assert announcement.close_button_label == '稍后再看'
     assert announcement.id not in [item.id for item in after_view]
+
+
+@pytest.mark.asyncio
+async def test_legacy_announcement_fields_fill_presentation_defaults(db_session):
+    Announcements = announcements()
+    announcement = await Announcements.create(
+        title='Legacy',
+        body='Legacy announcement body',
+        display_mode='once',
+        button_label='开始使用',
+        icon='legacy',
+        is_active=True,
+        starts_at=None,
+        ends_at=None,
+        sort_order=0,
+        created_by='admin',
+        now=1_720_000_000,
+        db=db_session,
+    )
+
+    assert announcement.summary == 'Legacy announcement body'
+    assert announcement.image_url == '/assets/images/space.jpg'
+    assert announcement.view_button_label == '查看公告'
+    assert announcement.close_button_label == '开始使用'
 
 
 @pytest.mark.asyncio

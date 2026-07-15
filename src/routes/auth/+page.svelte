@@ -32,6 +32,7 @@
 	import Spinner from '$lib/components/common/Spinner.svelte';
 	import OnBoarding from '$lib/components/OnBoarding.svelte';
 	import SensitiveInput from '$lib/components/common/SensitiveInput.svelte';
+	import EmailCodeModal from '$lib/components/common/EmailCodeModal.svelte';
 	import ThemeLogo from '$lib/components/common/ThemeLogo.svelte';
 	import { redirect } from '@sveltejs/kit';
 
@@ -47,27 +48,20 @@
 	let email = '';
 	let password = '';
 	let confirmPassword = '';
-	let emailCode = '';
-	let codeSent = false;
-	let resendSeconds = 0;
-	let codeExpiresSeconds = 0;
-	let verificationToken = '';
+	let mainFormBusy = false;
+	let verificationBusy = false;
+	let verificationModalOpen = false;
+	let verificationPurpose: 'registration' | 'login' = 'registration';
+	let verificationEmail = '';
+	let verificationChallengeStartedAt = 0;
+	let verificationExpiresAt = 0;
 	let registrationFeatures = { verification_enabled: false, email_code_login_enabled: false };
 	const resetEmailVerification = () => {
-		emailCode = '';
-		codeSent = false;
-		verificationToken = '';
-		resendSeconds = 0;
-		codeExpiresSeconds = 0;
+		verificationModalOpen = false;
+		verificationEmail = '';
+		verificationChallengeStartedAt = 0;
+		verificationExpiresAt = 0;
 	};
-
-	onMount(() => {
-		const timer = window.setInterval(() => {
-			if (resendSeconds > 0) resendSeconds -= 1;
-			if (codeExpiresSeconds > 0) codeExpiresSeconds -= 1;
-		}, 1000);
-		return () => window.clearInterval(timer);
-	});
 
 	let ldapUsername = '';
 
@@ -107,44 +101,61 @@
 	};
 
 	const sendCode = async (purpose: 'registration' | 'login') => {
-		if (resendSeconds > 0) {
-			toast.error(`请等待 ${resendSeconds} 秒后重新发送验证码。`);
-			return null;
-		}
-		const result = await requestEmailChallenge(email, purpose).catch((error) => {
+		const targetEmail = email.trim().toLowerCase();
+		const result = await requestEmailChallenge(targetEmail, purpose).catch((error) => {
 			toast.error(emailErrorMessage(error));
 			return null;
 		});
 		if (result?.status) {
-			codeSent = true;
-			resendSeconds = 60;
-			codeExpiresSeconds = 600;
+			verificationPurpose = purpose;
+			verificationEmail = targetEmail;
+			verificationChallengeStartedAt = Date.now();
+			verificationExpiresAt = verificationChallengeStartedAt + 10 * 60 * 1000;
+			verificationModalOpen = true;
 			toast.success('验证码已发送。');
 		}
 		return result;
 	};
 
-	const verifyCode = async (purpose: 'registration' | 'login') => {
-		const result = await verifyEmailChallenge(email, purpose, emailCode).catch((error) => {
+	const beginEmailVerification = async (purpose: 'registration' | 'login') => {
+		const targetEmail = email.trim().toLowerCase();
+		if (
+			verificationEmail === targetEmail &&
+			verificationPurpose === purpose &&
+			verificationExpiresAt > Date.now()
+		) {
+			verificationModalOpen = true;
+			return;
+		}
+		await sendCode(purpose);
+	};
+
+	const verifyCode = async (purpose: 'registration' | 'login', code: string) => {
+		const result = await verifyEmailChallenge(verificationEmail, purpose, code).catch((error) => {
 			toast.error(emailErrorMessage(error));
 			return null;
 		});
-		verificationToken = result?.verification_token ?? '';
-		return verificationToken;
+		return result?.verification_token ?? '';
 	};
 
 	const emailCodeSignInHandler = async () => {
-		if (!codeSent) {
-			await sendCode('login');
-			return;
-		}
-		const token = await verifyCode('login');
-		if (!token) return;
-		const sessionUser = await userEmailCodeSignIn(email, token).catch((error) => {
+		await beginEmailVerification('login');
+	};
+
+	const createAccount = async (verificationToken: string | null) => {
+		const sessionUser = await userSignUp(
+			name,
+			email.trim().toLowerCase(),
+			password,
+			generateInitialsImage(name),
+			verificationToken
+		).catch((error) => {
 			toast.error(emailErrorMessage(error));
 			return null;
 		});
+
 		await setSessionUser(sessionUser);
+		return sessionUser;
 	};
 
 	const signUpHandler = async () => {
@@ -155,25 +166,38 @@
 			}
 		}
 		if (registrationFeatures.verification_enabled && !($config?.onboarding ?? false)) {
-			if (!codeSent) {
-				await sendCode('registration');
-				return;
-			}
-			if (!(await verifyCode('registration'))) return;
+			await beginEmailVerification('registration');
+			return;
 		}
 
-		const sessionUser = await userSignUp(
-			name,
-			email,
-			password,
-			generateInitialsImage(name),
-			verificationToken || null
-		).catch((error) => {
-			toast.error(emailErrorMessage(error));
-			return null;
-		});
+		await createAccount(null);
+	};
 
-		await setSessionUser(sessionUser);
+	const completeEmailVerification = async (event: CustomEvent<{ code: string }>) => {
+		verificationBusy = true;
+		const token = await verifyCode(verificationPurpose, event.detail.code);
+		if (token) {
+			if (verificationPurpose === 'registration') {
+				const sessionUser = await createAccount(token);
+				if (sessionUser) resetEmailVerification();
+			} else {
+				const sessionUser = await userEmailCodeSignIn(verificationEmail, token).catch((error) => {
+					toast.error(emailErrorMessage(error));
+					return null;
+				});
+				if (sessionUser) {
+					resetEmailVerification();
+					await setSessionUser(sessionUser);
+				}
+			}
+		}
+		verificationBusy = false;
+	};
+
+	const resendEmailVerification = async () => {
+		verificationBusy = true;
+		await sendCode(verificationPurpose);
+		verificationBusy = false;
 	};
 
 	const ldapSignInHandler = async () => {
@@ -185,14 +209,19 @@
 	};
 
 	const submitHandler = async () => {
-		if (mode === 'ldap') {
-			await ldapSignInHandler();
-		} else if (mode === 'email-code') {
-			await emailCodeSignInHandler();
-		} else if (mode === 'signin') {
-			await signInHandler();
-		} else {
-			await signUpHandler();
+		mainFormBusy = true;
+		try {
+			if (mode === 'ldap') {
+				await ldapSignInHandler();
+			} else if (mode === 'email-code') {
+				await emailCodeSignInHandler();
+			} else if (mode === 'signin') {
+				await signInHandler();
+			} else {
+				await signUpHandler();
+			}
+		} finally {
+			mainFormBusy = false;
 		}
 	};
 
@@ -398,20 +427,9 @@
 													class="my-0.5 w-full text-sm outline-hidden bg-transparent placeholder:text-gray-300 dark:placeholder:text-gray-600"
 													autocomplete="name"
 													placeholder={$i18n.t('Enter Your Full Name')}
-												required
-											/>
-											<div class="mt-1 flex items-center justify-between text-xs text-gray-500">
-												<span>{codeExpiresSeconds > 0 ? `验证码将在 ${codeExpiresSeconds} 秒后过期` : '验证码已过期，请重新发送'}</span>
-												<button
-													type="button"
-													disabled={resendSeconds > 0}
-													class="font-medium underline disabled:no-underline disabled:opacity-50"
-													on:click={() => sendCode(mode === 'signup' ? 'registration' : 'login')}
-												>
-													{resendSeconds > 0 ? `${resendSeconds} 秒后可重发` : '重新发送'}
-												</button>
+													required
+												/>
 											</div>
-										</div>
 										{/if}
 
 										{#if mode === 'ldap'}
@@ -452,7 +470,7 @@
 												<label for="password" class="text-sm font-medium text-left mb-1 block"
 													>{$i18n.t('Password')}</label
 												>
-										<SensitiveInput
+												<SensitiveInput
 													bind:value={password}
 													type="password"
 													id="password"
@@ -462,37 +480,20 @@
 													name="password"
 													screenReader={true}
 													required
-											aria-required="true"
-										/>
-										{#if mode === 'signin'}
-											<div class="mt-1 text-right">
-												<button
-													type="button"
-													class="text-xs font-medium text-gray-500 hover:text-gray-800 dark:hover:text-gray-200"
-													on:click={() => goto('/auth/forgot-password')}
-												>
-													忘记密码？
-												</button>
-											</div>
-										{/if}
-									</div>{/if}
-
-										{#if codeSent && (mode === 'email-code' || mode === 'signup')}
-											<div class="mt-2">
-												<label for="email-code" class="text-sm font-medium text-left mb-1 block"
-													>邮箱验证码</label
-												>
-												<input
-													bind:value={emailCode}
-													id="email-code"
-													inputmode="numeric"
-													maxlength="6"
-													pattern="[0-9]{6}"
-													class="my-0.5 w-full text-sm outline-hidden bg-transparent"
-													required
+													aria-required="true"
 												/>
-											</div>
-										{/if}
+												{#if mode === 'signin'}
+													<div class="mt-1 text-right">
+														<button
+															type="button"
+															class="text-xs font-medium text-gray-500 hover:text-gray-800 dark:hover:text-gray-200"
+															on:click={() => goto('/auth/forgot-password')}
+														>
+															忘记密码？
+														</button>
+													</div>
+												{/if}
+											</div>{/if}
 
 										{#if mode === 'signup' && $config?.features?.enable_signup_password_confirmation}
 											<div class="mt-2">
@@ -528,16 +529,17 @@
 											<button
 												class="bg-gray-700/5 hover:bg-gray-700/10 dark:bg-gray-100/5 dark:hover:bg-gray-100/10 dark:text-gray-300 dark:hover:text-white transition w-full rounded-full font-medium text-sm py-2.5"
 												type="submit"
+												disabled={mainFormBusy}
 											>
-												{mode === 'signin'
-													? $i18n.t('Sign in')
-													: mode === 'email-code'
-														? codeSent
-															? '验证并登录'
-															: '发送登录验证码'
-														: ($config?.onboarding ?? false)
-															? $i18n.t('Create Admin Account')
-															: $i18n.t('Create Account')}
+												{mainFormBusy
+													? '请稍候...'
+													: mode === 'signin'
+														? $i18n.t('Sign in')
+														: mode === 'email-code'
+															? '登录'
+															: ($config?.onboarding ?? false)
+																? $i18n.t('Create Admin Account')
+																: $i18n.t('Create Account')}
 											</button>
 
 											{#if $config?.features.enable_signup && !($config?.onboarding ?? false)}
@@ -580,6 +582,18 @@
 									{/if}
 								</div>
 							</form>
+
+							<EmailCodeModal
+								bind:show={verificationModalOpen}
+								title={verificationPurpose === 'registration' ? '验证邮箱并注册' : '验证邮箱并登录'}
+								description="请输入发送到以下邮箱的 6 位验证码"
+								email={verificationEmail}
+								confirmLabel={verificationPurpose === 'registration' ? '验证并注册' : '验证并登录'}
+								busy={verificationBusy}
+								challengeStartedAt={verificationChallengeStartedAt}
+								on:confirm={completeEmailVerification}
+								on:resend={resendEmailVerification}
+							/>
 
 							{#if Object.keys($config?.oauth?.providers ?? {}).length > 0}
 								<div class="inline-flex items-center justify-center w-full">

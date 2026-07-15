@@ -62,12 +62,16 @@ if (exists('src/lib/apis/announcements/index.ts')) {
 		'updateAdminAnnouncement',
 		'deleteAdminAnnouncement'
 	]) {
-		if (!api.includes(`export const ${name}`)) failures.push(`Missing announcement API helper ${name}`);
+		if (!api.includes(`export const ${name}`))
+			failures.push(`Missing announcement API helper ${name}`);
 	}
-	if (!api.includes('include_inactive')) failures.push('Announcement API must expose include_inactive');
+	if (!api.includes('include_inactive'))
+		failures.push('Announcement API must expose include_inactive');
 }
 
-const adminAnnouncements = read('src/lib/components/admin/Settings/Subscriptions/Announcements.svelte');
+const adminAnnouncements = read(
+	'src/lib/components/admin/Settings/Subscriptions/Announcements.svelte'
+);
 for (const marker of ['showInactive', '显示已停用', "toast.success('公告已删除。')"]) {
 	if (!adminAnnouncements.includes(marker)) failures.push(`Announcement admin missing ${marker}`);
 }
@@ -116,25 +120,41 @@ for (const marker of [
 }
 
 const account = read('src/lib/components/chat/Settings/Account.svelte');
-if (!account.includes('BillingAddress')) failures.push('Account settings must include BillingAddress');
+if (!account.includes('BillingAddress'))
+	failures.push('Account settings must include BillingAddress');
 
 const userMenu = read('src/lib/components/layout/Sidebar/UserMenu.svelte');
-if (!userMenu.includes('SubscriptionQuotaRing')) failures.push('UserMenu must include SubscriptionQuotaRing');
+if (!userMenu.includes('SubscriptionQuotaRing'))
+	failures.push('UserMenu must include SubscriptionQuotaRing');
 
 const ring = read('src/lib/components/layout/Sidebar/SubscriptionQuotaRing.svelte');
-for (const marker of ['用量 / Usage', 'Plan Chatpoint', 'Check Chatpoint', 'refreshSubscription', 'exhausted', 'stroke-red']) {
+for (const marker of [
+	'用量 / Usage',
+	'Plan Chatpoint',
+	'Check Chatpoint',
+	'refreshSubscription',
+	'exhausted',
+	'stroke-red'
+]) {
 	if (!ring.includes(marker)) failures.push(`Quota ring missing ${marker}`);
 }
 
 if (ring.includes('免费版')) failures.push('Quota ring must use Free instead of 免费版');
 
 const adminSettings = read('src/lib/components/admin/Settings.svelte');
-if (adminSettings.includes("selectedTab === 'subscriptions'") || adminSettings.includes('<Subscriptions')) {
+if (
+	adminSettings.includes("selectedTab === 'subscriptions'") ||
+	adminSettings.includes('<Subscriptions')
+) {
 	failures.push('Subscription operations must not remain embedded in admin settings');
 }
 
 const adminLayout = read('src/routes/(app)/admin/+layout.svelte');
-for (const marker of ['href="/admin/subscriptions"', 'admin-mobile-section', 'goto(event.currentTarget.value)']) {
+for (const marker of [
+	'href="/admin/subscriptions"',
+	'admin-mobile-section',
+	'goto(event.currentTarget.value)'
+]) {
 	if (!adminLayout.includes(marker)) failures.push(`Admin navigation missing ${marker}`);
 }
 
@@ -153,33 +173,102 @@ for (const marker of ['你有待领取礼品卡', 'claimGiftCard', 'notifySubscr
 }
 
 const adminRedeemCodes = read('src/lib/components/admin/Settings/Subscriptions/RedeemCodes.svelte');
-for (const marker of ['自定义兑换码', 'deleteAdminRedemptionCode', 'code.code ?? code.code_preview']) {
+for (const marker of [
+	'自定义兑换码',
+	'deleteAdminRedemptionCode',
+	'code.code ?? code.code_preview'
+]) {
 	if (!adminRedeemCodes.includes(marker)) failures.push(`Admin redeem codes missing ${marker}`);
 }
 
 const usageLedger = read('src/lib/components/admin/Settings/Subscriptions/UsageLedger.svelte');
 if (!usageLedger.includes('user?.email')) failures.push('Usage ledger must display user email');
-for (const marker of [...pricingFields.map((field) => field.replace('_chatpoint_per_million', '_tokens')), 'client_ip', 'first_token_latency_ms', 'statusFilter']) {
+for (const marker of [
+	...pricingFields.map((field) => field.replace('_chatpoint_per_million', '_tokens')),
+	'client_ip',
+	'first_token_latency_ms',
+	'statusFilter'
+]) {
 	if (!usageLedger.includes(marker)) failures.push(`Admin usage ledger missing ${marker}`);
 }
 
 const userUsage = read('src/lib/components/chat/Settings/Usage.svelte');
-for (const marker of [...pricingFields.map((field) => field.replace('_chatpoint_per_million', '_tokens')), 'first_token_latency_ms', 'total_duration_ms']) {
+for (const marker of [
+	...pricingFields.map((field) => field.replace('_chatpoint_per_million', '_tokens')),
+	'first_token_latency_ms',
+	'total_duration_ms'
+]) {
 	if (!userUsage.includes(marker)) failures.push(`User usage ledger missing ${marker}`);
 }
-if (userUsage.includes('client_ip')) failures.push('User usage ledger must not reference client_ip');
+if (userUsage.includes('client_ip'))
+	failures.push('User usage ledger must not reference client_ip');
 
 const announcementModal = read('src/lib/components/AnnouncementModal.svelte');
-for (const marker of ['getActiveAnnouncements', 'sessionStorage', 'markAnnouncementViewed']) {
+for (const marker of [
+	'getActiveAnnouncements',
+	'sessionStorage',
+	'markAnnouncementViewed',
+	'current.summary',
+	'current.image_url',
+	'current.view_button_label',
+	'current.close_button_label',
+	'closeOnBackdrop={false}',
+	'closeOnEscape={false}',
+	'!rounded-[18px]',
+	'!border-0',
+	'announcement-expanded'
+]) {
 	if (!announcementModal.includes(marker)) failures.push(`Announcement modal missing ${marker}`);
 }
 
+const announcementAdmin = read(
+	'src/lib/components/admin/Settings/Subscriptions/Announcements.svelte'
+);
+for (const marker of [
+	'form.summary',
+	'form.image_url',
+	'form.view_button_label',
+	'form.close_button_label',
+	'row.summary',
+	'row.image_url',
+	'row.view_button_label',
+	'row.close_button_label',
+	'封面图片地址',
+	'展开内容'
+]) {
+	if (!announcementAdmin.includes(marker)) failures.push(`Announcement admin missing ${marker}`);
+}
+
+const announcementModel = read('backend/open_webui/models/announcements.py');
+const announcementRouter = read('backend/open_webui/routers/announcements.py');
+const announcementApi = read('src/lib/apis/announcements/index.ts');
+const announcementMigration = read(
+	'backend/open_webui/migrations/versions/0a1b2c3d4e5f_add_announcement_presentation_fields.py'
+);
+for (const field of ['summary', 'image_url', 'view_button_label', 'close_button_label']) {
+	for (const [label, text] of [
+		['model', announcementModel],
+		['router', announcementRouter],
+		['frontend API', announcementApi],
+		['migration', announcementMigration]
+	]) {
+		if (!text.includes(field)) failures.push(`Announcement ${label} missing ${field}`);
+	}
+}
+
 const modelEditor = read('src/lib/components/workspace/Models/ModelEditor.svelte');
-if (!modelEditor.includes('SubscriptionPolicy')) failures.push('ModelEditor must include SubscriptionPolicy');
+if (!modelEditor.includes('SubscriptionPolicy'))
+	failures.push('ModelEditor must include SubscriptionPolicy');
 
 const editUser = read('src/lib/components/admin/Users/UserList/EditUserModal.svelte');
-for (const marker of ['updateAdminUserSubscription', 'plan_chatpoint', 'check_chatpoint', 'expires_at_input']) {
-	if (!editUser.includes(marker)) failures.push(`EditUserModal subscription merge missing ${marker}`);
+for (const marker of [
+	'updateAdminUserSubscription',
+	'plan_chatpoint',
+	'check_chatpoint',
+	'expires_at_input'
+]) {
+	if (!editUser.includes(marker))
+		failures.push(`EditUserModal subscription merge missing ${marker}`);
 }
 
 const userList = read('src/lib/components/admin/Users/UserList.svelte');
@@ -193,7 +282,11 @@ if (exists('src/routes/(app)/admin/subscriptions/users/+page.svelte')) {
 if (exists('src/lib/components/admin/Settings/Subscriptions/UserSubscriptions.svelte')) {
 	failures.push('Standalone UserSubscriptions component must be removed');
 }
-if (read('src/lib/components/admin/Subscriptions/SubscriptionHome.svelte').includes('/admin/subscriptions/users')) {
+if (
+	read('src/lib/components/admin/Subscriptions/SubscriptionHome.svelte').includes(
+		'/admin/subscriptions/users'
+	)
+) {
 	failures.push('Subscription home must not link to standalone user subscriptions');
 }
 
