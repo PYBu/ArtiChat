@@ -14,6 +14,7 @@
 - When preparing a GitHub upload, public candidate, tag, or release, ignore local changes to `README.md` and `artivis-ass/`. Preserve the exact versions already present on `origin/main`; the user publishes updates to these paths separately.
 - Before starting work on a new version milestone such as 0.1.5, fetch `origin/main` and synchronize only `README.md` and `artivis-ass/` from `origin/main` into the active development worktree. Do not use that synchronization to overwrite unrelated local work.
 
-## Current 0.1.4 Handoff
+## Current Release Handoff
 
-- Before continuing ArtiChat 0.1.4 work, read `docs/progress/2026-07-14-artichat-0.1.4.md`, especially its `Next Session Handoff` section.
+- ArtiChat 0.1.4 implementation and local acceptance are complete. Its detailed internal record is `docs/progress/2026-07-14-artichat-0.1.4.md`.
+- Before beginning the next version, follow the user-owned introduction synchronization rule above and then create a version-specific progress record.
