@@ -10,13 +10,9 @@
 
 ## User-Owned Project Introduction
 
-- `README.md` and the following README introduction images are maintained by the user and must not be edited, regenerated, reformatted, renamed, or removed unless the user explicitly requests that exact change:
-  - `artivis-ass/4dea05393d4fcaa23bedee1d19481ca9.png`
-  - `artivis-ass/4fde7dee62fd3b77b9026bbe3eda62d1.png`
-  - `artivis-ass/5f1d3fbf73802d221dc80af588ea6875.png`
-  - `artivis-ass/a90b2eb989b596b71ef046eb5868569a.png`
-  - `artivis-ass/title.png`
-- Before preparing a GitHub upload, public candidate, tag, or release, remind the user to review and update these files. Preserve the user's latest GitHub versions when assembling the release.
+- `README.md` and the entire `artivis-ass/` directory are maintained exclusively by the user. Do not edit, regenerate, reformat, rename, remove, or otherwise manage either path unless the user explicitly requests that exact change.
+- When preparing a GitHub upload, public candidate, tag, or release, ignore local changes to `README.md` and `artivis-ass/`. Preserve the exact versions already present on `origin/main`; the user publishes updates to these paths separately.
+- Before starting work on a new version milestone such as 0.1.5, fetch `origin/main` and synchronize only `README.md` and `artivis-ass/` from `origin/main` into the active development worktree. Do not use that synchronization to overwrite unrelated local work.
 
 ## Current 0.1.4 Handoff
 
