@@ -144,4 +144,4 @@ ArtiChat/
 致谢OpenWebUI项目组的开源。
 
 ## 推荐社区
-<a href="https://linux.do/">LinuxDo</a>
+<a href="https://linux.do/">LinuxDo</a> | ArtivisCom [装修中未开放]
