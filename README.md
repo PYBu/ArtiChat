@@ -144,4 +144,4 @@ ArtiChat/
 致谢OpenWebUI项目组的开源。
 
 ## 推荐社区
-<a href="https://linux.do/">LinuxDo</a> | 本软件无任何版权，仅为个人（代表Artivis团队）二次开发且维护分享，商用请申请 OpenWebUI 的商用许可！
+<a href="https://linux.do/">LinuxDo</a>
