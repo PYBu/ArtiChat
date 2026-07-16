@@ -8,7 +8,7 @@
 
 它基于 <a href="https://github.com/open-webui/open-webui">OpenWebUI</a> ，是一个可以完全离线运行，兼容 OpenAI 风格 API ，内置检索增强（RAG）、多用户与权限管理、插件扩展等能力，适合团队与个人搭建自己的 AI 工作台。
 > 以 OpenWebUI 0.10.2 作为二次开发版本
-> Powered By Artivis Studio | <a href="https://chat.artivis.cc">Web ArtiChat</a>
+> Powered By Artivis Studio | <a href="https://chat.artivis.cc">Web ArtiChat</a> | <a href="https://chatbug.artivis.cc">访问ArtiChat 反馈中心</a>
 
 ![SvelteKit](https://img.shields.io/badge/frontend-SvelteKit-ff3e00?logo=svelte&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/backend-FastAPI-009688?logo=fastapi&logoColor=white)
@@ -46,6 +46,10 @@
 - 本项目配合 Sub2API/CLIProxyAPI/NewAPI/ChatGPT2API 等项目达到最佳。本项目不做号池服务。
 
 - Grok Build已开源，可能使用此服务二次加工做成配套设施。
+
+## 快速反馈
+- ArtiChat 服务拥有提交反馈的入口，用户的需求、Bug反馈、改进建议都可以在此提交，并且公开项目进度。
+- chatbug.artivis.cc | <a href="https://chatbug.artivis.cc">访问ArtiChat 反馈中心</a>
 
 ## 技术栈
 
