@@ -37,6 +37,7 @@
 - **后续功能**：ArtiChat会听取社区意见，持续更新，若有 Bug/更新 反馈或建议可以大胆提出！
 <img src="artivis-ass/4dea05393d4fcaa23bedee1d19481ca9.png">
 <img src="artivis-ass/4fde7dee62fd3b77b9026bbe3eda62d1.png">
+<img src="https://github.com/PYBu/ArtiChat/blob/main/artivis-ass/c3398c5ac541a8f83001b50417f78511.png?raw=true">
 <img src="artivis-ass/a90b2eb989b596b71ef046eb5868569a.png" height="200">
 
 > 用户用量用环状图显示，包括两种Point，订阅分配的可以月刷新的Point以及充值的不参与重置的Point。优先使用可刷新Point。
@@ -52,6 +53,10 @@
 ## 快速反馈
 - ArtiChat 服务拥有提交反馈的入口，用户的需求、Bug反馈、改进建议都可以在此提交，并且公开项目进度。
 - chatbug.artivis.cc | <a href="https://chatbug.artivis.cc">访问ArtiChat 反馈中心</a>
+
+<br><br><br>
+
+## 以下内容由AI生成，部署方法已验证。后续我会尝试做一个一键部署的脚本，简化部署流程。
 
 ## 技术栈
 
