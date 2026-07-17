@@ -13,7 +13,6 @@
 	import Textarea from '$lib/components/common/Textarea.svelte';
 	import Banners from './Interface/Banners.svelte';
 	import Events from './Events.svelte';
-	import VersionUpdatePanel from './VersionUpdatePanel.svelte';
 
 	const i18n = getContext('i18n');
 
@@ -61,10 +60,6 @@
 					<div class=" mt-0.5 mb-2.5 text-base font-medium">{$i18n.t('General')}</div>
 
 					<hr class=" border-gray-100/30 dark:border-gray-850/30 my-2" />
-
-					<div class="mb-2.5">
-						<VersionUpdatePanel />
-					</div>
 
 					<div class="mb-2.5">
 						<div class="flex w-full justify-between items-center">

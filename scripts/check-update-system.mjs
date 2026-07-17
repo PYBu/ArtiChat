@@ -1,9 +1,72 @@
 import fs from 'node:fs';
 
 const panelPath = 'src/lib/components/admin/Settings/VersionUpdatePanel.svelte';
+const pagePath = 'src/lib/components/admin/Settings/Update.svelte';
+const settingsPath = 'src/lib/components/admin/Settings.svelte';
+const generalPath = 'src/lib/components/admin/Settings/General.svelte';
 
 if (!fs.existsSync(panelPath)) {
 	throw new Error(`Version update panel is missing: ${panelPath}`);
+}
+
+for (const path of [pagePath, settingsPath, generalPath]) {
+	if (!fs.existsSync(path)) throw new Error(`Update settings file is missing: ${path}`);
+}
+
+const page = fs.readFileSync(pagePath, 'utf8');
+for (const required of ['VersionUpdatePanel', 'getUpdateAnnouncement', '暂无公告']) {
+	if (!page.includes(required)) throw new Error(`Update settings page is missing ${required}`);
+}
+
+const settings = fs.readFileSync(settingsPath, 'utf8');
+for (const required of ["id: 'update'", "route: '/admin/settings/update'", '<Update />']) {
+	if (!settings.includes(required)) throw new Error(`Admin settings is missing ${required}`);
+}
+
+const general = fs.readFileSync(generalPath, 'utf8');
+if (general.includes('VersionUpdatePanel')) {
+	throw new Error('Version update panel must not remain in General settings');
+}
+
+const appLayout = fs.readFileSync('src/routes/(app)/+layout.svelte', 'utf8');
+for (const forbidden of ['UpdateInfoToast', 'checkForVersionUpdates']) {
+	if (appLayout.includes(forbidden)) {
+		throw new Error(`Global update notification remains in app layout: ${forbidden}`);
+	}
+}
+
+const announcementFiles = [
+	'backend/open_webui/utils/announcement_service.py',
+	'backend/open_webui/tests/updates/test_announcement_service.py'
+];
+for (const path of announcementFiles) {
+	if (!fs.existsSync(path)) throw new Error(`Announcement service file is missing: ${path}`);
+}
+
+const announcementService = fs.readFileSync(announcementFiles[0], 'utf8');
+for (const required of [
+	"parsed.scheme != 'https'",
+	'MAX_RESPONSE_BYTES',
+	'cache_ttl_seconds',
+	'normalize_announcement'
+]) {
+	if (!announcementService.includes(required)) {
+		throw new Error(`Announcement service is missing ${required}`);
+	}
+}
+
+const updateRouter = fs.readFileSync('backend/open_webui/routers/updates.py', 'utf8');
+if (!updateRouter.includes("@router.get('/announcement')")) {
+	throw new Error('Update router is missing the announcement endpoint');
+}
+
+const env = fs.readFileSync('backend/open_webui/env.py', 'utf8');
+for (const required of [
+	'ARTICHAT_ANNOUNCEMENT_URL',
+	'ARTICHAT_ANNOUNCEMENT_CACHE_TTL_SECONDS',
+	'ARTICHAT_ANNOUNCEMENT_TIMEOUT_SECONDS'
+]) {
+	if (!env.includes(required)) throw new Error(`Environment config is missing ${required}`);
 }
 
 const panel = fs.readFileSync(panelPath, 'utf8');

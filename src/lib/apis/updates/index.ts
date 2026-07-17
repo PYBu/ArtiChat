@@ -44,11 +44,27 @@ export type UpdateInfo = {
 	error: string | null;
 };
 
+export type UpdateAnnouncement = {
+	id: string;
+	title: string;
+	content: string;
+	type: 'info' | 'warning' | 'maintenance';
+	published_at: string | null;
+	expires_at: string | null;
+};
+
+export type UpdateAnnouncementResponse = {
+	announcement: UpdateAnnouncement | null;
+};
+
 export const getUpdateInfo = async (token: string, force = false): Promise<UpdateInfo> =>
 	apiJsonFetch(`${WEBUI_API_BASE_URL}/updates/check?force=${force}`, token);
 
 export const getUpdateStatus = async (token: string): Promise<UpdateState> =>
 	apiJsonFetch(`${WEBUI_API_BASE_URL}/updates/status`, token);
+
+export const getUpdateAnnouncement = async (token: string): Promise<UpdateAnnouncementResponse> =>
+	apiJsonFetch(`${WEBUI_API_BASE_URL}/updates/announcement`, token);
 
 export const deployUpdate = async (token: string, targetVersion: string): Promise<UpdateState> =>
 	apiJsonFetch(`${WEBUI_API_BASE_URL}/updates/deploy`, token, {
