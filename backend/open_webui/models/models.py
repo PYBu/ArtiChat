@@ -38,6 +38,7 @@ class ModelMeta(BaseModel):
     description: str | None = Field(default=None, description='User-facing description of the model.')
     capabilities: dict | None = None
     subscription: dict | None = None
+    marketplace: dict | None = None
 
     model_config = ConfigDict(extra='allow')
 

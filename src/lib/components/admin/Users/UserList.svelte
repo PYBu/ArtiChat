@@ -238,10 +238,7 @@
 		<table class="w-full text-sm text-left text-gray-500 dark:text-gray-400 table-auto max-w-full">
 			<thead class="text-xs text-gray-800 uppercase bg-transparent dark:text-gray-200">
 				<tr class=" border-b-[1.5px] border-gray-50 dark:border-gray-850/30">
-					<th
-						scope="col"
-						class="px-2.5 py-2"
-					>订阅</th>
+					<th scope="col" class="px-2.5 py-2">订阅</th>
 					<th scope="col" class="px-2.5 py-2">到期</th>
 
 					<th
@@ -367,6 +364,12 @@
 			<tbody class="">
 				{#each users as user, userIdx (user.id)}
 					<tr class="bg-white dark:bg-gray-900 dark:border-gray-850 text-xs">
+						<td class="px-3 py-1">{user.subscription?.display_name ?? '-'}</td>
+						<td class="px-3 py-1">
+							{user.subscription?.expires_at
+								? dayjs(user.subscription.expires_at * 1000).format('LL')
+								: '-'}
+						</td>
 						<td class="px-3 py-1 min-w-[7rem] w-28">
 							<button
 								class=" translate-y-0.5"
@@ -410,12 +413,6 @@
 							</div>
 						</td>
 						<td class=" px-3 py-1 max-w-48 truncate"> {user.email} </td>
-						<td class="px-3 py-1">{user.subscription?.display_name ?? '-'}</td>
-						<td class="px-3 py-1">
-							{user.subscription?.expires_at
-								? dayjs(user.subscription.expires_at * 1000).format('LL')
-								: '-'}
-						</td>
 
 						<td class=" px-3 py-1">
 							{dayjs(user.last_active_at * 1000).fromNow()}
@@ -544,7 +541,6 @@
 		<Pagination bind:page count={total} perPage={30} />
 	{/if}
 {/if}
-
 
 {#if selectedUser}
 	<UserPreviewModal

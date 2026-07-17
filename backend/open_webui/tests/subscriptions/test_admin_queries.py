@@ -112,7 +112,54 @@ async def test_admin_usage_and_ledger_include_user_email(db_session):
     assert usage['items'][0]['client_ip'] == '203.0.113.8'
     assert usage['total_cache_creation_tokens'] == 5
     assert usage['total_cache_read_tokens'] == 7
+    assert usage['model_totals'] == [
+        {'model_id': 'model-1', 'total_tokens': 30, 'request_count': 1, 'cost_micros': 3}
+    ]
     assert ledger[0]['user']['email'] == 'alice@example.com'
+
+
+@pytest.mark.asyncio
+async def test_admin_usage_filters_by_partial_user_email(db_session):
+    await create_user(db_session, 'usage-alice', 'alice.usage@example.com', 'alice-usage', 'Alice Usage')
+    await create_user(db_session, 'usage-bob', 'bob.usage@example.com', 'bob-usage', 'Bob Usage')
+    for user_id, model_id, created_at in [
+        ('usage-alice', 'model-alice', 1_720_000_000),
+        ('usage-bob', 'model-bob', 1_720_000_100),
+    ]:
+        await SubscriptionUsages.insert(
+            user_id=user_id,
+            chat_id=None,
+            message_id=None,
+            model_id=model_id,
+            tier='free',
+            quota_mode='metered',
+            usage_multiplier='1',
+            input_tokens=10,
+            output_tokens=5,
+            total_tokens=15,
+            cost_micros=2,
+            plan_cost_micros=2,
+            check_cost_micros=0,
+            plan_balance_after_micros=100,
+            check_balance_after_micros=0,
+            status='billed',
+            metadata={},
+            created_at=created_at,
+            db=db_session,
+        )
+
+    usage = await SubscriptionUsages.get_usage_summary(
+        user_email='alice.usage',
+        include_user=True,
+        db=db_session,
+    )
+
+    assert [item['model_id'] for item in usage['items']] == ['model-alice']
+    assert usage['items'][0]['user']['email'] == 'alice.usage@example.com'
+    assert usage['total_input_tokens'] == 10
+    assert usage['model_totals'] == [
+        {'model_id': 'model-alice', 'total_tokens': 15, 'request_count': 1, 'cost_micros': 2}
+    ]
 
 
 @pytest.mark.asyncio

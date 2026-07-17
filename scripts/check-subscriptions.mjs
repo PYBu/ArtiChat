@@ -25,7 +25,10 @@ const requiredFiles = [
 	'src/routes/(app)/admin/subscriptions/usage/+page.svelte',
 	'src/lib/components/admin/Settings/Subscriptions/GiftCards.svelte',
 	'src/lib/components/admin/Settings/Subscriptions/Announcements.svelte',
-	'src/lib/components/workspace/Models/SubscriptionPolicy.svelte'
+	'src/lib/components/workspace/Models/SubscriptionPolicy.svelte',
+	'src/lib/components/admin/Settings/Email.svelte',
+	'src/routes/(app)/model-marketplace/+page.svelte',
+	'src/lib/components/models/ModelCallChart.svelte'
 ];
 
 for (const file of requiredFiles) {
@@ -187,7 +190,10 @@ for (const marker of [
 	...pricingFields.map((field) => field.replace('_chatpoint_per_million', '_tokens')),
 	'client_ip',
 	'first_token_latency_ms',
-	'statusFilter'
+	'statusFilter',
+	'userEmailFilter',
+	'selectedModelPercent',
+	'conic-gradient'
 ]) {
 	if (!usageLedger.includes(marker)) failures.push(`Admin usage ledger missing ${marker}`);
 }
@@ -259,6 +265,41 @@ for (const field of ['summary', 'image_url', 'view_button_label', 'close_button_
 const modelEditor = read('src/lib/components/workspace/Models/ModelEditor.svelte');
 if (!modelEditor.includes('SubscriptionPolicy'))
 	failures.push('ModelEditor must include SubscriptionPolicy');
+for (const marker of ['meta.marketplace', '展示在模型广场', 'long_description']) {
+	if (!modelEditor.includes(marker)) failures.push(`ModelEditor marketplace missing ${marker}`);
+}
+
+const modelMarketplace = read('src/routes/(app)/model-marketplace/+page.svelte');
+for (const marker of [
+	'getModelMarketplace',
+	'model.is_active',
+	'model.allowed_tiers',
+	'model.pricing',
+	'ModelCallChart'
+]) {
+	if (!modelMarketplace.includes(marker)) failures.push(`Model marketplace missing ${marker}`);
+}
+
+const emailSettings = read('src/lib/components/admin/Settings/Email.svelte');
+for (const marker of [
+	'RegistrationSettings',
+	'启用邮箱功能',
+	'EmailSettings',
+	'EmailTemplates',
+	'EmailDeliveries'
+]) {
+	if (!emailSettings.includes(marker))
+		failures.push(`Consolidated email settings missing ${marker}`);
+}
+
+if (adminLayout.includes('/admin/registration') || adminLayout.includes('/admin/email')) {
+	failures.push('Registration and email must not remain top-level admin navigation items');
+}
+
+const sidebar = read('src/lib/components/layout/Sidebar.svelte');
+for (const marker of ['/model-marketplace', 'customSidebarButtons', 'SidebarLinkIcon']) {
+	if (!sidebar.includes(marker)) failures.push(`Sidebar extensions missing ${marker}`);
+}
 
 const editUser = read('src/lib/components/admin/Users/UserList/EditUserModal.svelte');
 for (const marker of [

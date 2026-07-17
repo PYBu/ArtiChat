@@ -2,5 +2,5 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 
-	onMount(() => goto('/admin/email/settings'));
+	onMount(() => goto('/admin/settings/email', { replaceState: true }));
 </script>

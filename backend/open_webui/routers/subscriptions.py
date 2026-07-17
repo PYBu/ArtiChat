@@ -519,6 +519,7 @@ async def update_admin_user_subscription(
 @router.get('/admin/usage')
 async def get_admin_usage(
     user_id: str | None = None,
+    user_email: str | None = None,
     model_id: str | None = None,
     status: str | None = None,
     start_at: int | None = None,
@@ -530,6 +531,7 @@ async def get_admin_usage(
 ):
     return await SubscriptionUsages.get_usage_summary(
         user_id=user_id,
+        user_email=user_email,
         model_id=model_id,
         status=status,
         start_at=start_at,

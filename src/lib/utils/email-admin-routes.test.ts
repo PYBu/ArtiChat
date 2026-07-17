@@ -4,26 +4,34 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 describe('email admin routes', () => {
-	it('keeps email settings, templates, and deliveries as independent pages', () => {
+	it('consolidates registration and email under settings while preserving redirects', () => {
 		expect(existsSync(resolve('src/routes/(app)/admin/registration/+page.svelte'))).toBe(true);
-		for (const page of ['settings', 'templates', 'deliveries']) {
+		for (const page of ['', 'settings', 'templates', 'deliveries']) {
+			const route = page ? `${page}/` : '';
 			expect(
-				existsSync(resolve(`src/routes/(app)/admin/email/${page}/+page.svelte`)),
-				`${page} page should exist`
+				existsSync(resolve(`src/routes/(app)/admin/email/${route}+page.svelte`)),
+				`${page || 'email'} redirect page should exist`
 			).toBe(true);
+			const redirect = readFileSync(
+				resolve(`src/routes/(app)/admin/email/${route}+page.svelte`),
+				'utf8'
+			);
+			expect(redirect).toContain('/admin/settings/email');
 		}
 
 		const layout = readFileSync(resolve('src/routes/(app)/admin/+layout.svelte'), 'utf8');
-		expect(layout).toContain('/admin/email');
+		expect(layout).not.toContain('/admin/email');
+		expect(layout).not.toContain('/admin/registration');
 
-		const shell = readFileSync(
-			resolve('src/lib/components/admin/Email/EmailPageShell.svelte'),
+		const settings = readFileSync(
+			resolve('src/lib/components/admin/Settings/Email.svelte'),
 			'utf8'
 		);
-		expect(shell).toContain('/admin/email/settings');
-		expect(shell).toContain('/admin/email/templates');
-		expect(shell).toContain('/admin/email/deliveries');
-		expect(shell).toContain('<select');
+		expect(settings).toContain('RegistrationSettings');
+		expect(settings).toContain('EmailSettings');
+		expect(settings).toContain('EmailTemplates');
+		expect(settings).toContain('EmailDeliveries');
+		expect(settings).toContain('启用邮箱功能');
 	});
 
 	it('does not offer retry for expired security credentials', () => {

@@ -2,15 +2,59 @@ from __future__ import annotations
 
 from io import BytesIO
 from pathlib import Path
+from typing import Any
+from urllib.parse import urlsplit
 
 from PIL import Image, UnidentifiedImageError
 
 
 MAX_PLATFORM_LOGO_BYTES = 2 * 1024 * 1024
 PLATFORM_LOGO_CONTENT_TYPES = {'image/png', 'image/jpeg', 'image/webp'}
+PLATFORM_SIDEBAR_ICONS = {
+    'link',
+    'globe',
+    'home',
+    'document',
+    'book',
+    'chat',
+    'star',
+    'bolt',
+    'calendar',
+    'cube',
+    'grid',
+    'help',
+}
 
 
-def normalize_platform_settings(data: dict) -> dict[str, str]:
+def normalize_sidebar_buttons(value: Any) -> list[dict[str, str]]:
+    if value in (None, ''):
+        return []
+    if not isinstance(value, list) or len(value) > 8:
+        raise ValueError('PLATFORM_SIDEBAR_BUTTONS_INVALID')
+
+    buttons = []
+    for raw in value:
+        if not isinstance(raw, dict):
+            raise ValueError('PLATFORM_SIDEBAR_BUTTON_INVALID')
+        name = str(raw.get('name') or '').strip()
+        url = str(raw.get('url') or '').strip()
+        icon = str(raw.get('icon') or 'link').strip().lower()
+        if not name or len(name) > 40:
+            raise ValueError('PLATFORM_SIDEBAR_BUTTON_NAME_INVALID')
+        if len(url) > 2048:
+            raise ValueError('PLATFORM_SIDEBAR_BUTTON_URL_INVALID')
+        parsed = urlsplit(url)
+        is_internal = url.startswith('/') and not url.startswith('//')
+        is_external = parsed.scheme in {'http', 'https'} and bool(parsed.netloc)
+        if not (is_internal or is_external):
+            raise ValueError('PLATFORM_SIDEBAR_BUTTON_URL_INVALID')
+        if icon not in PLATFORM_SIDEBAR_ICONS:
+            raise ValueError('PLATFORM_SIDEBAR_BUTTON_ICON_INVALID')
+        buttons.append({'name': name, 'url': url, 'icon': icon})
+    return buttons
+
+
+def normalize_platform_settings(data: dict) -> dict[str, Any]:
     name = str(data.get('name') or '').strip()
     if not name:
         raise ValueError('PLATFORM_NAME_REQUIRED')
@@ -20,6 +64,7 @@ def normalize_platform_settings(data: dict) -> dict[str, str]:
         'name': name,
         'about_title': str(data.get('about_title') or '').strip(),
         'about_content': str(data.get('about_content') or '').strip(),
+        'sidebar_buttons': normalize_sidebar_buttons(data.get('sidebar_buttons')),
     }
 
 

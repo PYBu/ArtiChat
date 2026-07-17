@@ -37,6 +37,7 @@ from open_webui.models.models import (
     ModelResponse,
     Models,
 )
+from open_webui.models.subscriptions import SubscriptionUsages
 from open_webui.utils.access_control import filter_allowed_access_grants, has_permission
 from open_webui.utils.access_control.files import has_access_to_file
 from open_webui.utils.auth import get_admin_user, get_verified_user
@@ -117,6 +118,68 @@ async def _verify_knowledge_file_access(
 
 
 PAGE_ITEM_COUNT = 30
+
+
+class MarketplaceHistoryEntry(BaseModel):
+    date: str
+    count: int
+
+
+class MarketplaceModelResponse(BaseModel):
+    id: str
+    name: str
+    description: str
+    long_description: str
+    is_active: bool
+    allowed_tiers: list[str]
+    quota_mode: str
+    pricing: dict[str, str]
+    restricted_access: bool
+    history: list[MarketplaceHistoryEntry]
+
+
+@router.get('/marketplace', response_model=list[MarketplaceModelResponse])
+async def get_model_marketplace(
+    user=Depends(get_verified_user),
+    db: AsyncSession = Depends(get_async_session),
+):
+    models = await Models.get_all_models(db=db)
+    visible_models = [
+        model
+        for model in models
+        if bool(((model.meta.marketplace or {}) if model.meta else {}).get('visible'))
+    ]
+    history = await SubscriptionUsages.get_daily_request_counts(
+        [model.id for model in visible_models],
+        days=30,
+        db=db,
+    )
+
+    response = []
+    for model in visible_models:
+        meta = model.meta.model_dump() if model.meta else {}
+        marketplace = meta.get('marketplace') or {}
+        subscription = meta.get('subscription') or {}
+        response.append(
+            MarketplaceModelResponse(
+                id=model.id,
+                name=model.name,
+                description=str(meta.get('description') or ''),
+                long_description=str(marketplace.get('long_description') or meta.get('description') or ''),
+                is_active=bool(model.is_active),
+                allowed_tiers=list(subscription.get('allowed_tiers') or ['free', 'plus', 'chatpower']),
+                quota_mode=str(subscription.get('quota_mode') or 'metered'),
+                pricing={
+                    'input': str(subscription.get('input_chatpoint_per_million') or '0'),
+                    'output': str(subscription.get('output_chatpoint_per_million') or '0'),
+                    'cache_creation': str(subscription.get('cache_creation_chatpoint_per_million') or '0'),
+                    'cache_read': str(subscription.get('cache_read_chatpoint_per_million') or '0'),
+                },
+                restricted_access=bool(model.access_grants),
+                history=history.get(model.id, []),
+            )
+        )
+    return response
 
 
 @router.get('/list', response_model=ModelAccessListResponse)  # do NOT use "/" as path, conflicts with main.py

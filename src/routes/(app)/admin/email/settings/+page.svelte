@@ -1,6 +1,6 @@
 <script lang="ts">
-	import EmailPageShell from '$lib/components/admin/Email/EmailPageShell.svelte';
-	import EmailSettings from '$lib/components/admin/Email/EmailSettings.svelte';
-</script>
+	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
 
-<EmailPageShell><EmailSettings /></EmailPageShell>
+	onMount(() => goto('/admin/settings/email', { replaceState: true }));
+</script>

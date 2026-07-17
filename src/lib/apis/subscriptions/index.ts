@@ -140,6 +140,12 @@ export type SubscriptionUsageSummary = {
 	total_output_tokens: number;
 	total_cache_creation_tokens: number;
 	total_cache_read_tokens: number;
+	model_totals: Array<{
+		model_id: string;
+		total_tokens: number;
+		request_count: number;
+		cost_micros: number;
+	}>;
 };
 
 export type SubscriptionLedgerEntry = {
@@ -360,6 +366,7 @@ export const getAdminSubscriptionUsage = async (
 	token: string,
 	filters: {
 		userId?: string;
+		userEmail?: string;
 		modelId?: string;
 		status?: string;
 		startAt?: number;
@@ -370,6 +377,7 @@ export const getAdminSubscriptionUsage = async (
 ) => {
 	const params = new URLSearchParams();
 	if (filters.userId) params.set('user_id', filters.userId);
+	if (filters.userEmail) params.set('user_email', filters.userEmail);
 	if (filters.modelId) params.set('model_id', filters.modelId);
 	if (filters.status) params.set('status', filters.status);
 	if (filters.startAt !== undefined) params.set('start_at', String(filters.startAt));

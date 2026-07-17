@@ -1,5 +1,6 @@
 <script lang="ts">
-	import RegistrationSettings from '$lib/components/admin/Registration/RegistrationSettings.svelte';
-</script>
+	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
 
-<RegistrationSettings />
+	onMount(() => goto('/admin/settings/email', { replaceState: true }));
+</script>

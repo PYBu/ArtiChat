@@ -11,6 +11,8 @@
 		type EmailSettings
 	} from '$lib/apis/emails';
 
+	export let showEnableToggle = true;
+
 	const defaults: EmailSettings = {
 		enabled: false,
 		host: '',
@@ -111,8 +113,8 @@
 	<div class="flex max-w-4xl flex-col gap-6">
 		<section class="flex flex-col gap-4 border-b border-gray-100 pb-6 dark:border-gray-850">
 			<div class="flex items-center justify-between gap-4">
-				<div class="font-medium">发信服务</div>
-				<Switch bind:state={settings.enabled} ariaLabel="启用发信服务" />
+				<div class="font-medium">SMTP 连接</div>
+				{#if showEnableToggle}<Switch bind:state={settings.enabled} ariaLabel="启用发信服务" />{/if}
 			</div>
 			<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
 				<label class="flex flex-col gap-1 sm:col-span-2">

@@ -35,7 +35,7 @@ from open_webui.utils.tools import (
     set_terminal_servers,
     set_tool_servers,
 )
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 router = APIRouter()
 
@@ -86,6 +86,7 @@ PLATFORM_CONFIG_KEYS = {
     'about_content': 'platform.about_content',
     'logo_light': 'platform.logo_light',
     'logo_dark': 'platform.logo_dark',
+    'sidebar_buttons': 'platform.sidebar_buttons',
 }
 PLATFORM_ASSETS_DIR = DATA_DIR / 'platform-assets'
 
@@ -94,6 +95,7 @@ class PlatformSettingsForm(BaseModel):
     name: str
     about_title: str = ''
     about_content: str = ''
+    sidebar_buttons: list[dict] = Field(default_factory=list)
 
 
 async def platform_settings() -> dict:
@@ -104,6 +106,7 @@ async def platform_settings() -> dict:
         'about_content': values.get('about_content') or '',
         'logo_light': values.get('logo_light') or '/static/favicon.png',
         'logo_dark': values.get('logo_dark') or '/static/favicon-dark.png',
+        'sidebar_buttons': values.get('sidebar_buttons') or [],
     }
 
 

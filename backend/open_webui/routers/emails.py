@@ -230,6 +230,19 @@ async def load_registration_settings() -> dict[str, Any]:
     }
 
 
+async def load_effective_registration_settings() -> dict[str, Any]:
+    settings = await load_registration_settings()
+    smtp_settings = await load_smtp_settings()
+    if not smtp_settings.get('enabled'):
+        settings = {
+            **settings,
+            'verification_enabled': False,
+            'email_code_login_enabled': False,
+            'sensitive_action_verification_enabled': False,
+        }
+    return settings
+
+
 def _smtp_updates(settings: dict[str, Any]) -> dict[str, Any]:
     return {SMTP_CONFIG_KEYS[field]: value for field, value in settings.items() if field in SMTP_CONFIG_KEYS}
 
@@ -291,7 +304,7 @@ def _delivery_response(delivery) -> dict[str, Any]:
 
 @router.get('/registration/public')
 async def get_public_registration_settings():
-    settings = await load_registration_settings()
+    settings = await load_effective_registration_settings()
     return {
         'verification_enabled': bool(settings['verification_enabled']),
         'email_code_login_enabled': bool(settings['email_code_login_enabled']),
@@ -327,7 +340,7 @@ async def request_email_challenge(
         raise HTTPException(status_code=400, detail='EMAIL_CODE_PURPOSE_INVALID')
 
     email = form_data.email.strip().lower()
-    registration = await load_registration_settings()
+    registration = await load_effective_registration_settings()
     if purpose == 'registration':
         if not registration['verification_enabled']:
             raise HTTPException(status_code=400, detail='REGISTRATION_VERIFICATION_DISABLED')
@@ -488,7 +501,7 @@ async def request_sensitive_challenge(
     action = form_data.action.strip().lower()
     if action not in SENSITIVE_ACTION_LABELS:
         raise HTTPException(status_code=400, detail='SENSITIVE_ACTION_INVALID')
-    registration = await load_registration_settings()
+    registration = await load_effective_registration_settings()
     if not registration['sensitive_action_verification_enabled']:
         return {'status': True, 'verification_required': False}
     settings = await load_smtp_settings()
@@ -569,7 +582,7 @@ async def request_new_email_challenge(
         raise HTTPException(status_code=400, detail='EMAIL_FORMAT_INVALID')
     if await Users.get_user_by_email(email, db=db) is not None:
         raise HTTPException(status_code=400, detail='EMAIL_ALREADY_REGISTERED')
-    registration = await load_registration_settings()
+    registration = await load_effective_registration_settings()
     if not registration['sensitive_action_verification_enabled']:
         return {'status': True, 'verification_required': False}
     settings = await load_smtp_settings()
