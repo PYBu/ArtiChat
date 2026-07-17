@@ -1060,7 +1060,8 @@ ARTICHAT_UPDATE_CACHE_TTL_SECONDS = int(os.getenv('ARTICHAT_UPDATE_CACHE_TTL_SEC
 ARTICHAT_UPDATE_STALE_AFTER_SECONDS = int(
     os.getenv('ARTICHAT_UPDATE_STALE_AFTER_SECONDS', '1800')
 )
-ARTICHAT_ANNOUNCEMENT_URL = os.getenv('ARTICHAT_ANNOUNCEMENT_URL', '').strip()
+# The official announcement source is intentionally fixed for every deployment.
+ARTICHAT_ANNOUNCEMENT_URL = 'https://artichatupdate.artivis.cc/index.json'
 ARTICHAT_ANNOUNCEMENT_CACHE_TTL_SECONDS = int(
     os.getenv('ARTICHAT_ANNOUNCEMENT_CACHE_TTL_SECONDS', '600')
 )

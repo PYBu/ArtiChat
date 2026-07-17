@@ -63,10 +63,14 @@ if (!updateRouter.includes("@router.get('/announcement')")) {
 const env = fs.readFileSync('backend/open_webui/env.py', 'utf8');
 for (const required of [
 	'ARTICHAT_ANNOUNCEMENT_URL',
+	"https://artichatupdate.artivis.cc/index.json",
 	'ARTICHAT_ANNOUNCEMENT_CACHE_TTL_SECONDS',
 	'ARTICHAT_ANNOUNCEMENT_TIMEOUT_SECONDS'
 ]) {
 	if (!env.includes(required)) throw new Error(`Environment config is missing ${required}`);
+}
+if (env.includes("os.getenv('ARTICHAT_ANNOUNCEMENT_URL'")) {
+	throw new Error('The official announcement URL must not be environment-overridable');
 }
 
 const panel = fs.readFileSync(panelPath, 'utf8');
