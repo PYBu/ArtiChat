@@ -9,6 +9,9 @@
 		type RegistrationSettings
 	} from '$lib/apis/emails';
 
+	export let embedded = false;
+	export let emailEnabled = true;
+
 	let settings: RegistrationSettings = {
 		allowed_domains: [],
 		allow_subdomains: false,
@@ -53,10 +56,16 @@
 	onMount(load);
 </script>
 
-<div class="mx-auto flex w-full max-w-4xl flex-col gap-5 px-4 py-4 sm:px-6">
-	<div class="border-b border-gray-100 pb-3 dark:border-gray-850">
-		<h1 class="text-xl font-medium">注册管理</h1>
-	</div>
+<div
+	class={embedded
+		? 'flex w-full flex-col gap-5'
+		: 'mx-auto flex w-full max-w-4xl flex-col gap-5 px-4 py-4 sm:px-6'}
+>
+	{#if !embedded}
+		<div class="border-b border-gray-100 pb-3 dark:border-gray-850">
+			<h1 class="text-xl font-medium">注册管理</h1>
+		</div>
+	{/if}
 	{#if loading}
 		<div class="py-8 text-sm text-gray-500">加载中...</div>
 	{:else}
@@ -78,24 +87,30 @@
 					ariaLabel="允许子域名注册"
 				/></label
 			>
-			<label class="flex items-center justify-between gap-4 py-4"
-				><span class="text-sm">注册邮箱验证</span><Switch
-					bind:state={settings.verification_enabled}
-					ariaLabel="启用注册邮箱验证"
-				/></label
-			>
-			<label class="flex items-center justify-between gap-4 py-4"
-				><span class="text-sm">邮箱验证码登录</span><Switch
-					bind:state={settings.email_code_login_enabled}
-					ariaLabel="启用邮箱验证码登录"
-				/></label
-			>
-			<label class="flex items-center justify-between gap-4 py-4"
-				><span class="text-sm">敏感操作邮箱验证</span><Switch
-					bind:state={settings.sensitive_action_verification_enabled}
-					ariaLabel="启用敏感操作邮箱验证"
-				/></label
-			>
+			{#if emailEnabled}
+				<label class="flex items-center justify-between gap-4 py-4"
+					><span class="text-sm">注册邮箱验证</span><Switch
+						bind:state={settings.verification_enabled}
+						ariaLabel="启用注册邮箱验证"
+					/></label
+				>
+				<label class="flex items-center justify-between gap-4 py-4"
+					><span class="text-sm">邮箱验证码登录</span><Switch
+						bind:state={settings.email_code_login_enabled}
+						ariaLabel="启用邮箱验证码登录"
+					/></label
+				>
+				<label class="flex items-center justify-between gap-4 py-4"
+					><span class="text-sm">敏感操作邮箱验证</span><Switch
+						bind:state={settings.sensitive_action_verification_enabled}
+						ariaLabel="启用敏感操作邮箱验证"
+					/></label
+				>
+			{:else}
+				<div class="py-4 text-sm text-gray-500">
+					启用邮箱功能后可配置注册验证、验证码登录和敏感操作验证。
+				</div>
+			{/if}
 		</div>
 		<div class="flex justify-end">
 			<button

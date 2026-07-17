@@ -31,6 +31,17 @@ class FakeUpdateService:
         return self.deploy_result
 
 
+class FakeAnnouncementService:
+    def __init__(self, result=None, error=None):
+        self.result = result
+        self.error = error
+
+    async def get(self):
+        if self.error:
+            raise self.error
+        return self.result
+
+
 @pytest.fixture
 def updates_module(monkeypatch):
     auth_module = types.ModuleType("open_webui.utils.auth")
@@ -54,6 +65,7 @@ def test_update_router_exposes_only_expected_paths(updates_module):
         for method in route.methods
     }
     assert paths == {
+        ("/announcement", "GET"),
         ("/check", "GET"),
         ("/status", "GET"),
         ("/deploy", "POST"),
@@ -104,6 +116,33 @@ async def test_get_update_status_returns_persisted_state(updates_module):
     result = await updates.get_update_status(user=object(), service=service)
 
     assert result is service.status_value
+
+
+@pytest.mark.asyncio
+async def test_get_update_announcement_returns_single_notice(updates_module):
+    updates, _ = updates_module
+    announcement = {'id': '1', 'title': 'ArtiChat announcement'}
+    service = FakeAnnouncementService(result=announcement)
+
+    result = await updates.get_update_announcement(
+        user=object(), service=service
+    )
+
+    assert result == {'announcement': announcement}
+
+
+@pytest.mark.asyncio
+async def test_get_update_announcement_degrades_to_empty_result(updates_module):
+    updates, _ = updates_module
+    service = FakeAnnouncementService(
+        error=updates.AnnouncementError('remote unavailable')
+    )
+
+    result = await updates.get_update_announcement(
+        user=object(), service=service
+    )
+
+    assert result == {'announcement': None}
 
 
 @pytest.mark.asyncio

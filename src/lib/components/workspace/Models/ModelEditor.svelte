@@ -32,6 +32,7 @@
 	import TerminalSelector from './TerminalSelector.svelte';
 	import TTSVoiceInput from './TTSVoiceInput.svelte';
 	import SubscriptionPolicy from './SubscriptionPolicy.svelte';
+	import Switch from '$lib/components/common/Switch.svelte';
 	import AccessControlModal from '../common/AccessControlModal.svelte';
 	import LockClosed from '$lib/components/icons/LockClosed.svelte';
 
@@ -95,6 +96,7 @@
 			description: '',
 			suggestion_prompts: null,
 			subscription: { ...DEFAULT_SUBSCRIPTION_POLICY },
+			marketplace: { visible: false, long_description: '' },
 			tags: []
 		},
 		params: {
@@ -426,6 +428,11 @@
 		info.meta.subscription = {
 			...DEFAULT_SUBSCRIPTION_POLICY,
 			...(info.meta.subscription ?? {})
+		};
+		info.meta.marketplace = {
+			visible: false,
+			long_description: '',
+			...(info.meta.marketplace ?? {})
 		};
 
 		loaded = true;
@@ -884,6 +891,29 @@
 
 					<div class="my-4">
 						<SubscriptionPolicy bind:policy={info.meta.subscription} />
+					</div>
+
+					<div class="my-4 flex flex-col gap-3 border-y border-gray-100 py-4 dark:border-gray-850">
+						<div class="flex items-center justify-between gap-4">
+							<div>
+								<div class="text-xs font-medium text-gray-500">模型广场</div>
+								<div class="mt-1 text-xs text-gray-400">
+									向用户展示模型介绍、权限、定价和近期调用量。
+								</div>
+							</div>
+							<Switch bind:state={info.meta.marketplace.visible} ariaLabel="展示在模型广场" />
+						</div>
+						{#if info.meta.marketplace.visible}
+							<label class="flex flex-col gap-1">
+								<span class="text-xs text-gray-500">详细介绍</span>
+								<Textarea
+									rows={6}
+									className="text-sm w-full bg-transparent outline-hidden resize-y"
+									placeholder="介绍模型能力、适用场景和使用建议"
+									bind:value={info.meta.marketplace.long_description}
+								/>
+							</label>
+						{/if}
 					</div>
 
 					{#if Object.keys(capabilities).filter((key) => capabilities[key]).length > 0}

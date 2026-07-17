@@ -1945,6 +1945,7 @@ async def get_app_config(request: Request):
         'platform.about_content',
         'platform.logo_light',
         'platform.logo_dark',
+        'platform.sidebar_buttons',
     )
 
     platform_name = config.get('platform.name') or app.state.WEBUI_NAME
@@ -1959,6 +1960,7 @@ async def get_app_config(request: Request):
             'about_content': config.get('platform.about_content') or '',
             'logo_light': config.get('platform.logo_light') or '/static/favicon.png',
             'logo_dark': config.get('platform.logo_dark') or '/static/favicon-dark.png',
+            'sidebar_buttons': config.get('platform.sidebar_buttons') or [],
         },
         'default_locale': str(DEFAULT_LOCALE),
         'oauth': {

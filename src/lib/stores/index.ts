@@ -305,6 +305,13 @@ type Config = {
 	default_locale: string;
 	default_models: string;
 	default_prompt_suggestions: PromptSuggestion[];
+	branding?: {
+		about_title?: string;
+		about_content?: string;
+		logo_light?: string;
+		logo_dark?: string;
+		sidebar_buttons?: Array<{ name: string; url: string; icon: string }>;
+	};
 	features: {
 		auth: boolean;
 		auth_trusted_header: boolean;

@@ -1,7 +1,12 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from open_webui.env import (
+    ARTICHAT_ANNOUNCEMENT_CACHE_TTL_SECONDS,
+    ARTICHAT_ANNOUNCEMENT_TIMEOUT_SECONDS,
+    ARTICHAT_ANNOUNCEMENT_URL,
     ARTICHAT_UPDATE_CACHE_TTL_SECONDS,
     ARTICHAT_UPDATE_GITHUB_TOKEN,
     ARTICHAT_UPDATE_REF,
@@ -12,6 +17,10 @@ from open_webui.env import (
     VERSION,
     WEBUI_BUILD_HASH,
 )
+from open_webui.utils.announcement_service import (
+    AnnouncementError,
+    AnnouncementService,
+)
 from open_webui.utils.auth import get_admin_user
 from open_webui.utils.github_updates import GitHubUpdateClient, GitHubUpdateError
 from open_webui.utils.update_service import ArtiChatUpdateService
@@ -19,7 +28,9 @@ from open_webui.utils.update_state import UpdateInProgressError, UpdateStateStor
 
 
 router = APIRouter()
+log = logging.getLogger(__name__)
 _update_service: ArtiChatUpdateService | None = None
+_announcement_service: AnnouncementService | None = None
 
 
 class DeployUpdateForm(BaseModel):
@@ -53,6 +64,17 @@ def get_update_service() -> ArtiChatUpdateService:
     return _update_service
 
 
+def get_announcement_service() -> AnnouncementService:
+    global _announcement_service
+    if _announcement_service is None:
+        _announcement_service = AnnouncementService(
+            ARTICHAT_ANNOUNCEMENT_URL,
+            cache_ttl_seconds=ARTICHAT_ANNOUNCEMENT_CACHE_TTL_SECONDS,
+            timeout_seconds=ARTICHAT_ANNOUNCEMENT_TIMEOUT_SECONDS,
+        )
+    return _announcement_service
+
+
 @router.get("/check")
 async def check_for_updates(
     force: bool = False,
@@ -71,6 +93,19 @@ async def get_update_status(
     service=Depends(get_update_service),
 ):
     return service.status()
+
+
+@router.get('/announcement')
+async def get_update_announcement(
+    user=Depends(get_admin_user),
+    service=Depends(get_announcement_service),
+):
+    try:
+        announcement = await service.get()
+    except AnnouncementError as exc:
+        log.warning('Unable to load the update announcement: %s', exc)
+        announcement = None
+    return {'announcement': announcement}
 
 
 @router.post("/deploy", status_code=202)

@@ -59,10 +59,14 @@ async def test_admin_settings_store_encrypted_password_and_return_only_mask(monk
 
 @pytest.mark.asyncio
 async def test_registration_settings_normalize_domains_and_public_response_hides_allowlist(monkeypatch):
-    stored = {storage_key: default for storage_key, default in emails.REGISTRATION_CONFIG_DEFAULTS.items()}
+    stored = {
+        **{storage_key: default for storage_key, default in emails.REGISTRATION_CONFIG_DEFAULTS.items()},
+        **{storage_key: default for storage_key, default in emails.SMTP_CONFIG_DEFAULTS.items()},
+    }
+    stored[emails.SMTP_CONFIG_KEYS['enabled']] = True
 
     async def get_many(*keys):
-        return {key: stored[key] for key in keys}
+        return {key: stored[key] for key in keys if key in stored}
 
     async def upsert(updates):
         stored.update(updates)
@@ -88,6 +92,26 @@ async def test_registration_settings_normalize_domains_and_public_response_hides
         'email_code_login_enabled': True,
     }
     assert 'allowed_domains' not in public
+
+
+@pytest.mark.asyncio
+async def test_disabled_email_service_disables_all_public_verification_features(monkeypatch):
+    stored = {
+        **{storage_key: default for storage_key, default in emails.REGISTRATION_CONFIG_DEFAULTS.items()},
+        **{storage_key: default for storage_key, default in emails.SMTP_CONFIG_DEFAULTS.items()},
+    }
+    stored[emails.REGISTRATION_CONFIG_KEYS['verification_enabled']] = True
+    stored[emails.REGISTRATION_CONFIG_KEYS['email_code_login_enabled']] = True
+
+    async def get_many(*keys):
+        return {key: stored[key] for key in keys if key in stored}
+
+    monkeypatch.setattr(emails.Config, 'get_many', get_many)
+
+    assert await emails.get_public_registration_settings() == {
+        'verification_enabled': False,
+        'email_code_login_enabled': False,
+    }
 
 
 @pytest.mark.asyncio

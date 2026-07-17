@@ -3,7 +3,7 @@ from io import BytesIO
 import pytest
 from PIL import Image
 
-from open_webui.utils.platform import normalize_platform_settings, save_platform_logo
+from open_webui.utils.platform import normalize_platform_settings, normalize_sidebar_buttons, save_platform_logo
 
 
 def image_bytes(image_format: str = 'PNG') -> bytes:
@@ -19,10 +19,36 @@ def test_platform_text_settings_are_trimmed_and_defaulted():
         'name': 'My Platform',
         'about_title': 'About us',
         'about_content': 'Body',
+        'sidebar_buttons': [],
     }
 
     with pytest.raises(ValueError, match='PLATFORM_NAME_REQUIRED'):
         normalize_platform_settings({'name': '   ', 'about_title': '', 'about_content': ''})
+
+
+def test_sidebar_buttons_accept_safe_internal_and_external_urls():
+    assert normalize_sidebar_buttons(
+        [
+            {'name': 'Docs', 'url': '/docs', 'icon': 'book'},
+            {'name': 'Status', 'url': 'https://status.example.com/path', 'icon': 'globe'},
+        ]
+    ) == [
+        {'name': 'Docs', 'url': '/docs', 'icon': 'book'},
+        {'name': 'Status', 'url': 'https://status.example.com/path', 'icon': 'globe'},
+    ]
+
+
+@pytest.mark.parametrize(
+    'button,error',
+    [
+        ({'name': 'Unsafe', 'url': 'javascript:alert(1)', 'icon': 'link'}, 'URL'),
+        ({'name': 'Protocol relative', 'url': '//example.com', 'icon': 'link'}, 'URL'),
+        ({'name': 'Bad icon', 'url': '/ok', 'icon': 'custom-svg'}, 'ICON'),
+    ],
+)
+def test_sidebar_buttons_reject_unsafe_urls_and_unknown_icons(button, error):
+    with pytest.raises(ValueError, match=f'PLATFORM_SIDEBAR_BUTTON_{error}_INVALID'):
+        normalize_sidebar_buttons([button])
 
 
 @pytest.mark.parametrize('image_format', ['PNG', 'JPEG', 'WEBP'])

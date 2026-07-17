@@ -85,6 +85,8 @@
 	import PinnedNoteList from './Sidebar/PinnedNoteList.svelte';
 	import Note from '../icons/Note.svelte';
 	import Code from '../icons/Code.svelte';
+	import Grid from '../icons/Grid.svelte';
+	import SidebarLinkIcon from './Sidebar/SidebarLinkIcon.svelte';
 	import { slide } from 'svelte/transition';
 	import HotkeyHint from '../common/HotkeyHint.svelte';
 
@@ -131,6 +133,7 @@
 	let sharedFolders: any[] = [];
 
 	$: pinnedItems = $settings?.pinnedMenuItems ?? DEFAULT_PINNED_ITEMS;
+	$: customSidebarButtons = $config?.branding?.sidebar_buttons ?? [];
 
 	const isMenuItemVisible = (id) => {
 		switch (id) {
@@ -864,7 +867,10 @@
 						aria-label={$showSidebar ? $i18n.t('Close Sidebar') : $i18n.t('Open Sidebar')}
 					>
 						<div class=" self-center flex items-center justify-center size-9">
-							<ThemeLogo kind="mark" className="sidebar-new-chat-icon size-6 rounded-full group-hover:hidden" />
+							<ThemeLogo
+								kind="mark"
+								className="sidebar-new-chat-icon size-6 rounded-full group-hover:hidden"
+							/>
 
 							<Sidebar className="size-5 hidden group-hover:flex" />
 						</div>
@@ -914,6 +920,54 @@
 						</button>
 					</Tooltip>
 				</div>
+
+				<div>
+					<Tooltip content="模型广场" placement="right">
+						<a
+							class="cursor-pointer flex rounded-xl hover:bg-gray-100 dark:hover:bg-gray-850 transition group"
+							href="/model-marketplace"
+							on:click={async (event) => {
+								event.stopImmediatePropagation();
+								event.preventDefault();
+								await goto('/model-marketplace');
+								await itemClickHandler();
+							}}
+							draggable="false"
+							aria-label="模型广场"
+						>
+							<div class="self-center flex size-9 items-center justify-center">
+								<Grid className="size-4.5" />
+							</div>
+						</a>
+					</Tooltip>
+				</div>
+
+				{#each customSidebarButtons as button}
+					<div>
+						<Tooltip content={button.name} placement="right">
+							<a
+								class="cursor-pointer flex rounded-xl hover:bg-gray-100 dark:hover:bg-gray-850 transition group"
+								href={button.url}
+								target={button.url.startsWith('http') ? '_blank' : undefined}
+								rel={button.url.startsWith('http') ? 'noopener noreferrer' : undefined}
+								on:click={async (event) => {
+									event.stopImmediatePropagation();
+									if (button.url.startsWith('/')) {
+										event.preventDefault();
+										await goto(button.url);
+										await itemClickHandler();
+									}
+								}}
+								draggable="false"
+								aria-label={button.name}
+							>
+								<div class="self-center flex size-9 items-center justify-center">
+									<SidebarLinkIcon icon={button.icon} />
+								</div>
+							</a>
+						</Tooltip>
+					</div>
+				{/each}
 
 				{#each pinnedItems as itemId (itemId)}
 					{@const meta = getMenuItemMeta(itemId)}
@@ -1159,6 +1213,40 @@
 							<HotkeyHint name="search" className=" group-hover:visible invisible" />
 						</button>
 					</div>
+
+					<div class="px-[0.4375rem] flex justify-center text-gray-800 dark:text-gray-200">
+						<a
+							class="grow flex items-center space-x-3 rounded-2xl px-2.5 py-2 hover:bg-gray-100 dark:hover:bg-gray-900 transition outline-none"
+							href="/model-marketplace"
+							on:click={itemClickHandler}
+							draggable="false"
+							aria-label="模型广场"
+						>
+							<div class="self-center"><Grid className="size-4.5" /></div>
+							<div class="flex flex-1 self-center translate-y-[0.5px]">
+								<div class="self-center text-sm font-primary">模型广场</div>
+							</div>
+						</a>
+					</div>
+
+					{#each customSidebarButtons as button}
+						<div class="px-[0.4375rem] flex justify-center text-gray-800 dark:text-gray-200">
+							<a
+								class="grow flex items-center space-x-3 rounded-2xl px-2.5 py-2 hover:bg-gray-100 dark:hover:bg-gray-900 transition outline-none"
+								href={button.url}
+								target={button.url.startsWith('http') ? '_blank' : undefined}
+								rel={button.url.startsWith('http') ? 'noopener noreferrer' : undefined}
+								on:click={() => button.url.startsWith('/') && itemClickHandler()}
+								draggable="false"
+								aria-label={button.name}
+							>
+								<div class="self-center"><SidebarLinkIcon icon={button.icon} /></div>
+								<div class="flex min-w-0 flex-1 self-center translate-y-[0.5px]">
+									<div class="truncate self-center text-sm font-primary">{button.name}</div>
+								</div>
+							</a>
+						</div>
+					{/each}
 
 					<div id="pinned-menu-items-list">
 						{#each pinnedItems as itemId (itemId)}

@@ -1060,11 +1060,20 @@ ARTICHAT_UPDATE_CACHE_TTL_SECONDS = int(os.getenv('ARTICHAT_UPDATE_CACHE_TTL_SEC
 ARTICHAT_UPDATE_STALE_AFTER_SECONDS = int(
     os.getenv('ARTICHAT_UPDATE_STALE_AFTER_SECONDS', '1800')
 )
+# The official announcement source is intentionally fixed for every deployment.
+ARTICHAT_ANNOUNCEMENT_URL = 'https://artichatupdate.artivis.cc/index.json'
+ARTICHAT_ANNOUNCEMENT_CACHE_TTL_SECONDS = int(
+    os.getenv('ARTICHAT_ANNOUNCEMENT_CACHE_TTL_SECONDS', '600')
+)
+ARTICHAT_ANNOUNCEMENT_TIMEOUT_SECONDS = float(
+    os.getenv('ARTICHAT_ANNOUNCEMENT_TIMEOUT_SECONDS', '4')
+)
 OFFLINE_MODE = os.getenv('OFFLINE_MODE', 'false').lower() == 'true'
 
 if OFFLINE_MODE:
     os.environ['HF_HUB_OFFLINE'] = '1'
     ENABLE_VERSION_UPDATE_CHECK = False
+    ARTICHAT_ANNOUNCEMENT_URL = ''
 
 ####################################
 # Pyodide file persistence

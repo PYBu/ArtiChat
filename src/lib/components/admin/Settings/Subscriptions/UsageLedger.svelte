@@ -15,16 +15,33 @@
 		total_input_tokens: 0,
 		total_output_tokens: 0,
 		total_cache_creation_tokens: 0,
-		total_cache_read_tokens: 0
+		total_cache_read_tokens: 0,
+		model_totals: []
 	});
 	let usage = emptyUsage();
 	let ledger: SubscriptionLedgerEntry[] = [];
 	let loading = true;
 	let userFilter = '';
+	let userEmailFilter = '';
 	let modelFilter = '';
 	let statusFilter = '';
 	let startDate = '';
 	let endDate = '';
+	let selectedShareModel = '';
+
+	$: modelShares = (usage.model_totals ?? []).map((item) => ({
+		modelId: item.model_id,
+		tokens: item.total_tokens
+	}));
+	$: if (modelShares.length && !modelShares.some((item) => item.modelId === selectedShareModel)) {
+		selectedShareModel = modelShares[0].modelId;
+	}
+	$: selectedModelTokens =
+		modelShares.find((item) => item.modelId === selectedShareModel)?.tokens ?? 0;
+	$: allModelTokens = modelShares.reduce((total, item) => total + item.tokens, 0);
+	$: selectedModelPercent = allModelTokens
+		? Math.round((selectedModelTokens / allModelTokens) * 1000) / 10
+		: 0;
 
 	const formatChatpoint = (micros?: number | null) =>
 		micros === null || micros === undefined
@@ -49,6 +66,7 @@
 		const [usageResponse, ledgerResponse] = await Promise.all([
 			getAdminSubscriptionUsage(localStorage.token, {
 				userId: userFilter.trim() || undefined,
+				userEmail: userEmailFilter.trim() || undefined,
 				modelId: modelFilter.trim() || undefined,
 				status: statusFilter || undefined,
 				startAt: dateToTimestamp(startDate),
@@ -69,6 +87,7 @@
 
 	const resetFilters = () => {
 		userFilter = '';
+		userEmailFilter = '';
 		modelFilter = '';
 		statusFilter = '';
 		startDate = '';
@@ -92,11 +111,16 @@
 		>
 	</div>
 
-	<div class="grid gap-2 md:grid-cols-3 xl:grid-cols-6">
+	<div class="grid gap-2 md:grid-cols-4 xl:grid-cols-7">
 		<input
 			class="rounded-lg border border-gray-100 bg-transparent px-3 py-2 text-xs dark:border-gray-850"
 			bind:value={userFilter}
 			placeholder="用户 ID"
+		/>
+		<input
+			class="rounded-lg border border-gray-100 bg-transparent px-3 py-2 text-xs dark:border-gray-850"
+			bind:value={userEmailFilter}
+			placeholder="用户邮箱"
 		/>
 		<input
 			class="rounded-lg border border-gray-100 bg-transparent px-3 py-2 text-xs dark:border-gray-850"
@@ -147,6 +171,40 @@
 					<div class="mt-1 text-lg font-medium">{summary[1]}</div>
 				</div>
 			{/each}
+		</div>
+
+		<div
+			class="grid gap-5 border-y border-gray-100 py-4 dark:border-gray-850 lg:grid-cols-[15rem_1fr] lg:items-center"
+		>
+			<div
+				class="mx-auto flex size-52 items-center justify-center rounded-full"
+				style={`background: conic-gradient(rgb(17 24 39) 0 ${selectedModelPercent}%, rgb(229 231 235) ${selectedModelPercent}% 100%)`}
+			>
+				<div
+					class="flex size-36 flex-col items-center justify-center rounded-full bg-white text-center dark:bg-gray-900"
+				>
+					<div class="text-3xl font-medium">{selectedModelPercent}%</div>
+					<div class="mt-1 max-w-28 truncate text-xs text-gray-500">Token 占比</div>
+				</div>
+			</div>
+			<div class="min-w-0">
+				<div class="text-base font-medium">模型用量占比</div>
+				<div class="mt-1 text-xs text-gray-500">按当前筛选结果中的总 Token 计算。</div>
+				<label class="mt-4 flex max-w-md flex-col gap-1">
+					<span class="text-xs text-gray-500">查看模型</span>
+					<select
+						class="rounded-lg border border-gray-100 bg-transparent px-3 py-2 text-sm dark:border-gray-850"
+						bind:value={selectedShareModel}
+						disabled={!modelShares.length}
+					>
+						{#if !modelShares.length}<option value="">暂无模型</option>{/if}
+						{#each modelShares as item}<option value={item.modelId}>{item.modelId}</option>{/each}
+					</select>
+				</label>
+				<div class="mt-3 text-sm text-gray-600 dark:text-gray-300">
+					{formatNumber(selectedModelTokens)} / {formatNumber(allModelTokens)} Token
+				</div>
+			</div>
 		</div>
 
 		<div>

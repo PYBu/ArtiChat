@@ -1485,6 +1485,7 @@ class SubscriptionUsagesTable:
         self,
         *,
         user_id: str | None = None,
+        user_email: str | None = None,
         model_id: str | None = None,
         status: str | None = None,
         start_at: int | None = None,
@@ -1499,6 +1500,8 @@ class SubscriptionUsagesTable:
             filters = []
             if user_id:
                 filters.append(SubscriptionUsage.user_id == user_id)
+            if user_email:
+                filters.append(User.email.ilike(f'%{user_email}%'))
             if model_id:
                 filters.append(SubscriptionUsage.model_id == model_id)
             if status:
@@ -1508,7 +1511,7 @@ class SubscriptionUsagesTable:
             if end_at is not None:
                 filters.append(SubscriptionUsage.created_at <= end_at)
 
-            if include_user:
+            if include_user or user_email:
                 stmt = select(SubscriptionUsage, User).outerjoin(User, User.id == SubscriptionUsage.user_id)
             else:
                 stmt = select(SubscriptionUsage)
@@ -1535,17 +1538,36 @@ class SubscriptionUsagesTable:
                 else:
                     items = usage_models
 
-            totals = (
-                await session.execute(
-                    select(
-                        func.coalesce(func.sum(SubscriptionUsage.cost_micros), 0),
-                        func.coalesce(func.sum(SubscriptionUsage.input_tokens), 0),
-                        func.coalesce(func.sum(SubscriptionUsage.output_tokens), 0),
-                        func.coalesce(func.sum(SubscriptionUsage.cache_creation_tokens), 0),
-                        func.coalesce(func.sum(SubscriptionUsage.cache_read_tokens), 0),
-                    ).where(*filters)
+            totals_stmt = select(
+                func.coalesce(func.sum(SubscriptionUsage.cost_micros), 0),
+                func.coalesce(func.sum(SubscriptionUsage.input_tokens), 0),
+                func.coalesce(func.sum(SubscriptionUsage.output_tokens), 0),
+                func.coalesce(func.sum(SubscriptionUsage.cache_creation_tokens), 0),
+                func.coalesce(func.sum(SubscriptionUsage.cache_read_tokens), 0),
+            )
+            if user_email:
+                totals_stmt = totals_stmt.select_from(SubscriptionUsage).outerjoin(
+                    User, User.id == SubscriptionUsage.user_id
                 )
-            ).one()
+            totals = (await session.execute(totals_stmt.where(*filters))).one()
+
+            model_totals_stmt = select(
+                SubscriptionUsage.model_id,
+                func.coalesce(func.sum(SubscriptionUsage.total_tokens), 0),
+                func.count(SubscriptionUsage.id),
+                func.coalesce(func.sum(SubscriptionUsage.cost_micros), 0),
+            )
+            if user_email:
+                model_totals_stmt = model_totals_stmt.select_from(SubscriptionUsage).outerjoin(
+                    User, User.id == SubscriptionUsage.user_id
+                )
+            model_totals = (
+                await session.execute(
+                    model_totals_stmt.where(*filters)
+                    .group_by(SubscriptionUsage.model_id)
+                    .order_by(func.sum(SubscriptionUsage.total_tokens).desc())
+                )
+            ).all()
             return {
                 'items': items,
                 'total_cost_micros': int(totals[0]),
@@ -1553,7 +1575,54 @@ class SubscriptionUsagesTable:
                 'total_output_tokens': int(totals[2]),
                 'total_cache_creation_tokens': int(totals[3]),
                 'total_cache_read_tokens': int(totals[4]),
+                'model_totals': [
+                    {
+                        'model_id': model_id,
+                        'total_tokens': int(total_tokens),
+                        'request_count': int(request_count),
+                        'cost_micros': int(cost_micros),
+                    }
+                    for model_id, total_tokens, request_count, cost_micros in model_totals
+                ],
             }
+
+    async def get_daily_request_counts(
+        self,
+        model_ids: list[str],
+        *,
+        days: int = 30,
+        db: AsyncSession | None = None,
+    ) -> dict[str, list[dict[str, int | str]]]:
+        if not model_ids:
+            return {}
+
+        start_at = now_ts() - max(1, days) * 24 * 60 * 60
+        async with get_subscription_db_context(db) as session:
+            dialect = session.bind.dialect.name if session.bind is not None else 'sqlite'
+            if dialect == 'postgresql':
+                day = func.to_char(func.to_timestamp(SubscriptionUsage.created_at), 'YYYY-MM-DD')
+            elif dialect in {'mysql', 'mariadb'}:
+                day = func.date_format(func.from_unixtime(SubscriptionUsage.created_at), '%Y-%m-%d')
+            else:
+                day = func.strftime('%Y-%m-%d', SubscriptionUsage.created_at, 'unixepoch')
+
+            result = await session.execute(
+                select(
+                    SubscriptionUsage.model_id,
+                    day.label('day'),
+                    func.count(SubscriptionUsage.id).label('count'),
+                )
+                .where(
+                    SubscriptionUsage.model_id.in_(model_ids),
+                    SubscriptionUsage.created_at >= start_at,
+                )
+                .group_by(SubscriptionUsage.model_id, day)
+                .order_by(day.asc())
+            )
+            history: dict[str, list[dict[str, int | str]]] = {model_id: [] for model_id in model_ids}
+            for model_id, date, count in result.all():
+                history.setdefault(model_id, []).append({'date': str(date), 'count': int(count)})
+            return history
 
 
 SubscriptionUsages = SubscriptionUsagesTable()

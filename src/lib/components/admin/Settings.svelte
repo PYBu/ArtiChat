@@ -1,7 +1,6 @@
 <script>
 	import { getContext, tick, onMount } from 'svelte';
 	import { page } from '$app/stores';
-	import { goto } from '$app/navigation';
 	import { toast } from 'svelte-sonner';
 
 	import { config } from '$lib/stores';
@@ -11,6 +10,8 @@
 	import Authentication from './Settings/Authentication.svelte';
 	import General from './Settings/General.svelte';
 	import Platform from './Settings/Platform.svelte';
+	import Email from './Settings/Email.svelte';
+	import Update from './Settings/Update.svelte';
 	import Pipelines from './Settings/Pipelines.svelte';
 	import Audio from './Settings/Audio.svelte';
 	import Images from './Settings/Images.svelte';
@@ -26,7 +27,7 @@
 
 	import DocumentChartBar from '../icons/DocumentChartBar.svelte';
 	import Search from '../icons/Search.svelte';
-	import XMark from '../icons/XMark.svelte';
+	import Refresh from '../icons/Refresh.svelte';
 
 	const i18n = getContext('i18n');
 
@@ -51,7 +52,9 @@
 			'audio',
 			'images',
 			'pipelines',
-			'db'
+			'db',
+			'email',
+			'update'
 		].includes(tabFromPath)
 			? tabFromPath
 			: 'general';
@@ -74,7 +77,12 @@
 	let filteredSettings = [];
 
 	const allSettings = [
-		{ id: 'platform', title: 'Platform', route: '/admin/settings/platform', keywords: ['platform', 'name', 'logo', 'about', 'brand'] },
+		{
+			id: 'platform',
+			title: 'Platform',
+			route: '/admin/settings/platform',
+			keywords: ['platform', 'name', 'logo', 'about', 'brand']
+		},
 		{
 			id: 'general',
 			title: 'General',
@@ -279,6 +287,18 @@
 			title: 'Database',
 			route: '/admin/settings/db',
 			keywords: ['database', 'export', 'import', 'backup', 'chats', 'users']
+		},
+		{
+			id: 'email',
+			title: '邮箱',
+			route: '/admin/settings/email',
+			keywords: ['email', 'mail', 'smtp', 'registration', 'verification', '邮箱', '注册', '验证码']
+		},
+		{
+			id: 'update',
+			title: '更新',
+			route: '/admin/settings/update',
+			keywords: ['update', 'version', 'release', 'announcement', '更新', '版本', '公告']
 		}
 	];
 
@@ -358,6 +378,7 @@
 		<!-- {$i18n.t('Pipelines')} -->
 		<!-- {$i18n.t('Subscriptions')} -->
 		<!-- {$i18n.t('Database')} -->
+		<!-- {$i18n.t('Update')} -->
 		{#each filteredSettings as tab (tab.id)}
 			<a
 				id={tab.id}
@@ -547,6 +568,23 @@
 								d="M8 12.5c1.84 0 3.579-.37 4.914-1.037.366-.183.74-.41 1.086-.684V12c0 1.657-2.686 3-6 3s-6-1.343-6-3v-1.22c.346.273.72.5 1.087.683C4.42 12.131 6.16 12.5 8 12.5Z"
 							/>
 						</svg>
+					{:else if tab.id === 'email'}
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="1.5"
+							class="size-4"
+						>
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								d="M21.75 6.75v10.5A2.25 2.25 0 0 1 19.5 19.5h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0-8.69 5.518a2.25 2.25 0 0 1-2.12 0L2.25 6.75"
+							/>
+						</svg>
+					{:else if tab.id === 'update'}
+						<Refresh className="size-4" />
 					{/if}
 				</div>
 				<div class=" self-center">{$i18n.t(tab.title)}</div>
@@ -639,6 +677,10 @@
 					toast.success($i18n.t('Settings saved successfully!'));
 				}}
 			/>
+		{:else if selectedTab === 'email'}
+			<Email />
+		{:else if selectedTab === 'update'}
+			<Update />
 		{/if}
 	</div>
 </div>
