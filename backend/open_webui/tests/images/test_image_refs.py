@@ -15,7 +15,10 @@ def test_extract_internal_file_id_supports_relative_and_absolute_urls():
     file_id = 'file-123'
 
     assert image_refs.extract_internal_file_id(f'/api/v1/files/{file_id}/content') == file_id
-    assert image_refs.extract_internal_file_id(f'https://chat.example/api/v1/files/{file_id}/content?download=1') == file_id
+    assert (
+        image_refs.extract_internal_file_id(f'https://chat.example/api/v1/files/{file_id}/content?download=1')
+        == file_id
+    )
     assert image_refs.extract_internal_file_id('https://example.com/image.png') is None
 
 
@@ -23,9 +26,7 @@ def test_complete_image_data_url_is_resolved():
     source = b'png-image-bytes'
     reference = f'data:image/png;base64,{base64.b64encode(source).decode("ascii")}'
 
-    resolved = asyncio.run(
-        image_refs.resolve_image_reference(reference, SimpleNamespace(id='user-1', role='user'))
-    )
+    resolved = asyncio.run(image_refs.resolve_image_reference(reference, SimpleNamespace(id='user-1', role='user')))
 
     assert resolved.data == source
     assert resolved.content_type == 'image/png'

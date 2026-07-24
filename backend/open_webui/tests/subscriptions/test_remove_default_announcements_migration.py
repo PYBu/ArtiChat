@@ -6,7 +6,7 @@ from alembic.operations import Operations
 
 
 def test_default_announcement_cleanup_preserves_admin_content(tmp_path, monkeypatch):
-    engine = sa.create_engine(f"sqlite:///{tmp_path / 'announcement-cleanup.db'}")
+    engine = sa.create_engine(f'sqlite:///{tmp_path / "announcement-cleanup.db"}')
     metadata = sa.MetaData()
     announcement = sa.Table(
         'announcement',
@@ -24,9 +24,7 @@ def test_default_announcement_cleanup_preserves_admin_content(tmp_path, monkeypa
     )
     metadata.create_all(engine)
 
-    migration = importlib.import_module(
-        'open_webui.migrations.versions.c2d3e4f5a6b7_remove_default_announcements'
-    )
+    migration = importlib.import_module('open_webui.migrations.versions.c2d3e4f5a6b7_remove_default_announcements')
     with engine.begin() as connection:
         connection.execute(
             announcement.insert(),
@@ -48,12 +46,8 @@ def test_default_announcement_cleanup_preserves_admin_content(tmp_path, monkeypa
         migration.upgrade()
         migration.upgrade()
 
-        assert connection.execute(sa.select(announcement.c.id)).scalars().all() == [
-            'admin-announcement'
-        ]
-        assert connection.execute(sa.select(announcement_view.c.id)).scalars().all() == [
-            'view-admin'
-        ]
+        assert connection.execute(sa.select(announcement.c.id)).scalars().all() == ['admin-announcement']
+        assert connection.execute(sa.select(announcement_view.c.id)).scalars().all() == ['view-admin']
 
         migration.downgrade()
         assert connection.execute(sa.select(announcement.c.id)).scalar_one() == 'admin-announcement'

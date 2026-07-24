@@ -30,26 +30,16 @@ def upgrade() -> None:
         sa.column('id', sa.Text()),
         sa.column('created_by', sa.Text()),
     )
-    default_ids = sa.select(announcement.c.id).where(
-        announcement.c.created_by == SYSTEM_ANNOUNCEMENT_CREATOR
-    )
+    default_ids = sa.select(announcement.c.id).where(announcement.c.created_by == SYSTEM_ANNOUNCEMENT_CREATOR)
 
     if 'announcement_view' in tables:
         announcement_view = sa.table(
             'announcement_view',
             sa.column('announcement_id', sa.Text()),
         )
-        conn.execute(
-            announcement_view.delete().where(
-                announcement_view.c.announcement_id.in_(default_ids)
-            )
-        )
+        conn.execute(announcement_view.delete().where(announcement_view.c.announcement_id.in_(default_ids)))
 
-    conn.execute(
-        announcement.delete().where(
-            announcement.c.created_by == SYSTEM_ANNOUNCEMENT_CREATOR
-        )
-    )
+    conn.execute(announcement.delete().where(announcement.c.created_by == SYSTEM_ANNOUNCEMENT_CREATOR))
 
 
 def downgrade() -> None:

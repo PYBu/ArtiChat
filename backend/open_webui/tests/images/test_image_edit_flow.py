@@ -209,6 +209,5 @@ def test_openai_edit_reports_upstream_authentication_failure(monkeypatch):
 
     assert exc_info.value.status_code == 400
     assert exc_info.value.detail == (
-        '[ERROR: Image edit provider authentication failed (HTTP 401). '
-        'Check the Image Edit API Base URL and API Key.]'
+        '[ERROR: Image edit provider authentication failed (HTTP 401). Check the Image Edit API Base URL and API Key.]'
     )
