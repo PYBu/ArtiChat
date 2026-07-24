@@ -12,6 +12,7 @@ import sys
 import textwrap
 import time
 from concurrent.futures import ThreadPoolExecutor
+from html import escape
 from typing import Any, Optional
 from uuid import uuid4
 
@@ -83,6 +84,7 @@ from open_webui.utils.files import (
     get_image_base64_from_url,
     get_image_url_from_base64,
 )
+from open_webui.utils.image_refs import extract_internal_file_id
 from open_webui.utils.filter import (
     get_sorted_filter_ids,
     process_filter_functions,
@@ -1525,39 +1527,42 @@ async def add_file_context(messages: list, chat_id: str, user) -> list:
     stored_messages = get_message_list(history.get('messages', {}), history.get('currentId'))
 
     def format_file_tag(file):
-        attrs = f'type="{file.get("type", "file")}" url="{file["url"]}"'
+        url = file.get('url')
+        file_id = file.get('id') or (extract_internal_file_id(url) if url else None)
+        attrs = f'type="{escape(str(file.get("type", "file")), quote=True)}"'
+        if file_id:
+            attrs += f' id="{escape(str(file_id), quote=True)}"'
+        if url:
+            attrs += f' url="{escape(str(url), quote=True)}"'
         if file.get('content_type'):
-            attrs += f' content_type="{file["content_type"]}"'
+            attrs += f' content_type="{escape(str(file["content_type"]), quote=True)}"'
         if file.get('name'):
-            attrs += f' name="{file["name"]}"'
+            attrs += f' name="{escape(str(file["name"]), quote=True)}"'
         return f'<file {attrs}/>'
 
-    # Pair only user-role messages from both lists to avoid misalignment.
-    # After process_messages_with_output(), assistant messages with tool calls
-    # are expanded into multiple messages (assistant + tool results), making
-    # the payload message list longer than the stored message list. A naive
-    # positional zip() would pair user messages with wrong stored messages,
-    # causing later images to lose their file context (see #21878).
-    user_messages = [m for m in messages if m.get('role') == 'user']
-    stored_user_messages = [m for m in stored_messages if m.get('role') == 'user']
+    # Pair messages by role occurrence to avoid tool-result misalignment. Assistant
+    # files matter too: they include generated images that may be edited later.
+    for role in ('user', 'assistant'):
+        role_messages = [message for message in messages if message.get('role') == role]
+        stored_role_messages = [message for message in stored_messages if message.get('role') == role]
 
-    for message, stored_message in zip(user_messages, stored_user_messages):
-        files_with_urls = [
-            file
-            for file in stored_message.get('files', [])
-            if file.get('url') and not file.get('url').startswith('data:')
-        ]
-        if not files_with_urls:
-            continue
+        for message, stored_message in zip(role_messages, stored_role_messages):
+            files_with_references = [
+                file
+                for file in stored_message.get('files', [])
+                if file.get('id') or (file.get('url') and not file.get('url').startswith('data:'))
+            ]
+            if not files_with_references:
+                continue
 
-        file_tags = [format_file_tag(file) for file in files_with_urls]
-        file_context = '<attached_files>\n' + '\n'.join(file_tags) + '\n</attached_files>\n\n'
+            file_tags = [format_file_tag(file) for file in files_with_references]
+            file_context = '<attached_files>\n' + '\n'.join(file_tags) + '\n</attached_files>\n\n'
 
-        content = message.get('content', '')
-        if isinstance(content, list):
-            message['content'] = [{'type': 'text', 'text': file_context}] + content
-        else:
-            message['content'] = file_context + content
+            content = message.get('content', '')
+            if isinstance(content, list):
+                message['content'] = [{'type': 'text', 'text': file_context}] + content
+            else:
+                message['content'] = file_context + (content or '')
 
     return messages
 

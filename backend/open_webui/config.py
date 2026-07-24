@@ -1475,6 +1475,10 @@ IMAGES_GEMINI_API_KEY = os.getenv('IMAGES_GEMINI_API_KEY', GEMINI_API_KEY)
 
 IMAGES_GEMINI_ENDPOINT_METHOD = os.getenv('IMAGES_GEMINI_ENDPOINT_METHOD', '')
 
+IMAGE_OUTPUT_URL_FORMAT = os.getenv('IMAGE_OUTPUT_URL_FORMAT', 'relative').lower()
+if IMAGE_OUTPUT_URL_FORMAT not in {'relative', 'absolute'}:
+    IMAGE_OUTPUT_URL_FORMAT = 'relative'
+
 ENABLE_IMAGE_EDIT = os.getenv('ENABLE_IMAGE_EDIT', '').lower() == 'true'
 
 IMAGE_EDIT_ENGINE = os.getenv('IMAGE_EDIT_ENGINE', 'openai')
@@ -2953,6 +2957,7 @@ DEFAULT_CONFIG = {
     'image_generation.gemini.api_base_url': IMAGES_GEMINI_API_BASE_URL,
     'image_generation.gemini.api_key': IMAGES_GEMINI_API_KEY,
     'image_generation.gemini.endpoint_method': IMAGES_GEMINI_ENDPOINT_METHOD,
+    'images.output_url_format': IMAGE_OUTPUT_URL_FORMAT,
     'images.edit.enable': ENABLE_IMAGE_EDIT,
     'images.edit.engine': IMAGE_EDIT_ENGINE,
     'images.edit.model': IMAGE_EDIT_MODEL,

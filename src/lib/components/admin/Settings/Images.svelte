@@ -308,6 +308,39 @@
 							<Switch bind:state={config.ENABLE_IMAGE_GENERATION} />
 						</div>
 					</div>
+
+					<div class="mb-2.5">
+						<div class="flex w-full justify-between items-center gap-3">
+							<div class="text-xs pr-2 shrink-0">
+								{$i18n.t('Image URL Format')}
+							</div>
+
+							<div class="grid grid-cols-2 w-44 rounded-md bg-gray-100 p-0.5 dark:bg-gray-850">
+								<button
+									type="button"
+									class="h-7 rounded px-2 text-xs transition {config.IMAGE_OUTPUT_URL_FORMAT ===
+									'relative'
+										? 'bg-white shadow-sm dark:bg-gray-700'
+										: 'text-gray-500 dark:text-gray-400'}"
+									aria-pressed={config.IMAGE_OUTPUT_URL_FORMAT === 'relative'}
+									on:click={() => (config.IMAGE_OUTPUT_URL_FORMAT = 'relative')}
+								>
+									{$i18n.t('Relative')}
+								</button>
+								<button
+									type="button"
+									class="h-7 rounded px-2 text-xs transition {config.IMAGE_OUTPUT_URL_FORMAT ===
+									'absolute'
+										? 'bg-white shadow-sm dark:bg-gray-700'
+										: 'text-gray-500 dark:text-gray-400'}"
+									aria-pressed={config.IMAGE_OUTPUT_URL_FORMAT === 'absolute'}
+									on:click={() => (config.IMAGE_OUTPUT_URL_FORMAT = 'absolute')}
+								>
+									{$i18n.t('Absolute')}
+								</button>
+							</div>
+						</div>
+					</div>
 				</div>
 
 				<div class="mb-3">

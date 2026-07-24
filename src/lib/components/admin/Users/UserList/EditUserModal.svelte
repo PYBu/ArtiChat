@@ -150,6 +150,15 @@
 										{$i18n.t('Created at')}
 										{dayjs(selectedUser.created_at * 1000).format('LL')}
 									</div>
+
+									<div class="mt-1 text-xs text-gray-500">
+										<span>用户 ID：</span>
+										<span
+											class="select-all break-all font-mono text-[11px] text-gray-700 dark:text-gray-300"
+										>
+											{selectedUser.id}
+										</span>
+									</div>
 								</div>
 
 								<div class=" flex flex-col space-y-1.5">
