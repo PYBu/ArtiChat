@@ -1,7 +1,7 @@
 import { APP_NAME } from '$lib/constants';
 import { type Writable, writable } from 'svelte/store';
 import { getMySubscription, type UserSubscription } from '$lib/apis/subscriptions';
-import type { ModelConfig } from '$lib/apis';
+import type { ModelConfig, ReasoningLevel } from '$lib/apis';
 import type { Banner } from '$lib/types';
 import type { Socket } from 'socket.io-client';
 import type { AudioQueue } from '$lib/utils/audio';
@@ -105,7 +105,16 @@ export const settings: Writable<Settings> = writable({});
 
 export const audioQueue = writable<AudioQueue | null>(null);
 export const chatRequestQueues: Writable<
-	Record<string, { id: string; prompt: string; files: any[] }[]>
+	Record<
+		string,
+		{
+			id: string;
+			prompt: string;
+			files: any[];
+			models?: string[];
+			reasoningLevel?: ReasoningLevel;
+		}[]
+	>
 > = writable({});
 
 export const sidebarWidth = writable(260);

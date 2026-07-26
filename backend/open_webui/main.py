@@ -250,6 +250,7 @@ from open_webui.utils.oauth import (
 )
 from open_webui.utils.plugin import install_tool_and_function_dependencies
 from open_webui.utils.redis import get_redis_client
+from open_webui.utils.reasoning import resolve_reasoning_selection
 from open_webui.utils.security_headers import SecurityHeadersMiddleware
 from open_webui.utils.session_pool import get_session
 from open_webui.utils.subscriptions import (
@@ -1024,6 +1025,7 @@ async def chat_completion(
         await get_all_models(request, user=user)
 
     model_id = form_data.get('model', None)
+    requested_reasoning_level = form_data.pop('reasoning_level', None)
     model_item = form_data.pop('model_item', {})
     tasks = form_data.pop('background_tasks', None)
 
@@ -1120,7 +1122,19 @@ async def chat_completion(
             # Single-model fallback
             message_ids = [{'model_id': model_id, 'message_id': form_data.pop('id', None)}]
 
+        if requested_reasoning_level is not None and len(message_ids) != 1:
+            raise ValueError('Reasoning control is unavailable for multi-model requests.')
+        reasoning_selection = resolve_reasoning_selection(model_info, requested_reasoning_level)
+        if reasoning_selection:
+            form_data.setdefault('params', {})['reasoning_effort'] = reasoning_selection.effort
+
         user_message = form_data.pop('user_message', None) or form_data.pop('parent_message', None)
+        if isinstance(user_message, dict):
+            user_message.pop('reasoning_level', None)
+            user_message.pop('reasoning_profile', None)
+            if reasoning_selection:
+                user_message['reasoning_level'] = reasoning_selection.level
+                user_message['reasoning_profile'] = reasoning_selection.profile
 
         # Drop tool_servers if caller lacks features.direct_tool_servers —
         # mirrors the storage-side strip in user/settings/update.
@@ -1154,6 +1168,8 @@ async def chat_completion(
             'variables': form_data.get('variables', {}),
             'model': model,
             'direct': model_item.get('direct', False),
+            'reasoning_level': reasoning_selection.level if reasoning_selection else None,
+            'reasoning_profile': reasoning_selection.profile if reasoning_selection else None,
             'params': {
                 'stream_delta_chunk_size': stream_delta_chunk_size,
                 'reasoning_tags': reasoning_tags,
@@ -1264,6 +1280,14 @@ async def chat_completion(
                                 'content': '',
                                 'done': False,
                                 'model': target_model_id,
+                                **(
+                                    {
+                                        'reasoning_level': metadata['reasoning_level'],
+                                        'reasoning_profile': metadata['reasoning_profile'],
+                                    }
+                                    if metadata.get('reasoning_level')
+                                    else {}
+                                ),
                                 'timestamp': int(time.time()),
                             }
 
@@ -1475,6 +1499,14 @@ async def chat_completion(
                                     'content': '',
                                     'done': False,
                                     'model': target_model_id,
+                                    **(
+                                        {
+                                            'reasoning_level': metadata['reasoning_level'],
+                                            'reasoning_profile': metadata['reasoning_profile'],
+                                        }
+                                        if metadata.get('reasoning_level')
+                                        else {}
+                                    ),
                                     'timestamp': int(time.time()),
                                 },
                             )

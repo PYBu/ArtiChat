@@ -51,6 +51,10 @@ from open_webui.utils.payload import (
     apply_model_params_to_body_openai,
     apply_system_prompt_to_body,
 )
+from open_webui.utils.reasoning import (
+    apply_reasoning_metadata_to_payload,
+    move_reasoning_effort_to_responses,
+)
 from open_webui.utils.session_pool import (
     cleanup_response,
     get_session,
@@ -1031,6 +1035,8 @@ def convert_to_responses_payload(payload: dict) -> dict:
     if 'max_completion_tokens' in responses_payload:
         responses_payload['max_output_tokens'] = responses_payload.pop('max_completion_tokens')
 
+    responses_payload = move_reasoning_effort_to_responses(responses_payload)
+
     # Remove Chat Completions-only parameters not supported by the Responses API
     for unsupported_key in (
         'stream_options',
@@ -1150,6 +1156,8 @@ async def generate_chat_completion(
         await check_model_access(user, model_info, bypass_filter)
     else:
         await check_model_access(user, None, bypass_filter)
+
+    payload = apply_reasoning_metadata_to_payload(payload, metadata)
 
     # Check if model is already in app state cache to avoid expensive get_all_models() call
     models = request.app.state.OPENAI_MODELS
