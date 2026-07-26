@@ -42,6 +42,14 @@
 
 > 用户用量用环状图显示，包括两种Point，订阅分配的可以月刷新的Point以及充值的不参与重置的Point。优先使用可刷新Point。
 
+<br>
+
+- **New 推理强度**：新增推理强度选择，支持Codex与Claude的5档Low、Mid、High、XHigh、Max推理强度。
+<img src="https://github.com/PYBu/ArtiChat/blob/main/artivis-ass/tuili.png?raw=true">
+
+> 采用类Codex、Claude的桌面端的推理强度弹窗滑块以及动效。
+
+
 ## 未来企划（计划的0.2版本更新与开发）
 - Github 开源了 Claude Code 的代码，我将二次开发为 ArtiCode （开源Agent工具，已在内测）。
 - ArtiCode 将 ArtiChat 的账号、额度系统，让人人都能拥有自己的Agent软件并分化使用（画饼ing）。
@@ -55,8 +63,13 @@
 - chatbug.artivis.cc | <a href="https://chatbug.artivis.cc">访问ArtiChat 反馈中心</a>
 
 <br><br><br>
+<hr>
 
-## 以下内容由AI生成，部署方法已验证。后续我会尝试做一个一键部署的脚本，简化部署流程。
+## 部署方法已验证。后续我会尝试做一个一键部署的脚本，简化部署流程。
+
+> 建议使用Codex或Claude一键部署，并声明你用的面板和不影响当前服务
+
+> 例子：{服务器ip和ssh密钥地址} 这是我的服务器ip以及我的SSH密钥，帮我部署 https://github.com/PYBu/ArtiChat 这个项目，我用的是 1panel 面板，请不要影响其它正在运行的服务。
 
 ## 技术栈
 
