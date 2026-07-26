@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import time
-from typing import Optional
+from typing import Literal, Optional
 
 from open_webui.internal.db import Base, JSONField, get_async_db_context
 from open_webui.models.access_grants import AccessGrant, AccessGrantModel, AccessGrants
@@ -31,6 +31,17 @@ class ModelParams(BaseModel):
     model_config = ConfigDict(extra='allow')
 
 
+class ReasoningControlConfig(BaseModel):
+    enabled: bool = False
+    profile: Literal['gpt', 'claude'] | None = None
+
+    @model_validator(mode='after')
+    def require_profile_when_enabled(self):
+        if self.enabled and self.profile is None:
+            raise ValueError('A reasoning profile is required when reasoning control is enabled.')
+        return self
+
+
 class ModelMeta(BaseModel):
     """Metadata for a workspace model entry (profile, description, tags, capabilities)."""
 
@@ -39,6 +50,7 @@ class ModelMeta(BaseModel):
     capabilities: dict | None = None
     subscription: dict | None = None
     marketplace: dict | None = None
+    reasoning_control: ReasoningControlConfig | None = None
 
     model_config = ConfigDict(extra='allow')
 

@@ -32,6 +32,7 @@
 	import TerminalSelector from './TerminalSelector.svelte';
 	import TTSVoiceInput from './TTSVoiceInput.svelte';
 	import SubscriptionPolicy from './SubscriptionPolicy.svelte';
+	import ReasoningControlSettings from './ReasoningControlSettings.svelte';
 	import Switch from '$lib/components/common/Switch.svelte';
 	import AccessControlModal from '../common/AccessControlModal.svelte';
 	import LockClosed from '$lib/components/icons/LockClosed.svelte';
@@ -117,6 +118,7 @@
 	let defaultFilterIds = [];
 
 	let capabilities = { ...DEFAULT_CAPABILITIES };
+	let reasoningControl = { enabled: false, profile: null };
 	let defaultFeatureIds = [];
 	let builtinTools = {};
 
@@ -201,6 +203,16 @@
 		info.access_grants = accessGrants;
 		info.meta.capabilities = capabilities;
 		info.meta.subscription = info.meta.subscription ?? { ...DEFAULT_SUBSCRIPTION_POLICY };
+		if (reasoningControl.enabled && !reasoningControl.profile) {
+			toast.error($i18n.t('Reasoning profile is required.'));
+			loading = false;
+			return;
+		}
+		info.meta.reasoning_control = { ...reasoningControl };
+		if (reasoningControl.enabled) {
+			delete params.reasoning_effort;
+			delete info.params.reasoning_effort;
+		}
 
 		if (enableDescription) {
 			info.meta.description = info.meta.description.trim() === '' ? null : info.meta.description;
@@ -401,6 +413,11 @@
 
 			// Per-model overrides take precedence over admin defaults
 			capabilities = { ...capabilities, ...(model?.meta?.capabilities ?? {}) };
+			reasoningControl = {
+				enabled: false,
+				profile: null,
+				...(model?.meta?.reasoning_control ?? {})
+			};
 			defaultFeatureIds = model?.meta?.defaultFeatureIds ?? defaultFeatureIds;
 			builtinTools = model?.meta?.builtinTools ?? builtinTools;
 			terminalId = model?.meta?.terminalId ?? '';
@@ -793,7 +810,12 @@
 
 							{#if showAdvanced}
 								<div class="my-2">
-									<AdvancedParams admin={true} custom={true} bind:params />
+									<AdvancedParams
+										admin={true}
+										custom={true}
+										hideReasoningEffort={reasoningControl.enabled}
+										bind:params
+									/>
 								</div>
 							{/if}
 						</div>
@@ -888,6 +910,11 @@
 					<div class="my-4">
 						<Capabilities bind:capabilities />
 					</div>
+
+					<ReasoningControlSettings
+						bind:control={reasoningControl}
+						modelId={info.base_model_id ?? id}
+					/>
 
 					<div class="my-4">
 						<SubscriptionPolicy bind:policy={info.meta.subscription} />
