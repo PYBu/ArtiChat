@@ -34,6 +34,8 @@ from open_webui.env import (
     WEBUI_NAME,
     log,
 )
+from open_webui.internal.db import engine
+from open_webui.internal.migrations import assert_database_schema_ready, upgrade_database
 from open_webui.models.config import Config
 
 
@@ -61,22 +63,16 @@ logging.getLogger('uvicorn.access').addFilter(EndpointFilter())
 
 def run_migrations():
     log.info('Running migrations')
-    try:
-        from alembic import command
-        from alembic.config import Config as AlembicConfig
-
-        alembic_cfg = AlembicConfig(OPEN_WEBUI_DIR / 'alembic.ini')
-
-        migrations_path = OPEN_WEBUI_DIR / 'migrations'
-        alembic_cfg.set_main_option('script_location', str(migrations_path))
-
-        command.upgrade(alembic_cfg, 'head')
-    except Exception as e:
-        log.exception(f'Error running migrations: {e}')
+    upgrade_database(OPEN_WEBUI_DIR)
 
 
 if ENABLE_DB_MIGRATIONS:
     run_migrations()
+
+# Migration failures and incomplete schemas must prevent the process from
+# advertising health. This also protects deployments that disable automatic
+# migrations: they may start only after an external migrator reached this head.
+assert_database_schema_ready(engine)
 
 
 async def import_legacy_config_json():

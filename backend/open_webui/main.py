@@ -128,6 +128,7 @@ from open_webui.events import (
     upsert_event_webhook,
 )
 from open_webui.internal.db import engine, get_async_session
+from open_webui.internal.migrations import DatabaseSchemaNotReadyError, assert_database_schema_ready
 from open_webui.models.access_grants import AccessGrants
 from open_webui.models.channels import Channels
 from open_webui.models.chats import ChatForm, Chats
@@ -2761,8 +2762,19 @@ def _sync_db_ping() -> None:
         conn.execute(text('SELECT 1'))
 
 
+def _sync_db_readiness_check() -> None:
+    """Verify connectivity, migration head, and critical durable schema."""
+    with engine.connect() as conn:
+        conn.execute(text('SELECT 1'))
+        assert_database_schema_ready(conn)
+
+
 async def async_db_ping() -> None:
     await asyncio.to_thread(_sync_db_ping)
+
+
+async def async_db_readiness_check() -> None:
+    await asyncio.to_thread(_sync_db_readiness_check)
 
 
 @app.get('/health')
@@ -2784,9 +2796,15 @@ async def readiness_check():
             detail='Startup not complete',
         )
 
-    # Check database connectivity
+    # Check database connectivity and ensure this release's complete schema is installed.
     try:
-        await async_db_ping()
+        await async_db_readiness_check()
+    except DatabaseSchemaNotReadyError as e:
+        log.error(f'Readiness check schema validation failed: {e}')
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail='Database schema not ready',
+        )
     except Exception as e:
         log.warning(f'Readiness check DB ping failed: {e!r}')
         raise HTTPException(
