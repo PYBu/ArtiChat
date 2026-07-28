@@ -12,6 +12,7 @@ from open_webui.models.users import User, UserModel, UserProfileImageResponse, U
 from open_webui.utils.validate import validate_profile_image_url
 from pydantic import BaseModel, field_validator
 from sqlalchemy import Boolean, Column, String, Text, delete, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 log = logging.getLogger(__name__)
@@ -62,11 +63,6 @@ class SigninForm(BaseModel):
     password: str
 
 
-class EmailCodeSigninForm(BaseModel):
-    email: str
-    verification_token: str
-
-
 class LdapForm(BaseModel):
     user: str
     password: str
@@ -79,12 +75,6 @@ class ProfileImageUrlForm(BaseModel):
 class UpdatePasswordForm(BaseModel):
     password: str
     new_password: str
-    verification_token: str | None = None
-
-
-class UpdateEmailForm(BaseModel):
-    email: str
-    verification_token: str | None = None
 
 
 class SignupForm(BaseModel):
@@ -92,7 +82,6 @@ class SignupForm(BaseModel):
     email: str
     password: str
     profile_image_url: str | None = '/user.png'
-    verification_token: str | None = None
 
     @field_validator('profile_image_url')
     @classmethod
@@ -120,7 +109,6 @@ class AuthsTable:
         profile_image_url: str = '/user.png',
         role: str = 'pending',
         oauth: dict | None = None,
-        email_verified_at: int | None = None,
         db: AsyncSession | None = None,
     ) -> UserModel | None:
         """Create an Auth + User pair inside a single transaction."""
@@ -137,19 +125,20 @@ class AuthsTable:
             )
             session.add(credential)
 
-            created_user = await Users.insert_new_user(
-                new_id,
-                name,
-                email,
-                profile_image_url,
-                role,
-                oauth=oauth,
-                email_verified_at=email_verified_at,
-                db=session,
-            )
-            # persist both records and reload generated defaults
-            await session.commit()
-            await session.refresh(credential)
+            try:
+                created_user = await Users.insert_new_user(
+                    new_id,
+                    name,
+                    email,
+                    profile_image_url,
+                    role,
+                    oauth=oauth,
+                    db=session,
+                )
+                await session.commit()
+            except IntegrityError:
+                await session.rollback()
+                raise
             return created_user if credential and created_user else None
 
     async def authenticate_user(
@@ -208,19 +197,16 @@ class AuthsTable:
         self,
         user_id: str,
         email: str,
-        email_verified_at: int | None = None,
         db: AsyncSession | None = None,
     ) -> bool:
         """Set a new email on the auth record and propagate to the user row."""
         async with get_async_db_context(db) as session:
             auth_row = await session.get(Auth, user_id)
-            user_row = await session.get(User, user_id)
-            if auth_row is None or user_row is None:
+            if auth_row is None:
                 return False
             auth_row.email = email
-            user_row.email = email
-            user_row.email_verified_at = email_verified_at
             await session.commit()
+            await Users.update_user_by_id(user_id, {'email': email}, db=session)
             return True
         # --- password modification ---
 

@@ -53,7 +53,7 @@
 	export let overlay = false;
 	export let chatId: string | null = null;
 
-	// 鈹€鈹€ Terminal panel state 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+	// ── Terminal panel state ────────────────────────────────────────────
 	let terminalExpanded = false;
 	let terminalHeight = 200; // px, default when expanded
 	let isDraggingHandle = false;
@@ -88,14 +88,14 @@
 		window.addEventListener('mouseup', onMouseUp);
 	};
 
-	// 鈹€鈹€ Directory state 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+	// ── Directory state ──────────────────────────────────────────────────
 	let currentPath = savedPath;
 	let fileRoot: TerminalFileRoot | null = null;
 	let entries: FileEntry[] = [];
 	let loading = false;
 	let error: string | null = null;
 
-	// 鈹€鈹€ Sort state 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+	// ── Sort state ──────────────────────────────────────────────────────
 	type SortMode = 'name' | 'date';
 	let sortBy: SortMode = 'name';
 	let sortAsc = true;
@@ -124,7 +124,7 @@
 		entries = sortEntries(entries);
 	};
 
-	// 鈹€鈹€ Navigation history 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+	// ── Navigation history ──────────────────────────────────────────────
 	type NavEntry = { path: string; file: string | null };
 	let navHistory: NavEntry[] = [];
 	let navIndex = -1;
@@ -172,7 +172,7 @@
 		navigatingHistory = false;
 	};
 
-	// 鈹€鈹€ File preview state 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+	// ── File preview state ───────────────────────────────────────────────
 	let selectedFile: string | null = null;
 	let previewPort: number | null = null;
 	let fileContent: string | null = null;
@@ -184,7 +184,7 @@
 	let fileLoading = false;
 	let filePreviewRef: FilePreview;
 
-	// 鈹€鈹€ Office preview state 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+	// ── Office preview state ────────────────────────────────────────────
 	let fileOfficeHtml: string | null = null;
 	let fileOfficeSlides: string[] | null = null;
 	let currentSlide = 0;
@@ -192,7 +192,7 @@
 	let selectedExcelSheet = '';
 	let excelWorkbook: import('xlsx').WorkBook | null = null;
 
-	// 鈹€鈹€ File preview toolbar state (bound from FilePreview) 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+	// ── File preview toolbar state (bound from FilePreview) ─────────────
 	let editing = false;
 	let showRaw = false;
 	let saving = false;
@@ -214,7 +214,7 @@
 	$: isTextFile =
 		fileContent !== null && fileImageUrl === null && filePdfData === null && !isOfficeFile;
 
-	// 鈹€鈹€ Upload / folder creation 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+	// ── Upload / folder creation ─────────────────────────────────────────
 	let isDragOver = false;
 	let uploading = false;
 	let creatingFolder = false;
@@ -224,12 +224,12 @@
 	let newFileName = '';
 	let newFileInput: HTMLInputElement;
 
-	// 鈹€鈹€ Delete confirmation 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+	// ── Delete confirmation ──────────────────────────────────────────────
 	let deleteTarget: { path: string; name: string } | null = null;
 	let showDeleteConfirm = false;
 	let shiftKey = false;
 
-	// 鈹€鈹€ Terminal resolution 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+	// ── Terminal resolution ──────────────────────────────────────────────
 	let selectedTerminal: { url: string; key: string } | null = null;
 
 	const getTerminal = (): { url: string; key: string } | null => {
@@ -248,7 +248,7 @@
 		return url ? { url, key } : null;
 	};
 
-	// Detect terminal or chat changes 鈥?the explicit store references ensure
+	// Detect terminal or chat changes — the explicit store references ensure
 	// Svelte re-runs this block when any of them update.
 	// The `mounted` flag prevents the initial run from racing with onMount.
 	let prevTerminalUrl = '';
@@ -268,12 +268,12 @@
 
 		if (mounted && terminal) {
 			if (chatChanged && chatId && !oldChatId) {
-				// Chat just got created (null 鈫?real ID): persist the current
-				// browsed path as the new session's cwd 鈥?don't re-fetch.
+				// Chat just got created (null → real ID): persist the current
+				// browsed path as the new session's cwd — don't re-fetch.
 				setCwd(terminal.url, terminal.key, savedPath, chatId);
 			} else if (terminalChanged || chatChanged) {
 				// Terminal switched, new chat started, or switched between
-				// existing chats 鈥?re-fetch the session cwd.
+				// existing chats — re-fetch the session cwd.
 				loading = true;
 				error = null;
 				entries = [];
@@ -290,7 +290,7 @@
 		}
 	}
 
-	// 鈹€鈹€ Helpers 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+	// ── Helpers ──────────────────────────────────────────────────────────
 	const IMAGE_EXTS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'ico', 'avif']);
 	const VIDEO_EXTS = new Set(['mp4', 'webm', 'mov', 'ogv', 'avi', 'mkv']);
 	const AUDIO_EXTS = new Set(['mp3', 'wav', 'ogg', 'oga', 'flac', 'm4a', 'aac', 'wma', 'opus']);
@@ -364,7 +364,7 @@
 		);
 	};
 
-	// 鈹€鈹€ File preview management 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+	// ── File preview management ──────────────────────────────────────────
 	const clearFilePreview = () => {
 		fileContent = null;
 		if (fileImageUrl) {
@@ -389,7 +389,7 @@
 		excelWorkbook = null;
 	};
 
-	// 鈹€鈹€ Directory operations 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+	// ── Directory operations ─────────────────────────────────────────────
 	const loadDir = async (path: string) => {
 		const terminal = selectedTerminal;
 		if (!terminal) return;
@@ -413,7 +413,7 @@
 
 		if (result === null) {
 			error =
-				'Failed to load directory. Check your Terminal connection in Settings 鈫?Integrations.';
+				'Failed to load directory. Check your Terminal connection in Settings → Integrations.';
 			entries = [];
 		} else {
 			entries = sortEntries(result);
@@ -521,25 +521,37 @@
 		fileLoading = false;
 	};
 
+	let downloading = false;
+
 	const downloadFile = async (path: string) => {
 		const terminal = selectedTerminal;
-		if (!terminal) return;
+		if (!terminal || downloading) return;
 
-		// Directories end with '/' 鈥?download as ZIP archive
-		const isDir = path.endsWith('/');
-		const result = isDir
-			? await archiveFromTerminal(terminal.url, terminal.key, [path.replace(/\/$/, '')])
-			: await downloadFileBlob(terminal.url, terminal.key, path, chatId ?? undefined);
-		if (!result) return;
-		const url = URL.createObjectURL(result.blob);
-		const a = document.createElement('a');
-		a.href = url;
-		a.download = result.filename;
-		a.click();
-		URL.revokeObjectURL(url);
+		downloading = true;
+		const toastId = toast.loading($i18n.t('Preparing download...'));
+		try {
+			// Directories end with '/', downloaded as a ZIP archive
+			const isDir = path.endsWith('/');
+			const result = isDir
+				? await archiveFromTerminal(terminal.url, terminal.key, [path.replace(/\/$/, '')])
+				: await downloadFileBlob(terminal.url, terminal.key, path, chatId ?? undefined);
+			if (!result) {
+				toast.error($i18n.t('Download failed'));
+				return;
+			}
+			const url = URL.createObjectURL(result.blob);
+			const a = document.createElement('a');
+			a.href = url;
+			a.download = result.filename;
+			a.click();
+			URL.revokeObjectURL(url);
+		} finally {
+			toast.dismiss(toastId);
+			downloading = false;
+		}
 	};
 
-	// 鈹€鈹€ Drag-and-drop upload 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+	// ── Drag-and-drop upload ─────────────────────────────────────────────
 	const handleDragOver = (e: DragEvent) => {
 		if (selectedFile) return;
 		if (!e.dataTransfer?.types.includes('Files')) return;
@@ -579,7 +591,7 @@
 		await loadDir(currentPath);
 	};
 
-	// 鈹€鈹€ Folder creation 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+	// ── Folder creation ──────────────────────────────────────────────────
 	const startNewFolder = async () => {
 		creatingFolder = true;
 		newFolderName = '';
@@ -608,7 +620,7 @@
 		await loadDir(currentPath);
 	};
 
-	// 鈹€鈹€ File creation 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+	// ── File creation ────────────────────────────────────────────────────
 	const startNewFile = async () => {
 		creatingFile = true;
 		newFileName = '';
@@ -631,7 +643,7 @@
 		await loadDir(currentPath);
 	};
 
-	// 鈹€鈹€ Delete 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+	// ── Delete ───────────────────────────────────────────────────────────
 	const handleDelete = async (path: string, name: string) => {
 		const terminal = selectedTerminal;
 		if (!terminal) return;
@@ -648,7 +660,7 @@
 		showDeleteConfirm = true;
 	};
 
-	// 鈹€鈹€ Move (drag-and-drop) 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+	// ── Move (drag-and-drop) ────────────────────────────────────────────
 	const handleMove = async (source: string, destFolder: string) => {
 		const terminal = selectedTerminal;
 		if (!terminal) return;
@@ -677,7 +689,7 @@
 		await loadDir(currentPath);
 	};
 
-	// 鈹€鈹€ Rename 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+	// ── Rename ──────────────────────────────────────────────────────────
 	const handleRename = async (oldPath: string, newName: string) => {
 		const terminal = selectedTerminal;
 		if (!terminal || !newName) return;
@@ -702,7 +714,7 @@
 		await loadDir(currentPath);
 	};
 
-	// 鈹€鈹€ Multi-select 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+	// ── Multi-select ────────────────────────────────────────────────────
 	let selectedEntries: Set<string> = new Set();
 	let lastClickedIndex: number | null = null;
 	let selectionMode = false;
@@ -732,7 +744,7 @@
 		const idx = entries.indexOf(entry);
 
 		if (event.shiftKey && lastClickedIndex !== null) {
-			// Range select 鈥?replaces current selection with range
+			// Range select — replaces current selection with range
 			const start = Math.min(lastClickedIndex, idx);
 			const end = Math.max(lastClickedIndex, idx);
 			const newSet = new Set<string>();
@@ -785,26 +797,36 @@
 
 	const bulkDownload = async () => {
 		const terminal = selectedTerminal;
-		if (!terminal) return;
+		if (!terminal || downloading) return;
 
 		const paths = [...selectedEntries].map((p) => p.replace(/\/$/, ''));
 		if (paths.length === 0) return;
 
-		// Single file (not dir) 鈥?use the regular downloadFile path
+		// Single file (not dir) — use the regular downloadFile path
 		if (paths.length === 1 && ![...selectedEntries][0].endsWith('/')) {
 			await downloadFile([...selectedEntries][0]);
 			return;
 		}
 
-		// Archive everything into a single ZIP
-		const result = await archiveFromTerminal(terminal.url, terminal.key, paths);
-		if (!result) return;
-		const url = URL.createObjectURL(result.blob);
-		const a = document.createElement('a');
-		a.href = url;
-		a.download = result.filename;
-		a.click();
-		URL.revokeObjectURL(url);
+		downloading = true;
+		const toastId = toast.loading($i18n.t('Preparing download...'));
+		try {
+			// Archive everything into a single ZIP
+			const result = await archiveFromTerminal(terminal.url, terminal.key, paths);
+			if (!result) {
+				toast.error($i18n.t('Download failed'));
+				return;
+			}
+			const url = URL.createObjectURL(result.blob);
+			const a = document.createElement('a');
+			a.href = url;
+			a.download = result.filename;
+			a.click();
+			URL.revokeObjectURL(url);
+		} finally {
+			toast.dismiss(toastId);
+			downloading = false;
+		}
 	};
 
 	// Escape to clear selection
@@ -822,10 +844,9 @@
 		}
 	};
 
-	// 鈹€鈹€ Lifecycle 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
-	onMount(async () => {
+	// ── Lifecycle ────────────────────────────────────────────────────────
+	onMount(() => {
 		const terminal = getTerminal();
-		if (!terminal) return;
 
 		let handledDisplayFile = false;
 
@@ -880,19 +901,21 @@
 			}
 		});
 
-		if (!handledDisplayFile) {
+		if (!handledDisplayFile && terminal) {
 			loading = true;
 
-			// Discover server features on initial mount
-			const config = await getTerminalConfig(terminal.url, terminal.key);
-			terminalEnabled = config?.features?.terminal !== false;
+			void (async () => {
+				// Discover server features on initial mount
+				const config = await getTerminalConfig(terminal.url, terminal.key);
+				terminalEnabled = config?.features?.terminal !== false;
 
-			if (chatId || savedPath === '/') {
-				// Fetch session-specific cwd from the server (or global default for new chats)
-				savedPath = applyCwd(await getCwd(terminal.url, terminal.key, chatId ?? undefined));
-			}
-			savedPath = clampToFileRoot(savedPath);
-			loadDir(savedPath);
+				if (chatId || savedPath === '/') {
+					// Fetch session-specific cwd from the server (or global default for new chats)
+					savedPath = applyCwd(await getCwd(terminal.url, terminal.key, chatId ?? undefined));
+				}
+				savedPath = clampToFileRoot(savedPath);
+				loadDir(savedPath);
+			})();
 		}
 
 		mounted = true;
@@ -956,7 +979,7 @@
 			{$i18n.t('No Terminal connection configured.')}
 		</div>
 		<div class="text-[10px] text-gray-400 dark:text-gray-500">
-			{$i18n.t('Add your local terminal server URL and API key in Settings > Integrations.')}
+			{$i18n.t('Add your Open Terminal URL and API key in Settings → Integrations.')}
 		</div>
 	</div>
 {:else}
@@ -1361,7 +1384,7 @@
 						<Spinner className="size-4" />
 						{$i18n.t('Uploading...')}
 					</div>
-				{:else if loading}
+				{:else if loading || ($selectedTerminalId && $terminalServers === null)}
 					<div class="flex justify-center pt-8"><Spinner className="size-4" /></div>
 				{:else if error}
 					<div class="p-4 text-xs">{error}</div>
@@ -1377,7 +1400,7 @@
 					</div>
 				{/if}
 
-				{#if !loading && !error && !uploading}
+				{#if !loading && !error && !uploading && !($selectedTerminalId && $terminalServers === null)}
 					{#if creatingFolder}
 						<div class="flex items-center gap-2 px-3 py-1.5">
 							<Folder className="size-4 shrink-0 text-blue-400 dark:text-blue-300" />
@@ -1494,7 +1517,7 @@
 							clip-rule="evenodd"
 						/>
 					</svg>
-					<span class="font-medium">{$i18n.t('Terminal')}</span>
+					<span class="font-normal">{$i18n.t('Terminal')}</span>
 
 					{#if terminalExpanded}
 						<div

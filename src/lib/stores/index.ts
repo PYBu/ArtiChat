@@ -1,7 +1,6 @@
 import { APP_NAME } from '$lib/constants';
 import { type Writable, writable } from 'svelte/store';
-import { getMySubscription, type UserSubscription } from '$lib/apis/subscriptions';
-import type { ModelConfig, ReasoningLevel } from '$lib/apis';
+import type { ModelConfig } from '$lib/apis';
 import type { Banner } from '$lib/types';
 import type { Socket } from 'socket.io-client';
 import type { AudioQueue } from '$lib/utils/audio';
@@ -32,7 +31,6 @@ export const mobile = writable(false);
 export const socket: Writable<null | Socket> = writable(null);
 export const socketConnected: Writable<boolean> = writable(true);
 export const activeUserIds: Writable<null | string[]> = writable(null);
-export const activeChatIds: Writable<Set<string>> = writable(new Set());
 export const USAGE_POOL: Writable<null | string[]> = writable(null);
 
 export const theme = writable('system');
@@ -59,8 +57,7 @@ export const chatTitle = writable('');
 export const channels = writable([]);
 export const channelId = writable(null);
 
-export const chats = writable(null);
-export const pinnedChats = writable([]);
+export { chats, pinnedChats } from './chatList';
 export const pinnedNotes = writable([]);
 export const tags = writable([]);
 export const folders = writable([]);
@@ -74,56 +71,53 @@ export const tools = writable(null);
 export const skills = writable(null);
 export const functions = writable(null);
 
+export type WorkspaceSection = 'models' | 'knowledge' | 'prompts' | 'skills' | 'tools';
+export type WorkspaceAction = {
+	id: string;
+	label: string;
+	href?: string;
+	onClick?: () => void | Promise<void>;
+	visible?: boolean;
+};
+
+export const workspaceCounts: Writable<Record<WorkspaceSection, number | null>> = writable({
+	models: null,
+	knowledge: null,
+	prompts: null,
+	skills: null,
+	tools: null
+});
+export const workspaceActions: Writable<WorkspaceAction[]> = writable([]);
+export const adminUserCount: Writable<number | null> = writable(null);
+export const adminGroupCount: Writable<number | null> = writable(null);
+export const adminLeaderboardCount: Writable<number | null> = writable(null);
+export const adminFeedbackCount: Writable<number | null> = writable(null);
+
 export const toolServers = writable([]);
-export const terminalServers = writable([]);
+export const terminalServers: Writable<any[] | null> = writable(null);
 
 // Persistent Pyodide worker for code interpreter FS
 export const pyodideWorker: Writable<Worker | null> = writable(null);
 
 export const banners: Writable<Banner[]> = writable([]);
-export const subscription: Writable<UserSubscription | null> = writable(null);
-export const subscriptionRefreshTick: Writable<number> = writable(0);
-
-export const refreshSubscription = async (token?: string) => {
-	const authToken = token ?? (typeof localStorage !== 'undefined' ? localStorage.token : '');
-	if (!authToken) {
-		subscription.set(null);
-		return null;
-	}
-
-	const data = await getMySubscription(authToken).catch(() => null);
-	subscription.set(data);
-	return data;
-};
-
-export const notifySubscriptionChanged = async () => {
-	subscriptionRefreshTick.update((value) => value + 1);
-	return await refreshSubscription();
-};
 
 export const settings: Writable<Settings> = writable({});
 
 export const audioQueue = writable<AudioQueue | null>(null);
 export const chatRequestQueues: Writable<
-	Record<
-		string,
-		{
-			id: string;
-			prompt: string;
-			files: any[];
-			models?: string[];
-			reasoningLevel?: ReasoningLevel;
-		}[]
-	>
+	Record<string, { id: string; prompt: string; files: any[] }[]>
 > = writable({});
 
-export const sidebarWidth = writable(260);
+export const sidebarWidth = writable(245);
+
+export type SettingsModalRequest = {
+	tab: string;
+	state?: Record<string, unknown> | null;
+};
 
 export const showSidebar = writable(false);
 export const showSearch = writable(false);
-export const showSettings: Writable<boolean | string> = writable(false);
-export const showShortcuts = writable(false);
-export const showArchivedChats = writable(false);
+export const showSettings: Writable<boolean | string | SettingsModalRequest> = writable(false);
 export const showChangelog = writable(false);
 
 export const showControls = writable(false);
@@ -151,8 +145,6 @@ export type DesktopEvent = {
 	data?: any;
 };
 export const desktopEvent: Writable<DesktopEvent | null> = writable(null);
-export const scrollPaginationEnabled = writable(false);
-export const currentChatPage = writable(1);
 
 export const isLastActiveTab = writable(true);
 export const playingNotificationSound = writable(false);
@@ -242,6 +234,7 @@ type Settings = {
 	iframeSandboxAllowForms?: boolean;
 	iframeSandboxAllowSameOrigin?: boolean;
 	scrollOnBranchChange?: boolean;
+	scrollOnResponseGeneration?: boolean;
 	showFilesOnTerminalSelect?: boolean;
 	directConnections?: null;
 	chatBubble?: boolean;
@@ -259,12 +252,15 @@ type Settings = {
 	splitLargeDeltas?: boolean;
 	chatDirection?: 'LTR' | 'RTL' | 'auto';
 	ctrlEnterToSend?: boolean;
+	keyboardShortcuts?: boolean;
 	renderMarkdownInPreviews?: boolean;
 	renderMarkdownInUserMessages?: boolean;
 	renderMarkdownInAssistantMessages?: boolean;
 	recentEmojis?: string[];
 	pinnedMenuItems?: string[];
 	pinnedNotesOrder?: string[];
+
+	defaultUploadContext?: 'full' | 'focused';
 
 	system?: string;
 	seed?: number;
@@ -314,13 +310,6 @@ type Config = {
 	default_locale: string;
 	default_models: string;
 	default_prompt_suggestions: PromptSuggestion[];
-	branding?: {
-		about_title?: string;
-		about_content?: string;
-		logo_light?: string;
-		logo_dark?: string;
-		sidebar_buttons?: Array<{ name: string; url: string; icon: string }>;
-	};
 	features: {
 		auth: boolean;
 		auth_trusted_header: boolean;
@@ -336,8 +325,10 @@ type Config = {
 		enable_admin_export: boolean;
 		enable_admin_chat_access: boolean;
 		enable_admin_analytics: boolean;
+		enable_context_compaction?: boolean;
 		enable_community_sharing: boolean;
 		enable_memories: boolean;
+		enable_plugins?: boolean;
 		enable_autocomplete_generation: boolean;
 		enable_direct_connections: boolean;
 		enable_version_update_check: boolean;

@@ -9,11 +9,12 @@ import urllib
 import uuid
 from ssl import CERT_NONE, CERT_REQUIRED, PROTOCOL_TLS
 
-from aiohttp import ClientSession
+from aiohttp import BasicAuth, ClientSession
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse, Response
 from ldap3 import NONE, Connection, Server, Tls
 from ldap3.utils.conv import escape_filter_chars
+from ldap3.utils.dn import parse_dn
 from open_webui.config import (
     ENABLE_PASSWORD_AUTH,
     OAUTH_PROVIDERS,
@@ -24,6 +25,9 @@ from open_webui.env import (
     AIOHTTP_CLIENT_SESSION_SSL,
     ENABLE_INITIAL_ADMIN_SIGNUP,
     ENABLE_OAUTH_TOKEN_EXCHANGE,
+    OAUTH_TOKEN_EXCHANGE_RATE_LIMIT,
+    OAUTH_TOKEN_EXCHANGE_RATE_LIMIT_WINDOW,
+    OAUTH_TOKEN_EXCHANGE_TRUSTED_CLIENT_IDS,
     WEBUI_AUTH,
     WEBUI_AUTH_COOKIE_SAME_SITE,
     WEBUI_AUTH_COOKIE_SECURE,
@@ -32,21 +36,18 @@ from open_webui.env import (
     WEBUI_AUTH_TRUSTED_GROUPS_HEADER,
     WEBUI_AUTH_TRUSTED_NAME_HEADER,
     WEBUI_AUTH_TRUSTED_ROLE_HEADER,
-    WEBUI_SECRET_KEY,
 )
 from open_webui.internal.db import get_async_session
 from open_webui.models.auths import (
     AddUserForm,
     ApiKey,
     Auths,
-    EmailCodeSigninForm,
     LdapForm,
     SigninForm,
     SigninResponse,
     SignupForm,
     Token,
     UpdatePasswordForm,
-    UpdateEmailForm,
 )
 from open_webui.models.config import Config
 from open_webui.models.groups import Groups
@@ -75,16 +76,9 @@ from open_webui.utils.auth import (
 from open_webui.utils.groups import apply_default_group_assignment
 from open_webui.utils.misc import parse_duration, validate_email_format
 from open_webui.utils.rate_limit import RateLimiter
-from open_webui.utils.registration import resolve_signup_email_verified_at
-from open_webui.utils.sensitive_actions import authorize_sensitive_action
-from open_webui.utils.session_security import revoke_user_sessions
-from open_webui.utils.account_notifications import notify_user
-from open_webui.utils.email_security import (
-    claim_email_verification_ticket,
-    validate_email_verification_ticket,
-)
 from open_webui.utils.redis import get_redis_client
 from pydantic import BaseModel
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter()
@@ -94,6 +88,18 @@ log = logging.getLogger(__name__)
 # Forgive us our failed attempts, as we forgive those
 # who exceed their allotted rate against this gate.
 signin_rate_limiter = RateLimiter(redis_client=get_redis_client(), limit=5 * 3, window=60 * 3)
+# Best-effort throttle only: there is no caller identity before the provider answers,
+# and deployments may derive request.client from proxy headers.
+token_exchange_rate_limiter = (
+    RateLimiter(
+        redis_client=get_redis_client(),
+        limit=OAUTH_TOKEN_EXCHANGE_RATE_LIMIT,
+        window=OAUTH_TOKEN_EXCHANGE_RATE_LIMIT_WINDOW,
+    )
+    if OAUTH_TOKEN_EXCHANGE_RATE_LIMIT is not None
+    else None
+)
+
 
 ADMIN_CONFIG_KEYS = {
     'SHOW_ADMIN_DETAILS': 'auth.admin.show',
@@ -114,6 +120,7 @@ ADMIN_CONFIG_KEYS = {
     'AUTOMATION_MIN_INTERVAL': 'automations.min_interval',
     'ENABLE_AUTOMATIONS': 'automations.enable',
     'ENABLE_CHANNELS': 'channels.enable',
+    'CHANNEL_MODEL_RESPONSE_MODE': 'channels.model_response_mode',
     'ENABLE_CALENDAR': 'calendar.enable',
     'ENABLE_MEMORIES': 'memories.enable',
     'ENABLE_MEMORY_SYSTEM_CONTEXT': 'memories.system_context.enable',
@@ -139,6 +146,9 @@ LDAP_SERVER_CONFIG_KEYS = {
     'certificate_path': 'ldap.server.ca_cert_file',
     'validate_cert': 'ldap.server.validate_cert',
     'ciphers': 'ldap.server.ciphers',
+    'enable_group_management': 'ldap.group.enable_management',
+    'enable_group_creation': 'ldap.group.enable_creation',
+    'attribute_for_groups': 'ldap.server.attribute_for_groups',
 }
 
 
@@ -176,7 +186,7 @@ async def create_session_response(
         expires_at = int(time.time()) + int(expires_delta.total_seconds())
 
     token = create_token(
-        data={'id': user.id, 'auth_epoch': user.auth_epoch},
+        data={'id': user.id},
         expires_delta=expires_delta,
     )
 
@@ -331,51 +341,6 @@ async def update_profile(
         raise HTTPException(400, detail=ERROR_MESSAGES.INVALID_CRED)
 
 
-@router.post('/signin/email-code', response_model=SessionUserResponse)
-async def signin_with_email_code(
-    request: Request,
-    response: Response,
-    form_data: EmailCodeSigninForm,
-    db: AsyncSession = Depends(get_async_session),
-):
-    email = form_data.email.strip().lower()
-    if not await Config.get('registration.email_code_login_enabled', False):
-        raise HTTPException(status.HTTP_403_FORBIDDEN, detail='EMAIL_CODE_LOGIN_DISABLED')
-    if signin_rate_limiter.is_limited(email):
-        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, detail=ERROR_MESSAGES.RATE_LIMIT_EXCEEDED)
-
-    timestamp = int(time.time())
-    try:
-        await validate_email_verification_ticket(
-            form_data.verification_token,
-            email=email,
-            purpose='login',
-            now=timestamp,
-            db=db,
-        )
-    except ValueError as exc:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-
-    user = await Auths.authenticate_user_by_email(email, db=db)
-    if user is None:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=ERROR_MESSAGES.INVALID_CRED)
-
-    try:
-        await claim_email_verification_ticket(
-            form_data.verification_token,
-            email=email,
-            purpose='login',
-            now=timestamp,
-            db=db,
-        )
-    except ValueError as exc:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-
-    if user.email_verified_at is None:
-        user = await Users.update_user_by_id(user.id, {'email_verified_at': timestamp}, db=db) or user
-    return await create_session_response(request, user, db, response, set_cookie=True, source='email_code')
-
-
 ############################
 # Update Timezone
 ############################
@@ -415,70 +380,6 @@ async def update_timezone(
 ############################
 
 
-@router.post('/update/email', response_model=bool)
-async def update_email(
-    request: Request,
-    form_data: UpdateEmailForm,
-    session_user=Depends(get_current_user),
-    db: AsyncSession = Depends(get_async_session),
-):
-    email = form_data.email.strip().lower()
-    if not validate_email_format(email):
-        raise HTTPException(status_code=400, detail='EMAIL_FORMAT_INVALID')
-    existing = await Users.get_user_by_email(email, db=db)
-    if existing is not None and existing.id != session_user.id:
-        raise HTTPException(status_code=400, detail='EMAIL_ALREADY_REGISTERED')
-    try:
-        await authorize_sensitive_action(
-            request,
-            session_user,
-            action='email_new',
-            verification_token=form_data.verification_token,
-            expected_email=email,
-            db=db,
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-    old_email = session_user.email
-    timestamp = int(time.time())
-    if not await Auths.update_email_by_id(
-        session_user.id,
-        email,
-        email_verified_at=timestamp,
-        db=db,
-    ):
-        raise HTTPException(status_code=400, detail='EMAIL_UPDATE_FAILED')
-    await revoke_user_sessions(request, session_user.id, db=db)
-
-    try:
-        from open_webui.routers.emails import load_smtp_settings
-        from open_webui.utils.email_delivery import deliver_email
-
-        settings = await load_smtp_settings()
-        if settings.get('enabled'):
-            variables = {
-                'platform_name': settings.get('sender_name') or 'ArtiChat',
-                'platform_url': settings.get('public_url') or '',
-                'user_name': session_user.name,
-                'old_email': old_email,
-                'new_email': email,
-                'changed_at': datetime.datetime.now(datetime.UTC).strftime('%Y-%m-%d %H:%M UTC'),
-            }
-            for recipient in {old_email, email}:
-                await deliver_email(
-                    template_key='email_changed',
-                    recipient=recipient,
-                    variables=variables,
-                    settings=settings,
-                    secret_key=WEBUI_SECRET_KEY,
-                    db=db,
-                )
-    except Exception:
-        log.warning('Email changed notice could not be dispatched', exc_info=True)
-    return True
-
-
 @router.post('/update/password', response_model=bool)
 async def update_password(
     request: Request,
@@ -501,16 +402,6 @@ async def update_password(
                 validate_password(form_data.new_password)
             except Exception as e:
                 raise HTTPException(400, detail=str(e))
-            try:
-                await authorize_sensitive_action(
-                    request,
-                    user,
-                    action='password',
-                    verification_token=form_data.verification_token,
-                    db=db,
-                )
-            except ValueError as exc:
-                raise HTTPException(status_code=400, detail=str(exc)) from exc
             hashed = await get_password_hash(form_data.new_password)
             success = await Auths.update_user_password_by_id(user.id, hashed, db=db)
             if success:
@@ -521,17 +412,57 @@ async def update_password(
                     subject_id=user.id,
                     subject_type='user',
                 )
-                await notify_user(
-                    'password_changed',
-                    user,
-                    {'changed_at': datetime.datetime.now(datetime.UTC).strftime('%Y-%m-%d %H:%M UTC')},
-                    db=db,
-                )
             return success
         else:
             raise HTTPException(400, detail=ERROR_MESSAGES.INCORRECT_PASSWORD)
     else:
         raise HTTPException(400, detail=ERROR_MESSAGES.INVALID_CRED)
+
+
+def _unescape_ldap_dn_value(value: str) -> str:
+    """Resolve RFC 4514 escapes in a DN value, e.g. ``CN=Sales\\, EMEA`` -> ``Sales, EMEA``.
+
+    Consecutive ``\\XX`` hex escapes encode UTF-8 bytes and are decoded together.
+    """
+    hexdigits = '0123456789abcdefABCDEF'
+    result = []
+    pos = 0
+    length = len(value)
+    while pos < length:
+        char = value[pos]
+        if char == '\\' and pos + 1 < length:
+            if pos + 2 < length and value[pos + 1] in hexdigits and value[pos + 2] in hexdigits:
+                byte_values = bytearray()
+                while (
+                    pos + 2 < length
+                    and value[pos] == '\\'
+                    and value[pos + 1] in hexdigits
+                    and value[pos + 2] in hexdigits
+                ):
+                    byte_values.append(int(value[pos + 1 : pos + 3], 16))
+                    pos += 3
+                result.append(byte_values.decode('utf-8', errors='replace'))
+            else:
+                # Backslash escaping a literal special char, e.g. "\," or "\+".
+                result.append(value[pos + 1])
+                pos += 2
+        else:
+            result.append(char)
+            pos += 1
+    return ''.join(result)
+
+
+def extract_group_cn_from_dn(group_dn: str) -> str | None:
+    """Return the first CN component of an LDAP group DN, or None.
+
+    Uses ``parse_dn`` so escaped separators inside a value (e.g. a group whose
+    name contains a comma) are handled correctly instead of naively splitting
+    on ``,``.
+    """
+    for attr_type, attr_value, _ in parse_dn(group_dn):
+        if attr_type.upper() == 'CN':
+            return _unescape_ldap_dn_value(attr_value)
+    return None
 
 
 ############################
@@ -681,17 +612,10 @@ async def ldap_auth(
                     log.info(f'Processing group DN #{group_idx + 1}: {group_dn}')
 
                     try:
-                        group_cn = None
-
-                        for item in group_dn.split(','):
-                            item = item.strip()
-                            if item.upper().startswith('CN='):
-                                group_cn = item[3:]
-                                break
+                        group_cn = extract_group_cn_from_dn(group_dn)
 
                         if group_cn:
                             user_groups.append(group_cn)
-
                         else:
                             log.warning(f'Could not extract CN from group DN: {group_dn}')
                     except Exception as e:
@@ -763,9 +687,9 @@ async def ldap_auth(
 
             if user:
                 if ENABLE_LDAP_GROUP_MANAGEMENT and user_groups:
-                    if ENABLE_LDAP_GROUP_CREATION:
-                        await Groups.create_groups_by_group_names(user.id, user_groups, db=db)
                     try:
+                        if ENABLE_LDAP_GROUP_CREATION:
+                            await Groups.create_groups_by_group_names(user.id, user_groups, db=db)
                         await Groups.sync_groups_by_group_names(user.id, user_groups, db=db)
                         log.info(f'Successfully synced groups for user {user.id}: {user_groups}')
                     except Exception as e:
@@ -817,14 +741,18 @@ async def signin(
                 pass
 
         if not await Users.get_user_by_email(email.lower(), db=db):
-            await signup_handler(
-                request,
-                email,
-                str(uuid.uuid4()),
-                name,
-                db=db,
-                source='trusted_header',
-            )
+            try:
+                await signup_handler(
+                    request,
+                    email,
+                    str(uuid.uuid4()),
+                    name,
+                    db=db,
+                    source='trusted_header',
+                )
+            except IntegrityError:
+                if not await Users.get_user_by_email(email.lower(), db=db):
+                    raise
 
         user = await Auths.authenticate_user_by_email(email, db=db)
         if user:
@@ -905,7 +833,6 @@ async def signup_handler(
     *,
     db: AsyncSession,
     source: str = 'api',
-    email_verified_at: int | None = None,
 ) -> UserModel:
     """
     Core user-creation logic shared by the signup endpoint and
@@ -925,7 +852,6 @@ async def signup_handler(
         name=name,
         profile_image_url=profile_image_url,
         role=await Config.get('ui.default_user_role'),
-        email_verified_at=email_verified_at,
         db=db,
     )
     if not user:
@@ -982,44 +908,11 @@ async def signup(
     if await Users.get_user_by_email(form_data.email.lower(), db=db):
         raise HTTPException(400, detail=ERROR_MESSAGES.EMAIL_TAKEN)
 
-    registration_values = await Config.get_many(
-        'registration.allowed_domains',
-        'registration.allow_subdomains',
-        'registration.verification_enabled',
-    )
-    try:
-        email_verified_at = await resolve_signup_email_verified_at(
-            email=form_data.email,
-            has_users=has_users,
-            verification_token=form_data.verification_token,
-            registration_settings={
-                'allowed_domains': registration_values.get('registration.allowed_domains', []),
-                'allow_subdomains': registration_values.get('registration.allow_subdomains', False),
-                'verification_enabled': registration_values.get('registration.verification_enabled', False),
-            },
-            now=int(time.time()),
-            db=db,
-        )
-    except ValueError as exc:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-
     try:
         try:
             validate_password(form_data.password)
         except Exception as e:
             raise HTTPException(400, detail=str(e))
-
-        if has_users and form_data.verification_token and email_verified_at is not None:
-            try:
-                await claim_email_verification_ticket(
-                    form_data.verification_token,
-                    email=form_data.email,
-                    purpose='registration',
-                    now=int(time.time()),
-                    db=db,
-                )
-            except ValueError as exc:
-                raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
         user = await signup_handler(
             request,
@@ -1028,7 +921,6 @@ async def signup(
             form_data.name,
             form_data.profile_image_url,
             db=db,
-            email_verified_at=email_verified_at,
         )
         await publish_event(
             request,
@@ -1232,10 +1124,7 @@ async def add_user(
             )
 
             expires_delta = parse_duration(await Config.get('auth.jwt_expiry'))
-            token = create_token(
-                data={'id': user.id, 'auth_epoch': user.auth_epoch},
-                expires_delta=expires_delta,
-            )
+            token = create_token(data={'id': user.id}, expires_delta=expires_delta)
             return {
                 'token': token,
                 'token_type': 'Bearer',
@@ -1316,6 +1205,7 @@ class AdminConfig(BaseModel):
     AUTOMATION_MIN_INTERVAL: int | str | None = None
     ENABLE_AUTOMATIONS: bool
     ENABLE_CHANNELS: bool
+    CHANNEL_MODEL_RESPONSE_MODE: str = 'thread'
     ENABLE_CALENDAR: bool
     ENABLE_MEMORIES: bool
     ENABLE_MEMORY_SYSTEM_CONTEXT: bool
@@ -1338,6 +1228,9 @@ async def update_admin_config(request: Request, form_data: AdminConfig, user=Dep
 
     if form_data.DEFAULT_USER_ROLE not in ['pending', 'user', 'admin']:
         updates.pop('ui.default_user_role', None)
+
+    if form_data.CHANNEL_MODEL_RESPONSE_MODE not in ['thread', 'channel']:
+        updates.pop('channels.model_response_mode', None)
 
     pattern = r'^(-1|0|(-?\d+(\.\d+)?)(ms|s|m|h|d|w))$'
 
@@ -1363,6 +1256,9 @@ class LdapServerConfig(BaseModel):
     certificate_path: str | None = None
     validate_cert: bool = True
     ciphers: str | None = 'ALL'
+    enable_group_management: bool = False
+    enable_group_creation: bool = False
+    attribute_for_groups: str = 'memberOf'
 
 
 @router.get('/admin/config/ldap/server', response_model=LdapServerConfig)
@@ -1383,6 +1279,11 @@ async def update_ldap_server(request: Request, form_data: LdapServerConfig, user
         value = getattr(form_data, key)
         if not value:
             raise HTTPException(400, detail=ERROR_MESSAGES.REQUIRED_FIELD_EMPTY(key))
+
+    # The group attribute is what group management reads from the directory
+    # entry; an empty value would make group sync silently do nothing.
+    if form_data.enable_group_management and not (form_data.attribute_for_groups or '').strip():
+        raise HTTPException(400, detail=ERROR_MESSAGES.REQUIRED_FIELD_EMPTY('attribute_for_groups'))
 
     updates = config_updates(form_data.model_dump(), LDAP_SERVER_CONFIG_KEYS)
     updates['ldap.server.app_dn'] = form_data.app_dn or ''
@@ -1415,6 +1316,7 @@ class OAuthConfigForm(BaseModel):
     """All OAuth/OIDC settings exposed to the admin panel."""
 
     # General OAuth
+    ENABLE_OAUTH: bool | None = None
     ENABLE_OAUTH_SIGNUP: bool | None = None
     OAUTH_MERGE_ACCOUNTS_BY_EMAIL: bool | None = None
     OAUTH_AUTO_REDIRECT: bool | None = None
@@ -1470,6 +1372,7 @@ OAUTH_COMMA_LIST_FIELDS = {
 
 
 OAUTH_CONFIG_KEYS = {
+    'ENABLE_OAUTH': 'oauth.enable',
     'ENABLE_OAUTH_SIGNUP': 'oauth.enable_signup',
     'OAUTH_MERGE_ACCOUNTS_BY_EMAIL': 'oauth.merge_accounts_by_email',
     'OAUTH_AUTO_REDIRECT': 'oauth.auto_redirect',
@@ -1624,6 +1527,37 @@ class TokenExchangeForm(BaseModel):
     token: str  # OAuth access token from external provider
 
 
+async def get_token_client_id(client, token: str) -> str | None:
+    """Return the OAuth client_id a token was minted for, when the provider supports introspection."""
+    try:
+        metadata = await client.load_server_metadata()
+        introspection_endpoint = metadata.get('introspection_endpoint')
+        if not introspection_endpoint:
+            log.warning('Token exchange trusted-client check requires an introspection_endpoint')
+            return None
+
+        async with ClientSession(trust_env=True) as session:
+            async with session.post(
+                introspection_endpoint,
+                data={'token': token, 'token_type_hint': 'access_token'},
+                auth=BasicAuth(client.client_id, client.client_secret or ''),
+                ssl=AIOHTTP_CLIENT_SESSION_SSL,
+            ) as r:
+                if r.status != 200:
+                    log.warning(f'Token introspection returned {r.status}')
+                    return None
+                introspection = await r.json()
+
+        if not introspection.get('active'):
+            log.warning('Token introspection reports the token is inactive')
+            return None
+
+        return introspection.get('client_id')
+    except Exception as e:
+        log.warning(f'Token introspection failed: {e}')
+        return None
+
+
 @router.post('/oauth/{provider}/token/exchange', response_model=SessionUserResponse)
 async def token_exchange(
     request: Request,
@@ -1633,13 +1567,21 @@ async def token_exchange(
     db: AsyncSession = Depends(get_async_session),
 ):
     """
-    Exchange an external OAuth provider token for an ArtiChat JWT.
+    Exchange an external OAuth provider token for an OpenWebUI JWT.
     This endpoint is disabled by default. Set ENABLE_OAUTH_TOKEN_EXCHANGE=True to enable.
     """
     if not ENABLE_OAUTH_TOKEN_EXCHANGE:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail='Token exchange is disabled',
+        )
+
+    if token_exchange_rate_limiter and token_exchange_rate_limiter.is_limited(
+        request.client.host if request.client else 'unknown'
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=ERROR_MESSAGES.RATE_LIMIT_EXCEEDED,
         )
 
     provider = provider.lower()
@@ -1658,6 +1600,20 @@ async def token_exchange(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=ERROR_MESSAGES.OAUTH_NOT_CONFIGURED(provider),
         )
+
+    if OAUTH_TOKEN_EXCHANGE_TRUSTED_CLIENT_IDS:
+        token_client_id = await get_token_client_id(client, form_data.token)
+        if not token_client_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail='Unable to determine which client the token was issued to',
+            )
+        if token_client_id not in OAUTH_TOKEN_EXCHANGE_TRUSTED_CLIENT_IDS:
+            log.warning('Token exchange denied: token was issued to an untrusted client for %s', provider)
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
+            )
 
     # Validate the token by calling the userinfo endpoint
     try:

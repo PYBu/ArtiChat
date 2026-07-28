@@ -7,7 +7,6 @@
 	import { goto } from '$app/navigation';
 
 	import { updateUserById, getUserGroupsById } from '$lib/apis/users';
-	import { updateAdminUserSubscription } from '$lib/apis/subscriptions';
 
 	import Modal from '$lib/components/common/Modal.svelte';
 	import localizedFormat from 'dayjs/plugin/localizedFormat';
@@ -29,17 +28,8 @@
 
 	const init = () => {
 		if (selectedUser) {
-			_user = { ...selectedUser };
+			_user = selectedUser;
 			_user.password = '';
-			const subscription = selectedUser.subscription ?? {};
-			_subscription = {
-				tier: subscription.tier ?? 'free',
-				status: subscription.status ?? 'free',
-				plan_chatpoint: `${(subscription.plan_balance_micros ?? 0) / 1_000_000}`,
-				check_chatpoint: `${(subscription.check_balance_micros ?? 0) / 1_000_000}`,
-				expires_at_input: toDateTimeLocal(subscription.expires_at),
-				notes: subscription.notes ?? ''
-			};
 			loadUserGroups();
 		}
 	};
@@ -53,47 +43,16 @@
 	};
 
 	let userGroups: any[] | null = null;
-	let _subscription = {
-		tier: 'free',
-		status: 'free',
-		plan_chatpoint: '0',
-		check_chatpoint: '0',
-		expires_at_input: '',
-		notes: ''
-	};
-
-	const toDateTimeLocal = (value?: number | null) => {
-		if (!value) return '';
-		const date = new Date(value * 1000);
-		date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
-		return date.toISOString().slice(0, 16);
-	};
-
-	const fromDateTimeLocal = (value: string) =>
-		value ? Math.floor(new Date(value).getTime() / 1000) : null;
 
 	const submitHandler = async () => {
 		const res = await updateUserById(localStorage.token, selectedUser.id, _user).catch((error) => {
 			toast.error(`${error}`);
 		});
 
-		if (!res) return;
-
-		const subscription = await updateAdminUserSubscription(localStorage.token, selectedUser.id, {
-			tier: _subscription.tier,
-			status: _subscription.status,
-			plan_chatpoint: _subscription.plan_chatpoint,
-			check_chatpoint: _subscription.check_chatpoint,
-			expires_at: fromDateTimeLocal(_subscription.expires_at_input),
-			notes: _subscription.notes || null
-		}).catch((error) => {
-			toast.error(`${error}`);
-			return null;
-		});
-
-		if (!subscription) return;
-		dispatch('save');
-		show = false;
+		if (res) {
+			dispatch('save');
+			show = false;
+		}
 	};
 
 	const loadUserGroups = async () => {
@@ -109,16 +68,16 @@
 
 <Modal size="sm" bind:show>
 	<div>
-		<div class=" flex justify-between dark:text-gray-300 px-5 pt-4 pb-2">
-			<div class=" text-lg font-medium self-center">{$i18n.t('Edit User')}</div>
+		<div class=" flex justify-between dark:text-gray-300 px-4 pt-3 pb-1">
+			<div class=" text-sm font-medium self-center">{$i18n.t('Edit User')}</div>
 			<button
-				class="self-center"
+				class="self-center rounded-lg p-1 text-gray-500 transition hover:bg-gray-50 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200"
 				aria-label={$i18n.t('Close')}
 				on:click={() => {
 					show = false;
 				}}
 			>
-				<XMark className={'size-5'} />
+				<XMark className={'size-4'} />
 			</button>
 		</div>
 
@@ -142,22 +101,13 @@
 
 							<div class=" flex-1 min-w-0">
 								<div class="overflow-hidden w-ful mb-2">
-									<div class=" self-center capitalize font-medium truncate">
+									<div class=" self-center capitalize font-normal truncate">
 										{selectedUser.name}
 									</div>
 
 									<div class="text-xs text-gray-500">
 										{$i18n.t('Created at')}
 										{dayjs(selectedUser.created_at * 1000).format('LL')}
-									</div>
-
-									<div class="mt-1 text-xs text-gray-500">
-										<span>用户 ID：</span>
-										<span
-											class="select-all break-all font-mono text-[11px] text-gray-700 dark:text-gray-300"
-										>
-											{selectedUser.id}
-										</span>
 									</div>
 								</div>
 
@@ -268,62 +218,9 @@
 							</div>
 						</div>
 
-						<div class="mt-4 border-t border-gray-100 pt-4 dark:border-gray-850">
-							<div class="mb-2 text-sm font-medium">订阅与额度</div>
-							<div class="grid grid-cols-2 gap-2">
-								<label class="flex flex-col gap-1"
-									><span class="text-xs text-gray-500">订阅</span><select
-										class="rounded-lg border border-gray-100 bg-transparent px-2 py-1 text-sm dark:border-gray-850"
-										bind:value={_subscription.tier}
-										><option value="free">Free</option><option value="plus">Plus</option><option
-											value="chatpower">ChatPower</option
-										></select
-									></label
-								>
-								<label class="flex flex-col gap-1"
-									><span class="text-xs text-gray-500">状态</span><select
-										class="rounded-lg border border-gray-100 bg-transparent px-2 py-1 text-sm dark:border-gray-850"
-										bind:value={_subscription.status}
-										><option value="free">Free</option><option value="active">有效</option><option
-											value="expired">已过期</option
-										><option value="inactive">未启用</option></select
-									></label
-								>
-								<label class="col-span-2 flex flex-col gap-1"
-									><span class="text-xs text-gray-500">到期时间</span><input
-										type="datetime-local"
-										class="rounded-lg border border-gray-100 bg-transparent px-2 py-1 text-sm dark:border-gray-850"
-										bind:value={_subscription.expires_at_input}
-									/></label
-								>
-								<label class="flex flex-col gap-1"
-									><span class="text-xs text-gray-500">周期 Chatpoint</span><input
-										type="number"
-										step="any"
-										class="rounded-lg border border-gray-100 bg-transparent px-2 py-1 text-sm dark:border-gray-850"
-										bind:value={_subscription.plan_chatpoint}
-									/></label
-								>
-								<label class="flex flex-col gap-1"
-									><span class="text-xs text-gray-500">充值 Chatpoint</span><input
-										type="number"
-										step="any"
-										class="rounded-lg border border-gray-100 bg-transparent px-2 py-1 text-sm dark:border-gray-850"
-										bind:value={_subscription.check_chatpoint}
-									/></label
-								>
-								<label class="col-span-2 flex flex-col gap-1"
-									><span class="text-xs text-gray-500">管理员备注</span><input
-										class="rounded-lg border border-gray-100 bg-transparent px-2 py-1 text-sm dark:border-gray-850"
-										bind:value={_subscription.notes}
-									/></label
-								>
-							</div>
-						</div>
-
-						<div class="flex justify-end pt-3 text-sm font-medium">
+						<div class="flex justify-end pt-3 text-sm font-normal">
 							<button
-								class="px-3.5 py-1.5 text-sm font-medium bg-black hover:bg-gray-900 text-white dark:bg-white dark:text-black dark:hover:bg-gray-100 transition rounded-full flex flex-row space-x-1 items-center"
+								class="px-3.5 py-1.5 text-sm font-normal bg-black hover:bg-gray-900 text-white dark:bg-white dark:text-black dark:hover:bg-gray-100 transition rounded-full flex flex-row space-x-1 items-center"
 								type="submit"
 							>
 								{$i18n.t('Save')}

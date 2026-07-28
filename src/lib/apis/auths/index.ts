@@ -341,32 +341,11 @@ export const userSignIn = async (email: string, password: string) => {
 	return res;
 };
 
-export const userEmailCodeSignIn = async (email: string, verificationToken: string) => {
-	let error = null;
-	const res = await fetch(`${WEBUI_API_BASE_URL}/auths/signin/email-code`, {
-		method: 'POST',
-		headers: { 'Content-Type': 'application/json' },
-		credentials: 'include',
-		body: JSON.stringify({ email, verification_token: verificationToken })
-	})
-		.then(async (response) => {
-			if (!response.ok) throw await response.json();
-			return response.json();
-		})
-		.catch((reason) => {
-			error = reason.detail;
-			return null;
-		});
-	if (error) throw error;
-	return res;
-};
-
 export const userSignUp = async (
 	name: string,
 	email: string,
 	password: string,
-	profile_image_url: string,
-	verificationToken: string | null = null
+	profile_image_url: string
 ) => {
 	let error = null;
 
@@ -380,8 +359,7 @@ export const userSignUp = async (
 			name: name,
 			email: email,
 			password: password,
-			profile_image_url: profile_image_url,
-			verification_token: verificationToken
+			profile_image_url: profile_image_url
 		})
 	})
 		.then(async (res) => {
@@ -516,12 +494,7 @@ export const updateUserTimezone = async (token: string, timezone: string) => {
 	});
 };
 
-export const updateUserPassword = async (
-	token: string,
-	password: string,
-	newPassword: string,
-	verificationToken: string | null = null
-) => {
+export const updateUserPassword = async (token: string, password: string, newPassword: string) => {
 	let error = null;
 
 	const res = await fetch(`${WEBUI_API_BASE_URL}/auths/update/password`, {
@@ -532,8 +505,7 @@ export const updateUserPassword = async (
 		},
 		body: JSON.stringify({
 			password: password,
-			new_password: newPassword,
-			verification_token: verificationToken
+			new_password: newPassword
 		})
 	})
 		.then(async (res) => {
@@ -551,32 +523,6 @@ export const updateUserPassword = async (
 	}
 
 	return res;
-};
-
-export const updateUserEmail = async (
-	token: string,
-	email: string,
-	verificationToken: string | null = null
-) => {
-	let error = null;
-	const response = await fetch(`${WEBUI_API_BASE_URL}/auths/update/email`, {
-		method: 'POST',
-		headers: {
-			'Content-Type': 'application/json',
-			...(token && { authorization: `Bearer ${token}` })
-		},
-		body: JSON.stringify({ email, verification_token: verificationToken })
-	})
-		.then(async (res) => {
-			if (!res.ok) throw await res.json();
-			return res.json();
-		})
-		.catch((reason) => {
-			error = reason?.detail ?? reason;
-			return null;
-		});
-	if (error) throw error;
-	return response;
 };
 
 export const createAPIKey = async (token: string) => {

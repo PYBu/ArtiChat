@@ -3,10 +3,11 @@ from __future__ import annotations
 import json
 import logging
 import time
-from typing import Literal, Optional
+from copy import deepcopy
+from typing import Any, Optional
 
 from open_webui.internal.db import Base, JSONField, get_async_db_context
-from open_webui.models.access_grants import AccessGrant, AccessGrantModel, AccessGrants
+from open_webui.models.access_grants import AccessGrantModel, AccessGrants
 from open_webui.models.groups import Groups
 from open_webui.models.users import User, UserModel, UserResponse, Users
 from open_webui.utils.validate import validate_profile_image_url
@@ -22,6 +23,38 @@ log = logging.getLogger(__name__)
 _warned_profile_urls: set[str] = set()
 
 
+def strip_extracted_content_from_model_knowledge(knowledge: Any) -> Any:
+    """Drop duplicated extracted text from ModelMeta.knowledge."""
+    if not isinstance(knowledge, list):
+        return knowledge
+
+    sanitized = []
+
+    for item in knowledge:
+        if not isinstance(item, dict):
+            sanitized.append(item)
+            continue
+
+        next_item = item
+        data = item.get('data')
+        if isinstance(data, dict) and 'content' in data:
+            next_item = deepcopy(item)
+            next_item.get('data', {}).pop('content', None)
+
+        file = next_item.get('file')
+        file_data = file.get('data') if isinstance(file, dict) else None
+        if isinstance(file_data, dict) and 'content' in file_data:
+            if next_item is item:
+                next_item = deepcopy(item)
+                file = next_item.get('file')
+                file_data = file.get('data') if isinstance(file, dict) else None
+            file_data.pop('content', None)
+
+        sanitized.append(next_item)
+
+    return sanitized
+
+
 # --- Models DB Schema ---
 
 
@@ -31,26 +64,13 @@ class ModelParams(BaseModel):
     model_config = ConfigDict(extra='allow')
 
 
-class ReasoningControlConfig(BaseModel):
-    enabled: bool = False
-    profile: Literal['gpt', 'claude'] | None = None
-
-    @model_validator(mode='after')
-    def require_profile_when_enabled(self):
-        if self.enabled and self.profile is None:
-            raise ValueError('A reasoning profile is required when reasoning control is enabled.')
-        return self
-
-
 class ModelMeta(BaseModel):
     """Metadata for a workspace model entry (profile, description, tags, capabilities)."""
 
     profile_image_url: str | None = None
     description: str | None = Field(default=None, description='User-facing description of the model.')
     capabilities: dict | None = None
-    subscription: dict | None = None
-    marketplace: dict | None = None
-    reasoning_control: ReasoningControlConfig | None = None
+    knowledge: list[Any] | None = None
 
     model_config = ConfigDict(extra='allow')
 
@@ -69,6 +89,11 @@ class ModelMeta(BaseModel):
                     v,
                 )
             return None
+
+    @field_validator('knowledge', mode='before')
+    @classmethod
+    def strip_knowledge_content(cls, v):
+        return strip_extracted_content_from_model_knowledge(v)
 
     @model_validator(mode='before')
     @classmethod
@@ -166,11 +191,19 @@ class ModelsTable:
         access_grants: list[AccessGrantModel | None] = None,
         db: AsyncSession | None = None,
     ) -> ModelModel:
-        model_data = ModelModel.model_validate(model).model_dump(exclude={'access_grants'})
-        model_data['access_grants'] = (
-            access_grants if access_grants is not None else await self._get_access_grants(model_data['id'], db=db)
+        if isinstance(model.meta, dict):
+            knowledge = model.meta.get('knowledge')
+            stripped_knowledge = strip_extracted_content_from_model_knowledge(knowledge)
+            if stripped_knowledge != knowledge:
+                model.meta = {**model.meta, 'knowledge': stripped_knowledge}
+                if db is not None:
+                    await db.commit()
+
+        model_model = ModelModel.model_validate(model)
+        model_model.access_grants = (
+            access_grants if access_grants is not None else await self._get_access_grants(model_model.id, db=db)
         )
-        return ModelModel.model_validate(model_data)
+        return model_model
 
     async def insert_new_model(
         self, form_data: ModelForm, user_id: str, db: AsyncSession | None = None
@@ -187,7 +220,6 @@ class ModelsTable:
                 )
                 db.add(result)
                 await db.commit()
-                await db.refresh(result)
                 await AccessGrants.set_access_grants('model', result.id, form_data.access_grants, db=db)
 
                 if result:
@@ -270,26 +302,26 @@ class ModelsTable:
             ]
 
     async def get_models_by_user_id(
-        self, user_id: str, permission: str = 'write', db: AsyncSession | None = None
+        self,
+        user_id: str,
+        permission: str = 'write',
+        db: AsyncSession | None = None,
+        user_group_ids: set[str] | None = None,
     ) -> list[ModelUserResponse]:
         models = await self.get_models(db=db)
-        user_groups = await Groups.get_groups_by_member_id(user_id, db=db)
-        user_group_ids = {group.id for group in user_groups}
+        if user_group_ids is None:
+            user_group_ids = {group.id for group in await Groups.get_groups_by_member_id(user_id, db=db)}
 
-        result = []
-        for model in models:
-            if model.user_id == user_id:
-                result.append(model)
-            elif await AccessGrants.has_access(
-                user_id=user_id,
-                resource_type='model',
-                resource_id=model.id,
-                permission=permission,
-                user_group_ids=user_group_ids,
-                db=db,
-            ):
-                result.append(model)
-        return result
+        # One grants query for all non-owned models instead of one per model
+        accessible_ids = await AccessGrants.get_accessible_resource_ids(
+            user_id=user_id,
+            resource_type='model',
+            resource_ids=[model.id for model in models if model.user_id != user_id],
+            permission=permission,
+            user_group_ids=user_group_ids,
+            db=db,
+        )
+        return [model for model in models if model.user_id == user_id or model.id in accessible_ids]
 
     def _has_permission(self, db, query, filter: dict, permission: str = 'read'):
         return AccessGrants.has_permission_filter(
@@ -497,62 +529,10 @@ class ModelsTable:
                 model.is_active = not model.is_active
                 model.updated_at = int(time.time())
                 await db.commit()
-                await db.refresh(model)
 
                 return await self._to_model_model(model, db=db)
             except Exception:
                 return None
-
-    async def update_model_subscription_policies(
-        self,
-        policies: dict[str, dict],
-        db: AsyncSession | None = None,
-    ) -> list[ModelModel]:
-        async def update_in_session(session: AsyncSession) -> list[ModelModel]:
-            ids = list(policies)
-            try:
-                result = await session.execute(select(Model).filter(Model.id.in_(ids)))
-                rows = {row.id: row for row in result.scalars().all()}
-                missing = [model_id for model_id in ids if model_id not in rows]
-                if missing:
-                    raise ValueError(f'MODEL_NOT_FOUND: {missing[0]}')
-
-                updated_at = int(time.time())
-                for model_id, policy in policies.items():
-                    row = rows[model_id]
-                    meta = dict(row.meta or {})
-                    meta['subscription'] = policy
-                    row.meta = meta
-                    row.updated_at = updated_at
-
-                await session.commit()
-            except Exception:
-                await session.rollback()
-                raise
-
-            grants_result = await session.execute(
-                select(AccessGrant).filter(
-                    AccessGrant.resource_type == 'model',
-                    AccessGrant.resource_id.in_(ids),
-                )
-            )
-            grants_map: dict[str, list[AccessGrantModel]] = {model_id: [] for model_id in ids}
-            for grant in grants_result.scalars().all():
-                grants_map[grant.resource_id].append(AccessGrantModel.model_validate(grant))
-
-            return [
-                await self._to_model_model(
-                    rows[model_id],
-                    access_grants=grants_map[model_id],
-                    db=session,
-                )
-                for model_id in ids
-            ]
-
-        if db is not None:
-            return await update_in_session(db)
-        async with get_async_db_context() as session:
-            return await update_in_session(session)
 
     async def update_model_by_id(self, id: str, model: ModelForm, db: AsyncSession | None = None) -> ModelModel | None:
         try:
@@ -575,13 +555,12 @@ class ModelsTable:
         try:
             async with get_async_db_context(db) as db:
                 result = await db.execute(select(Model).filter_by(id=id))
-                model_obj = result.scalars().first()
-                if not model_obj:
+                model = result.scalars().first()
+                if not model:
                     return None
-                model_obj.updated_at = int(time.time())
+                model.updated_at = int(time.time())
                 await db.commit()
-                await db.refresh(model_obj)
-                return await self._to_model_model(model_obj, db=db)
+                return await self._to_model_model(model, db=db)
         except Exception as e:
             log.exception(f'Failed to update the model updated_at by id {id}: {e}')
             return None

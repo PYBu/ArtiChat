@@ -21,16 +21,14 @@
 		console.log(data);
 
 		const manifest = extractFrontmatter(data.content);
-		const requiredVersion =
-			manifest?.required_artichat_version ?? manifest?.required_open_webui_version ?? '0.0.0';
-		if (compareVersion(requiredVersion, WEBUI_VERSION)) {
+		if (compareVersion(manifest?.required_open_webui_version ?? '0.0.0', WEBUI_VERSION)) {
 			console.log('Version is lower than required');
 			toast.error(
 				$i18n.t(
-					'ArtiChat version (v{{ARTICHAT_VERSION}}) is lower than required version (v{{REQUIRED_VERSION}})',
+					'Open WebUI version (v{{OPEN_WEBUI_VERSION}}) is lower than required version (v{{REQUIRED_VERSION}})',
 					{
-						ARTICHAT_VERSION: WEBUI_VERSION,
-						REQUIRED_VERSION: requiredVersion
+						OPEN_WEBUI_VERSION: WEBUI_VERSION,
+						REQUIRED_VERSION: manifest?.required_open_webui_version ?? '0.0.0'
 					}
 				)
 			);
@@ -62,6 +60,11 @@
 	};
 
 	onMount(async () => {
+		if (!$config?.features?.enable_plugins) {
+			goto('/admin', { replaceState: true });
+			return;
+		}
+
 		console.log('mounted');
 		const id = $page.url.searchParams.get('id');
 
@@ -78,7 +81,7 @@
 </script>
 
 {#if func}
-	<div class="px-[16px] h-full">
+	<div class="px-[16px] h-full min-w-0 overflow-x-hidden">
 		<FunctionEditor
 			edit={true}
 			id={func.id}

@@ -4,9 +4,7 @@ services:
     container_name: playwright
     command: npx -y playwright@1.60.0 run-server --port 3000 --host 0.0.0.0
 
-  artichat:
-    depends_on:
-      - playwright
+  open-webui:
     environment:
       - 'WEB_LOADER_ENGINE=playwright'
       - 'PLAYWRIGHT_WS_URL=ws://playwright:3000'

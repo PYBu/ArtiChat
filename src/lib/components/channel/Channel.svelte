@@ -7,7 +7,6 @@
 	import { v4 as uuidv4 } from 'uuid';
 
 	import {
-		WEBUI_NAME,
 		chatId,
 		channels,
 		channelId as _channelId,
@@ -310,10 +309,10 @@
 					} else {
 						return e.name;
 					}
-				}, '')} • {$WEBUI_NAME}</title
+				}, '')} / Open WebUI</title
 		>
 	{:else}
-		<title>#{channel?.name ?? 'Channel'} • {$WEBUI_NAME}</title>
+		<title>#{channel?.name ?? 'Channel'} / Open WebUI</title>
 	{/if}
 </svelte:head>
 

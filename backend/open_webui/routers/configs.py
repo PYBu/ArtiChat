@@ -5,11 +5,10 @@ import logging
 from typing import Optional
 
 import aiohttp
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, Depends, HTTPException, Request
 from mcp.shared.auth import OAuthMetadata
 from open_webui.config import BannerModel
-from open_webui.env import AIOHTTP_CLIENT_SESSION_SSL, AIOHTTP_CLIENT_TIMEOUT, DATA_DIR
+from open_webui.env import AIOHTTP_CLIENT_SESSION_SSL, AIOHTTP_CLIENT_TIMEOUT
 from open_webui.events import EVENTS, publish_event
 from open_webui.models.config import Config
 from open_webui.models.oauth_sessions import OAuthSessions
@@ -27,7 +26,6 @@ from open_webui.utils.oauth import (
     recover_static_oauth_client_metadata,
     resolve_oauth_client_info,
 )
-from open_webui.utils.platform import normalize_platform_settings, save_platform_logo
 from open_webui.utils.tools import (
     bearer_auth_header,
     get_tool_server_data,
@@ -35,7 +33,7 @@ from open_webui.utils.tools import (
     set_terminal_servers,
     set_tool_servers,
 )
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 
 router = APIRouter()
 
@@ -69,6 +67,15 @@ MODELS_CONFIG_KEYS = {
     'DEFAULT_MODEL_METADATA': 'models.default_metadata',
     'DEFAULT_MODEL_PARAMS': 'models.default_params',
 }
+SUBAGENTS_CONFIG_KEYS = {
+    'ENABLE_SUBAGENTS': 'subagents.enable',
+    'SUBAGENTS_BACKGROUND_ENABLED': 'subagents.background_enabled',
+    'SUBAGENTS_MAX_CONCURRENT': 'subagents.max_concurrent',
+    'SUBAGENTS_MAX_ASYNC': 'subagents.max_async',
+    'SUBAGENTS_MAX_ITERATIONS': 'subagents.max_iterations',
+    'SUBAGENTS_MAX_OUTPUT': 'subagents.max_output',
+    'SUBAGENTS_SYSTEM_PROMPT': 'subagents.system_prompt',
+}
 
 
 async def get_config_values(key_map: dict[str, str]) -> dict:
@@ -78,87 +85,6 @@ async def get_config_values(key_map: dict[str, str]) -> dict:
 
 def config_updates(data: dict, key_map: dict[str, str]) -> dict:
     return {key_map[field]: value for field, value in data.items() if field in key_map}
-
-
-PLATFORM_CONFIG_KEYS = {
-    'name': 'platform.name',
-    'about_title': 'platform.about_title',
-    'about_content': 'platform.about_content',
-    'logo_light': 'platform.logo_light',
-    'logo_dark': 'platform.logo_dark',
-    'sidebar_buttons': 'platform.sidebar_buttons',
-}
-PLATFORM_ASSETS_DIR = DATA_DIR / 'platform-assets'
-
-
-class PlatformSettingsForm(BaseModel):
-    name: str
-    about_title: str = ''
-    about_content: str = ''
-    sidebar_buttons: list[dict] = Field(default_factory=list)
-
-
-async def platform_settings() -> dict:
-    values = await get_config_values(PLATFORM_CONFIG_KEYS)
-    return {
-        'name': values.get('name') or 'ArtiChat',
-        'about_title': values.get('about_title') or '',
-        'about_content': values.get('about_content') or '',
-        'logo_light': values.get('logo_light') or '/static/favicon.png',
-        'logo_dark': values.get('logo_dark') or '/static/favicon-dark.png',
-        'sidebar_buttons': values.get('sidebar_buttons') or [],
-    }
-
-
-@router.get('/platform/public')
-async def get_public_platform_settings():
-    return await platform_settings()
-
-
-@router.get('/platform')
-async def get_platform_settings(user=Depends(get_admin_user)):
-    return await platform_settings()
-
-
-@router.post('/platform')
-async def set_platform_settings(request: Request, form_data: PlatformSettingsForm, user=Depends(get_admin_user)):
-    try:
-        normalized = normalize_platform_settings(form_data.model_dump())
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    await Config.upsert(config_updates(normalized, PLATFORM_CONFIG_KEYS))
-    request.app.state.WEBUI_NAME = normalized['name']
-    return await platform_settings()
-
-
-@router.post('/platform/logo/{theme}')
-async def upload_platform_logo(
-    theme: str,
-    file: UploadFile = File(...),
-    user=Depends(get_admin_user),
-):
-    try:
-        target = save_platform_logo(
-            content=await file.read(),
-            content_type=file.content_type or '',
-            theme=theme,
-            assets_dir=PLATFORM_ASSETS_DIR,
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    url = f'/api/v1/configs/platform/logo/{theme}'
-    await Config.upsert({PLATFORM_CONFIG_KEYS[f'logo_{theme}']: url})
-    return {'url': url, 'filename': target.name}
-
-
-@router.get('/platform/logo/{theme}')
-async def get_platform_logo(theme: str):
-    if theme not in {'light', 'dark'}:
-        raise HTTPException(status_code=404, detail='PLATFORM_LOGO_NOT_FOUND')
-    target = PLATFORM_ASSETS_DIR / f'logo-{theme}.png'
-    if not target.exists():
-        raise HTTPException(status_code=404, detail='PLATFORM_LOGO_NOT_FOUND')
-    return FileResponse(target, media_type='image/png')
 
 
 ############################
@@ -279,7 +205,7 @@ async def register_oauth_client(
         log.debug(f'Failed to register OAuth client: {e}')
         raise HTTPException(
             status_code=400,
-            detail=f'Failed to register OAuth client',
+            detail=f'Failed to register OAuth client: {e}',
         )
 
 
@@ -381,10 +307,8 @@ class TerminalServerConnection(BaseModel):
 
     config: dict | None = None
 
-    # Orchestrator policy fields
-    server_type: str | None = None  # "orchestrator", "terminal"
+    server_type: str | None = None
     policy_id: str | None = None
-    policy: dict | None = None  # cached policy data
 
     model_config = ConfigDict(extra='allow')
 
@@ -404,7 +328,9 @@ async def set_terminal_servers_config(
     form_data: TerminalServersConfigForm,
     user=Depends(get_admin_user),
 ):
-    connections = [connection.model_dump() for connection in form_data.TERMINAL_SERVER_CONNECTIONS]
+    connections = [
+        connection.model_dump(exclude={'policy', 'lifecycle'}) for connection in form_data.TERMINAL_SERVER_CONNECTIONS
+    ]
     await Config.upsert({'terminal_server.connections': connections})
 
     await set_terminal_servers(request)
@@ -474,7 +400,7 @@ class TerminalServerPolicyForm(BaseModel):
     key: str | None = ''
     auth_type: str | None = 'bearer'
     policy_id: str
-    policy_data: dict
+    policy_data: dict | None = None
 
 
 class TerminalServerLifecycleForm(BaseModel):
@@ -482,7 +408,7 @@ class TerminalServerLifecycleForm(BaseModel):
     key: str | None = ''
     auth_type: str | None = 'bearer'
     policy_id: str
-    lifecycle_data: dict
+    lifecycle_data: dict | None = None
 
 
 class TerminalServerRefreshForm(BaseModel):
@@ -499,9 +425,7 @@ class TerminalServerRefreshForm(BaseModel):
 async def put_terminal_server_policy(
     request: Request, form_data: TerminalServerPolicyForm, user=Depends(get_admin_user)
 ):
-    """
-    Proxy a policy PUT to an orchestrator terminal server.
-    """
+    """Proxy a policy read or update to an orchestrator terminal server."""
     base_url = (form_data.url or '').rstrip('/')
     if not base_url:
         raise HTTPException(status_code=400, detail='Terminal server URL is required')
@@ -516,8 +440,12 @@ async def put_terminal_server_policy(
             timeout=aiohttp.ClientTimeout(total=AIOHTTP_CLIENT_TIMEOUT),
         ) as session:
             policy_url = f'{base_url}/api/v1/policies/{form_data.policy_id}'
-            async with session.put(
-                policy_url, headers=headers, json=form_data.policy_data, ssl=AIOHTTP_CLIENT_SESSION_SSL
+            async with session.request(
+                'GET' if form_data.policy_data is None else 'PUT',
+                policy_url,
+                headers=headers,
+                json=form_data.policy_data,
+                ssl=AIOHTTP_CLIENT_SESSION_SSL,
             ) as resp:
                 if resp.ok:
                     return await resp.json()
@@ -526,17 +454,15 @@ async def put_terminal_server_policy(
     except HTTPException:
         raise
     except Exception as e:
-        log.debug(f'Failed to save policy to terminal server: {e}')
-        raise HTTPException(status_code=400, detail='Failed to save policy to terminal server')
+        log.debug(f'Failed to access policy on terminal server: {e}')
+        raise HTTPException(status_code=400, detail='Failed to access policy on terminal server')
 
 
 @router.post('/terminal_servers/lifecycle')
 async def put_terminal_server_lifecycle(
     request: Request, form_data: TerminalServerLifecycleForm, user=Depends(get_admin_user)
 ):
-    """
-    Proxy a policy lifecycle PUT to an orchestrator terminal server.
-    """
+    """Proxy a lifecycle read or update to an orchestrator terminal server."""
     base_url = (form_data.url or '').rstrip('/')
     if not base_url:
         raise HTTPException(status_code=400, detail='Terminal server URL is required')
@@ -551,7 +477,8 @@ async def put_terminal_server_lifecycle(
             timeout=aiohttp.ClientTimeout(total=AIOHTTP_CLIENT_TIMEOUT),
         ) as session:
             lifecycle_url = f'{base_url}/api/v1/policies/{form_data.policy_id}/lifecycle'
-            async with session.put(
+            async with session.request(
+                'GET' if form_data.lifecycle_data is None else 'PUT',
                 lifecycle_url,
                 headers=headers,
                 json=form_data.lifecycle_data,
@@ -564,8 +491,8 @@ async def put_terminal_server_lifecycle(
     except HTTPException:
         raise
     except Exception as e:
-        log.debug(f'Failed to save lifecycle to terminal server: {e}')
-        raise HTTPException(status_code=400, detail='Failed to save lifecycle to terminal server')
+        log.debug(f'Failed to access lifecycle on terminal server: {e}')
+        raise HTTPException(status_code=400, detail='Failed to access lifecycle on terminal server')
 
 
 @router.post('/terminal_servers/refresh')
@@ -687,7 +614,7 @@ async def verify_tool_servers_config(request: Request, form_data: ToolServerConn
                     if form_data.headers and isinstance(form_data.headers, dict):
                         if headers is None:
                             headers = {}
-                        custom_headers = get_custom_headers(form_data.headers, user)
+                        custom_headers = await get_custom_headers(form_data.headers, user)
                         headers.update(custom_headers)
 
                     await client.connect(form_data.url, headers=headers)
@@ -732,7 +659,7 @@ async def verify_tool_servers_config(request: Request, form_data: ToolServerConn
             if form_data.headers and isinstance(form_data.headers, dict):
                 if headers is None:
                     headers = {}
-                custom_headers = get_custom_headers(form_data.headers, user)
+                custom_headers = await get_custom_headers(form_data.headers, user)
                 headers.update(custom_headers)
 
             url = get_tool_server_url(form_data.url, form_data.path)
@@ -833,6 +760,40 @@ async def set_models_config(request: Request, form_data: ModelsConfigForm, user=
             'default_pinned_models': values.get('DEFAULT_PINNED_MODELS'),
             'model_order_count': len(values.get('MODEL_ORDER_LIST') or []),
         },
+    )
+    return values
+
+
+class SubagentsConfigForm(BaseModel):
+    ENABLE_SUBAGENTS: bool
+    SUBAGENTS_BACKGROUND_ENABLED: bool
+    SUBAGENTS_MAX_CONCURRENT: int
+    SUBAGENTS_MAX_ASYNC: int
+    SUBAGENTS_MAX_ITERATIONS: int
+    SUBAGENTS_MAX_OUTPUT: int
+    SUBAGENTS_SYSTEM_PROMPT: str
+
+
+@router.get('/subagents', response_model=SubagentsConfigForm)
+async def get_subagents_config(user=Depends(get_admin_user)):
+    return await get_config_values(SUBAGENTS_CONFIG_KEYS)
+
+
+@router.post('/subagents', response_model=SubagentsConfigForm)
+async def set_subagents_config(
+    request: Request,
+    form_data: SubagentsConfigForm,
+    user=Depends(get_admin_user),
+):
+    await Config.upsert(config_updates(form_data.model_dump(), SUBAGENTS_CONFIG_KEYS))
+    values = await get_config_values(SUBAGENTS_CONFIG_KEYS)
+    await publish_event(
+        request,
+        EVENTS.CONFIG_UPDATED,
+        actor=user,
+        subject_id='subagents',
+        subject_type='config',
+        data={'enabled': values.get('ENABLE_SUBAGENTS')},
     )
     return values
 

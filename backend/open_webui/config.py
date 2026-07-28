@@ -182,16 +182,15 @@ CACHE_DIR.mkdir(parents=True, exist_ok=True)
 ####################################
 
 CUSTOM_NAME = os.getenv('CUSTOM_NAME', '')
-CUSTOM_BRANDING_API_BASE_URL = os.getenv('CUSTOM_BRANDING_API_BASE_URL', '').rstrip('/')
 
-if CUSTOM_NAME and CUSTOM_BRANDING_API_BASE_URL:
+if CUSTOM_NAME:
     try:
-        r = requests.get(f'{CUSTOM_BRANDING_API_BASE_URL}/api/v1/custom/{CUSTOM_NAME}')
+        r = requests.get(f'https://api.openwebui.com/api/v1/custom/{CUSTOM_NAME}')
         data = r.json()
         if r.ok:
             if 'logo' in data:
                 WEBUI_FAVICON_URL = url = (
-                    f'{CUSTOM_BRANDING_API_BASE_URL}{data["logo"]}' if data['logo'][0] == '/' else data['logo']
+                    f'https://api.openwebui.com{data["logo"]}' if data['logo'][0] == '/' else data['logo']
                 )
 
                 r = requests.get(url, stream=True)
@@ -201,7 +200,7 @@ if CUSTOM_NAME and CUSTOM_BRANDING_API_BASE_URL:
                         shutil.copyfileobj(r.raw, f)
 
             if 'splash' in data:
-                url = f'{CUSTOM_BRANDING_API_BASE_URL}{data["splash"]}' if data['splash'][0] == '/' else data['splash']
+                url = f'https://api.openwebui.com{data["splash"]}' if data['splash'][0] == '/' else data['splash']
 
                 r = requests.get(url, stream=True)
                 if r.status_code == 200:
@@ -244,13 +243,13 @@ if OLLAMA_BASE_URL == '' and OLLAMA_API_BASE_URL != '':
 if ENV == 'prod':
     if OLLAMA_BASE_URL == '/ollama' and not K8S_FLAG:
         if USE_OLLAMA_DOCKER.lower() == 'true':
-            # If you use the all-in-one Docker container with Ollama.
+            # if you use all-in-one docker container (Open WebUI + Ollama)
             # with the docker build arg USE_OLLAMA=true (--build-arg="USE_OLLAMA=true") this only works with http://localhost:11434
             OLLAMA_BASE_URL = 'http://localhost:11434'
         else:
             OLLAMA_BASE_URL = 'http://host.docker.internal:11434'
     elif K8S_FLAG:
-        OLLAMA_BASE_URL = 'http://ollama-service.artichat.svc.cluster.local:11434'
+        OLLAMA_BASE_URL = 'http://ollama-service.open-webui.svc.cluster.local:11434'
 
 
 def _resolve_ollama_base_url(url: str) -> str:
@@ -597,7 +596,7 @@ MILVUS_DISKANN_MAX_DEGREE = int(os.getenv('MILVUS_DISKANN_MAX_DEGREE', '56'))
 MILVUS_DISKANN_SEARCH_LIST_SIZE = int(os.getenv('MILVUS_DISKANN_SEARCH_LIST_SIZE', '100'))
 ENABLE_MILVUS_MULTITENANCY_MODE = os.getenv('ENABLE_MILVUS_MULTITENANCY_MODE', 'false').lower() == 'true'
 # Hyphens not allowed, need to use underscores in collection names
-MILVUS_COLLECTION_PREFIX = os.getenv('MILVUS_COLLECTION_PREFIX', 'artichat')
+MILVUS_COLLECTION_PREFIX = os.getenv('MILVUS_COLLECTION_PREFIX', 'open_webui')
 
 # Qdrant
 QDRANT_URI = os.getenv('QDRANT_URI', None)
@@ -608,7 +607,7 @@ QDRANT_GRPC_PORT = int(os.getenv('QDRANT_GRPC_PORT', '6334'))
 QDRANT_TIMEOUT = int(os.getenv('QDRANT_TIMEOUT', '5'))
 QDRANT_HNSW_M = int(os.getenv('QDRANT_HNSW_M', '16'))
 ENABLE_QDRANT_MULTITENANCY_MODE = os.getenv('ENABLE_QDRANT_MULTITENANCY_MODE', 'true').lower() == 'true'
-QDRANT_COLLECTION_PREFIX = os.getenv('QDRANT_COLLECTION_PREFIX', 'artichat')
+QDRANT_COLLECTION_PREFIX = os.getenv('QDRANT_COLLECTION_PREFIX', 'open-webui')
 
 WEAVIATE_HTTP_HOST = os.getenv('WEAVIATE_HTTP_HOST', '')
 WEAVIATE_GRPC_HOST = os.getenv('WEAVIATE_GRPC_HOST', '')
@@ -625,7 +624,6 @@ OPENSEARCH_SSL = os.getenv('OPENSEARCH_SSL', 'true').lower() == 'true'
 OPENSEARCH_CERT_VERIFY = os.getenv('OPENSEARCH_CERT_VERIFY', 'false').lower() == 'true'
 OPENSEARCH_USERNAME = os.getenv('OPENSEARCH_USERNAME', None)
 OPENSEARCH_PASSWORD = os.getenv('OPENSEARCH_PASSWORD', None)
-OPENSEARCH_INDEX_PREFIX = os.getenv('OPENSEARCH_INDEX_PREFIX', 'artichat')
 
 # ElasticSearch
 ELASTICSEARCH_URL = os.getenv('ELASTICSEARCH_URL', 'https://localhost:9200')
@@ -635,7 +633,7 @@ ELASTICSEARCH_USERNAME = os.getenv('ELASTICSEARCH_USERNAME', None)
 ELASTICSEARCH_PASSWORD = os.getenv('ELASTICSEARCH_PASSWORD', None)
 ELASTICSEARCH_CLOUD_ID = os.getenv('ELASTICSEARCH_CLOUD_ID', None)
 SSL_ASSERT_FINGERPRINT = os.getenv('SSL_ASSERT_FINGERPRINT', None)
-ELASTICSEARCH_INDEX_PREFIX = os.getenv('ELASTICSEARCH_INDEX_PREFIX', 'artichat_collections')
+ELASTICSEARCH_INDEX_PREFIX = os.getenv('ELASTICSEARCH_INDEX_PREFIX', 'open_webui_collections')
 # Pgvector
 PGVECTOR_DB_URL = os.getenv('PGVECTOR_DB_URL', DATABASE_URL)
 if VECTOR_DB == 'pgvector' and not PGVECTOR_DB_URL.startswith('postgres'):
@@ -779,7 +777,7 @@ else:
 # Pinecone
 PINECONE_API_KEY = os.getenv('PINECONE_API_KEY', None)
 PINECONE_ENVIRONMENT = os.getenv('PINECONE_ENVIRONMENT', None)
-PINECONE_INDEX_NAME = os.getenv('PINECONE_INDEX_NAME', 'artichat-index')
+PINECONE_INDEX_NAME = os.getenv('PINECONE_INDEX_NAME', 'open-webui-index')
 PINECONE_DIMENSION = int(os.getenv('PINECONE_DIMENSION', 1536))  # or 3072, 1024, 768
 PINECONE_METRIC = os.getenv('PINECONE_METRIC', 'cosine')
 PINECONE_CLOUD = os.getenv('PINECONE_CLOUD', 'aws')  # or "gcp" or "azure"
@@ -815,7 +813,7 @@ S3_VECTOR_REGION = os.getenv('S3_VECTOR_REGION', None)
 
 # Valkey Vector Store
 VALKEY_URL = os.getenv('VALKEY_URL', '')
-VALKEY_COLLECTION_PREFIX = os.getenv('VALKEY_COLLECTION_PREFIX', 'artichat')
+VALKEY_COLLECTION_PREFIX = os.getenv('VALKEY_COLLECTION_PREFIX', 'open_webui')
 VALKEY_INDEX_TYPE = os.getenv('VALKEY_INDEX_TYPE', 'HNSW').upper()
 VALKEY_DISTANCE_METRIC = os.getenv('VALKEY_DISTANCE_METRIC', 'COSINE').upper()
 VALKEY_HNSW_M = int(os.getenv('VALKEY_HNSW_M', '16'))
@@ -854,6 +852,13 @@ ONEDRIVE_SHAREPOINT_TENANT_ID = os.getenv('ONEDRIVE_SHAREPOINT_TENANT_ID', '')
 
 # RAG Content Extraction
 CONTENT_EXTRACTION_ENGINE = os.getenv('CONTENT_EXTRACTION_ENGINE', '').lower()
+
+content_extraction_supported_media_mime_types = os.getenv('CONTENT_EXTRACTION_SUPPORTED_MEDIA_MIME_TYPES')
+CONTENT_EXTRACTION_SUPPORTED_MEDIA_MIME_TYPES = (
+    [mime_type.strip() for mime_type in content_extraction_supported_media_mime_types.split(',') if mime_type.strip()]
+    if content_extraction_supported_media_mime_types is not None
+    else None
+)
 
 DATALAB_MARKER_API_KEY = os.getenv('DATALAB_MARKER_API_KEY', '')
 
@@ -1178,6 +1183,7 @@ WEB_SEARCH_TRUST_ENV = os.getenv('WEB_SEARCH_TRUST_ENV', 'True').lower() == 'tru
 OLLAMA_CLOUD_WEB_SEARCH_API_KEY = os.getenv('OLLAMA_CLOUD_API_KEY', '')
 
 SEARXNG_QUERY_URL = os.getenv('SEARXNG_QUERY_URL', '')
+OPENSERP_BASE_URL = os.getenv('OPENSERP_BASE_URL', 'http://localhost:7000')
 
 SEARXNG_LANGUAGE = os.getenv('SEARXNG_LANGUAGE', 'all')
 
@@ -1475,10 +1481,6 @@ IMAGES_GEMINI_API_KEY = os.getenv('IMAGES_GEMINI_API_KEY', GEMINI_API_KEY)
 
 IMAGES_GEMINI_ENDPOINT_METHOD = os.getenv('IMAGES_GEMINI_ENDPOINT_METHOD', '')
 
-IMAGE_OUTPUT_URL_FORMAT = os.getenv('IMAGE_OUTPUT_URL_FORMAT', 'relative').lower()
-if IMAGE_OUTPUT_URL_FORMAT not in {'relative', 'absolute'}:
-    IMAGE_OUTPUT_URL_FORMAT = 'relative'
-
 ENABLE_IMAGE_EDIT = os.getenv('ENABLE_IMAGE_EDIT', '').lower() == 'true'
 
 IMAGE_EDIT_ENGINE = os.getenv('IMAGE_EDIT_ENGINE', 'openai')
@@ -1670,7 +1672,13 @@ if default_prompt_suggestions == []:
 
 DEFAULT_PROMPT_SUGGESTIONS = default_prompt_suggestions
 
-MODEL_ORDER_LIST = []
+try:
+    model_order_list = json.loads(os.getenv('MODEL_ORDER_LIST', '[]'))
+except Exception as e:
+    log.exception(f'Error loading MODEL_ORDER_LIST: {e}')
+    model_order_list = []
+
+MODEL_ORDER_LIST = model_order_list
 
 try:
     default_model_metadata = json.loads(os.getenv('DEFAULT_MODEL_METADATA', '{}'))
@@ -1812,6 +1820,9 @@ USER_PERMISSIONS_CALENDAR_ALLOW_PUBLIC_SHARING = (
 USER_PERMISSIONS_ACCESS_GRANTS_ALLOW_USERS = (
     os.getenv('USER_PERMISSIONS_ACCESS_GRANTS_ALLOW_USERS', 'True').lower() == 'true'
 )
+USER_PERMISSIONS_ACCESS_GRANTS_ALLOW_GROUPS = (
+    os.getenv('USER_PERMISSIONS_ACCESS_GRANTS_ALLOW_GROUPS', 'True').lower() == 'true'
+)
 
 
 USER_PERMISSIONS_CHAT_CONTROLS = os.getenv('USER_PERMISSIONS_CHAT_CONTROLS', 'True').lower() == 'true'
@@ -1844,6 +1855,10 @@ USER_PERMISSIONS_CHAT_SHARE = os.getenv('USER_PERMISSIONS_CHAT_SHARE', 'True').l
 
 USER_PERMISSIONS_CHAT_ALLOW_PUBLIC_SHARING = (
     os.getenv('USER_PERMISSIONS_CHAT_ALLOW_PUBLIC_SHARING', 'False').lower() == 'true'
+)
+
+USER_PERMISSIONS_CHAT_ALLOW_OPEN_SHARING = (
+    os.getenv('USER_PERMISSIONS_CHAT_ALLOW_OPEN_SHARING', 'False').lower() == 'true'
 )
 
 USER_PERMISSIONS_CHAT_EXPORT = os.getenv('USER_PERMISSIONS_CHAT_EXPORT', 'True').lower() == 'true'
@@ -1932,10 +1947,12 @@ DEFAULT_USER_PERMISSIONS = {
         'public_notes': USER_PERMISSIONS_NOTES_ALLOW_PUBLIC_SHARING,
         'folders': USER_PERMISSIONS_FOLDERS_ALLOW_SHARING,
         'public_chats': USER_PERMISSIONS_CHAT_ALLOW_PUBLIC_SHARING,
+        'open_chats': USER_PERMISSIONS_CHAT_ALLOW_OPEN_SHARING,
         'public_calendars': USER_PERMISSIONS_CALENDAR_ALLOW_PUBLIC_SHARING,
     },
     'access_grants': {
         'allow_users': USER_PERMISSIONS_ACCESS_GRANTS_ALLOW_USERS,
+        'allow_groups': USER_PERMISSIONS_ACCESS_GRANTS_ALLOW_GROUPS,
     },
     'chat': {
         'controls': USER_PERMISSIONS_CHAT_CONTROLS,
@@ -1989,9 +2006,19 @@ FOLDER_MAX_FILE_COUNT = os.getenv('FOLDER_MAX_FILE_COUNT', '')
 
 ENABLE_CHANNELS = os.getenv('ENABLE_CHANNELS', 'False').lower() == 'true'
 
+CHANNEL_MODEL_RESPONSE_MODE = os.getenv('CHANNEL_MODEL_RESPONSE_MODE', 'thread')
+
 ENABLE_CALENDAR = os.getenv('ENABLE_CALENDAR', 'True').lower() == 'true'
 
 ENABLE_AUTOMATIONS = os.getenv('ENABLE_AUTOMATIONS', 'True').lower() == 'true'
+
+ENABLE_SUBAGENTS = os.getenv('ENABLE_SUBAGENTS', 'False').lower() == 'true'
+SUBAGENTS_BACKGROUND_ENABLED = os.getenv('SUBAGENTS_BACKGROUND_ENABLED', 'False').lower() == 'true'
+SUBAGENTS_MAX_CONCURRENT = int(os.getenv('SUBAGENTS_MAX_CONCURRENT', '20'))
+SUBAGENTS_MAX_ASYNC = int(os.getenv('SUBAGENTS_MAX_ASYNC', '20'))
+SUBAGENTS_MAX_ITERATIONS = int(os.getenv('SUBAGENTS_MAX_ITERATIONS', '30'))
+SUBAGENTS_MAX_OUTPUT = int(os.getenv('SUBAGENTS_MAX_OUTPUT', '30000'))
+SUBAGENTS_SYSTEM_PROMPT = os.getenv('SUBAGENTS_SYSTEM_PROMPT', '')
 
 AUTOMATION_MAX_COUNT = os.getenv('AUTOMATION_MAX_COUNT', '')
 
@@ -2044,7 +2071,7 @@ ENABLE_ADMIN_CHAT_ACCESS = os.getenv('ENABLE_ADMIN_CHAT_ACCESS', 'True').lower()
 
 ENABLE_ADMIN_ANALYTICS = os.getenv('ENABLE_ADMIN_ANALYTICS', 'True').lower() == 'true'
 
-ENABLE_COMMUNITY_SHARING = os.getenv('ENABLE_COMMUNITY_SHARING', 'False').lower() == 'true'
+ENABLE_COMMUNITY_SHARING = os.getenv('ENABLE_COMMUNITY_SHARING', 'True').lower() == 'true'
 
 ENABLE_MESSAGE_RATING = os.getenv('ENABLE_MESSAGE_RATING', 'True').lower() == 'true'
 
@@ -2130,33 +2157,41 @@ TASK_MODEL = os.getenv('TASK_MODEL', '')
 
 TASK_MODEL_EXTERNAL = os.getenv('TASK_MODEL_EXTERNAL', '')
 
+CONTEXT_COMPACTION_MODEL = os.getenv('CONTEXT_COMPACTION_MODEL', '')
+
 ENABLE_CONTEXT_COMPACTION = os.getenv('ENABLE_CONTEXT_COMPACTION', 'False').lower() == 'true'
 
 CONTEXT_COMPACTION_TOKEN_THRESHOLD = int(os.getenv('CONTEXT_COMPACTION_TOKEN_THRESHOLD', '80000'))
+
+_CONTEXT_COMPACTION_TOKEN_CAP = os.getenv('CONTEXT_COMPACTION_TOKEN_CAP')
+CONTEXT_COMPACTION_TOKEN_CAP = int(_CONTEXT_COMPACTION_TOKEN_CAP) if _CONTEXT_COMPACTION_TOKEN_CAP else None
+
+CONTEXT_COMPACTION_RETENTION_PERCENTAGE = min(
+    50, max(10, int(os.getenv('CONTEXT_COMPACTION_RETENTION_PERCENTAGE', '40')))
+)
 
 CONTEXT_COMPACTION_PROMPT_TEMPLATE = os.getenv('CONTEXT_COMPACTION_PROMPT_TEMPLATE', '')
 
 TITLE_GENERATION_PROMPT_TEMPLATE = os.getenv('TITLE_GENERATION_PROMPT_TEMPLATE', '')
 
 DEFAULT_TITLE_GENERATION_PROMPT_TEMPLATE = """### Task:
-Generate a concise, 3-5 word title with an emoji summarizing the chat history.
+Generate a concise title summarizing the chat history.
 ### Guidelines:
 - The title should clearly represent the main theme or subject of the conversation.
-- Use emojis that enhance understanding of the topic, but avoid quotation marks or special formatting.
+- Keep it short: 2-4 words is best.
+- Do not use emojis, quotation marks, or special formatting.
 - Write the title in the chat's primary language; default to English if multilingual.
-- Prioritize accuracy over excessive creativity; keep it clear and simple.
+- Prioritize accuracy over creativity.
 - Your entire response must consist solely of the JSON object, without any introductory or concluding text.
 - The output must be a single, raw JSON object, without any markdown code fences or other encapsulating text.
 - Ensure no conversational text, affirmations, or explanations precede or follow the raw JSON output, as this will cause direct parsing failure.
 ### Output:
 JSON format: { "title": "your concise title here" }
 ### Examples:
-- { "title": "📉 Stock Market Trends" },
-- { "title": "🍪 Perfect Chocolate Chip Recipe" },
-- { "title": "Evolution of Music Streaming" },
-- { "title": "Remote Work Productivity Tips" },
-- { "title": "Artificial Intelligence in Healthcare" },
-- { "title": "🎮 Video Game Development Insights" }
+- { "title": "Stock Trends" },
+- { "title": "Chocolate Chip Cookies" },
+- { "title": "Music Streaming" },
+- { "title": "Remote Work" }
 ### Chat History:
 <chat_history>
 {{MESSAGES:END:2}}
@@ -2399,12 +2434,17 @@ JWT_EXPIRES_IN = os.getenv('JWT_EXPIRES_IN', '4w')
 if JWT_EXPIRES_IN == '-1':
     log.warning(
         "⚠️  SECURITY WARNING: JWT_EXPIRES_IN is set to '-1'\n"
-        '    See the ArtiChat environment configuration reference.\n'
+        '    See: https://docs.openwebui.com/reference/env-configuration\n'
     )
 
 ####################################
 # OAuth config
 ####################################
+
+# Master switch for OAuth/OIDC sign-in. Defaults to enabled so existing
+# deployments that already have a provider configured keep working; admins can
+# turn it off to disable OAuth login without clearing their provider settings.
+ENABLE_OAUTH = os.getenv('ENABLE_OAUTH', 'True').lower() == 'true'
 
 ENABLE_OAUTH_SIGNUP = os.getenv('ENABLE_OAUTH_SIGNUP', 'False').lower() == 'true'
 
@@ -2559,6 +2599,23 @@ if _oauth_authorize_params:
         log.warning('OAUTH_AUTHORIZE_PARAMS is not valid JSON, ignoring')
 
 
+def oauth_client_kwargs(scope: str, **kwargs):
+    client_kwargs = {
+        'scope': scope,
+        **kwargs,
+        **({'timeout': int(OAUTH_TIMEOUT)} if OAUTH_TIMEOUT else {}),
+    }
+
+    if OAUTH_CODE_CHALLENGE_METHOD == 'S256':
+        client_kwargs['code_challenge_method'] = 'S256'
+    elif OAUTH_CODE_CHALLENGE_METHOD:
+        raise Exception(
+            'Code challenge methods other than "%s" not supported. Given: "%s"' % ('S256', OAUTH_CODE_CHALLENGE_METHOD)
+        )
+
+    return client_kwargs
+
+
 def load_oauth_providers():
     OAUTH_PROVIDERS.clear()
     if GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET:
@@ -2569,10 +2626,7 @@ def load_oauth_providers():
                 client_id=GOOGLE_CLIENT_ID,
                 client_secret=GOOGLE_CLIENT_SECRET,
                 server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
-                client_kwargs={
-                    'scope': GOOGLE_OAUTH_SCOPE,
-                    **({'timeout': int(OAUTH_TIMEOUT)} if OAUTH_TIMEOUT else {}),
-                },
+                client_kwargs=oauth_client_kwargs(GOOGLE_OAUTH_SCOPE),
                 redirect_uri=GOOGLE_REDIRECT_URI,
                 **({'authorize_params': GOOGLE_OAUTH_AUTHORIZE_PARAMS} if GOOGLE_OAUTH_AUTHORIZE_PARAMS else {}),
             )
@@ -2590,10 +2644,7 @@ def load_oauth_providers():
                 client_id=MICROSOFT_CLIENT_ID,
                 client_secret=MICROSOFT_CLIENT_SECRET,
                 server_metadata_url=f'{MICROSOFT_CLIENT_LOGIN_BASE_URL}/{MICROSOFT_CLIENT_TENANT_ID}/v2.0/.well-known/openid-configuration?appid={MICROSOFT_CLIENT_ID}',
-                client_kwargs={
-                    'scope': MICROSOFT_OAUTH_SCOPE,
-                    **({'timeout': int(OAUTH_TIMEOUT)} if OAUTH_TIMEOUT else {}),
-                },
+                client_kwargs=oauth_client_kwargs(MICROSOFT_OAUTH_SCOPE),
                 redirect_uri=MICROSOFT_REDIRECT_URI,
             )
             return client
@@ -2614,10 +2665,7 @@ def load_oauth_providers():
                 authorize_url='https://github.com/login/oauth/authorize',
                 api_base_url='https://api.github.com',
                 userinfo_endpoint='https://api.github.com/user',
-                client_kwargs={
-                    'scope': GITHUB_CLIENT_SCOPE,
-                    **({'timeout': int(OAUTH_TIMEOUT)} if OAUTH_TIMEOUT else {}),
-                },
+                client_kwargs=oauth_client_kwargs(GITHUB_CLIENT_SCOPE),
                 redirect_uri=GITHUB_CLIENT_REDIRECT_URI,
             )
             return client
@@ -2630,30 +2678,19 @@ def load_oauth_providers():
     if OAUTH_CLIENT_ID and (OAUTH_CLIENT_SECRET or OAUTH_CODE_CHALLENGE_METHOD) and OPENID_PROVIDER_URL:
 
         def oidc_oauth_register(oauth: OAuth):
-            client_kwargs = {
-                'scope': OAUTH_SCOPES,
-                **(
-                    {'token_endpoint_auth_method': OAUTH_TOKEN_ENDPOINT_AUTH_METHOD}
-                    if OAUTH_TOKEN_ENDPOINT_AUTH_METHOD
-                    else {}
-                ),
-                **({'timeout': int(OAUTH_TIMEOUT)} if OAUTH_TIMEOUT else {}),
-            }
-
-            if OAUTH_CODE_CHALLENGE_METHOD and OAUTH_CODE_CHALLENGE_METHOD == 'S256':
-                client_kwargs['code_challenge_method'] = 'S256'
-            elif OAUTH_CODE_CHALLENGE_METHOD:
-                raise Exception(
-                    'Code challenge methods other than "%s" not supported. Given: "%s"'
-                    % ('S256', OAUTH_CODE_CHALLENGE_METHOD)
-                )
-
             client = oauth.register(
                 name='oidc',
                 client_id=OAUTH_CLIENT_ID,
                 client_secret=OAUTH_CLIENT_SECRET,
                 server_metadata_url=OPENID_PROVIDER_URL,
-                client_kwargs=client_kwargs,
+                client_kwargs=oauth_client_kwargs(
+                    OAUTH_SCOPES,
+                    **(
+                        {'token_endpoint_auth_method': OAUTH_TOKEN_ENDPOINT_AUTH_METHOD}
+                        if OAUTH_TOKEN_ENDPOINT_AUTH_METHOD
+                        else {}
+                    ),
+                ),
                 redirect_uri=OPENID_REDIRECT_URI,
             )
             return client
@@ -2789,6 +2826,7 @@ DEFAULT_CONFIG = {
     'onedrive.sharepoint_url': ONEDRIVE_SHAREPOINT_URL,
     'onedrive.sharepoint_tenant_id': ONEDRIVE_SHAREPOINT_TENANT_ID,
     'rag.content_extraction_engine': CONTENT_EXTRACTION_ENGINE,
+    'rag.content_extraction.supported_media_mime_types': CONTENT_EXTRACTION_SUPPORTED_MEDIA_MIME_TYPES,
     'rag.datalab_marker_api_key': DATALAB_MARKER_API_KEY,
     'rag.datalab_marker_api_base_url': DATALAB_MARKER_API_BASE_URL,
     'rag.datalab_marker_additional_config': DATALAB_MARKER_ADDITIONAL_CONFIG,
@@ -2881,6 +2919,7 @@ DEFAULT_CONFIG = {
     'web.search.trust_env': WEB_SEARCH_TRUST_ENV,
     'web.search.ollama_cloud_api_key': OLLAMA_CLOUD_WEB_SEARCH_API_KEY,
     'web.search.searxng_query_url': SEARXNG_QUERY_URL,
+    'web.search.openserp_base_url': OPENSERP_BASE_URL,
     'web.search.searxng_language': SEARXNG_LANGUAGE,
     'web.search.yacy_query_url': YACY_QUERY_URL,
     'web.search.yacy_username': YACY_USERNAME,
@@ -2957,7 +2996,6 @@ DEFAULT_CONFIG = {
     'image_generation.gemini.api_base_url': IMAGES_GEMINI_API_BASE_URL,
     'image_generation.gemini.api_key': IMAGES_GEMINI_API_KEY,
     'image_generation.gemini.endpoint_method': IMAGES_GEMINI_ENDPOINT_METHOD,
-    'images.output_url_format': IMAGE_OUTPUT_URL_FORMAT,
     'images.edit.enable': ENABLE_IMAGE_EDIT,
     'images.edit.engine': IMAGE_EDIT_ENGINE,
     'images.edit.model': IMAGE_EDIT_MODEL,
@@ -3002,22 +3040,6 @@ DEFAULT_CONFIG = {
     'audio.tts.mistral.api_key': AUDIO_TTS_MISTRAL_API_KEY,
     'audio.tts.mistral.api_base_url': AUDIO_TTS_MISTRAL_API_BASE_URL,
     'webui.url': WEBUI_URL,
-    'email.enabled': False,
-    'email.smtp.host': '',
-    'email.smtp.port': 587,
-    'email.smtp.username': '',
-    'email.smtp.password_encrypted': '',
-    'email.smtp.security': 'starttls',
-    'email.sender_email': '',
-    'email.sender_name': 'ArtiChat',
-    'email.reply_to': '',
-    'email.public_url': WEBUI_URL,
-    'email.subscription_notifications': True,
-    'registration.allowed_domains': [],
-    'registration.allow_subdomains': False,
-    'registration.verification_enabled': False,
-    'registration.email_code_login_enabled': False,
-    'registration.sensitive_action_verification_enabled': False,
     'ui.enable_signup': ENABLE_SIGNUP,
     'ui.enable_login_form': ENABLE_LOGIN_FORM,
     'ui.enable_password_change_form': ENABLE_PASSWORD_CHANGE_FORM,
@@ -3037,8 +3059,16 @@ DEFAULT_CONFIG = {
     'folders.enable': ENABLE_FOLDERS,
     'folders.max_file_count': FOLDER_MAX_FILE_COUNT,
     'channels.enable': ENABLE_CHANNELS,
+    'channels.model_response_mode': CHANNEL_MODEL_RESPONSE_MODE,
     'calendar.enable': ENABLE_CALENDAR,
     'automations.enable': ENABLE_AUTOMATIONS,
+    'subagents.enable': ENABLE_SUBAGENTS,
+    'subagents.background_enabled': SUBAGENTS_BACKGROUND_ENABLED,
+    'subagents.max_concurrent': SUBAGENTS_MAX_CONCURRENT,
+    'subagents.max_async': SUBAGENTS_MAX_ASYNC,
+    'subagents.max_iterations': SUBAGENTS_MAX_ITERATIONS,
+    'subagents.max_output': SUBAGENTS_MAX_OUTPUT,
+    'subagents.system_prompt': SUBAGENTS_SYSTEM_PROMPT,
     'automations.max_count': AUTOMATION_MAX_COUNT,
     'automations.min_interval': AUTOMATION_MIN_INTERVAL,
     'automations.auth_token_expires_in': AUTOMATION_AUTH_TOKEN_EXPIRES_IN,
@@ -3055,8 +3085,11 @@ DEFAULT_CONFIG = {
     'auth.admin.email': ADMIN_EMAIL,
     'task.model.default': TASK_MODEL,
     'task.model.external': TASK_MODEL_EXTERNAL,
+    'chat.context_compaction.model': CONTEXT_COMPACTION_MODEL,
     'chat.context_compaction.enable': ENABLE_CONTEXT_COMPACTION,
     'chat.context_compaction.token_threshold': CONTEXT_COMPACTION_TOKEN_THRESHOLD,
+    'chat.context_compaction.token_cap': CONTEXT_COMPACTION_TOKEN_CAP,
+    'chat.context_compaction.retention_percentage': CONTEXT_COMPACTION_RETENTION_PERCENTAGE,
     'chat.context_compaction.prompt_template': CONTEXT_COMPACTION_PROMPT_TEMPLATE,
     'task.title.prompt_template': TITLE_GENERATION_PROMPT_TEMPLATE,
     'task.tags.prompt_template': TAGS_GENERATION_PROMPT_TEMPLATE,
@@ -3078,6 +3111,7 @@ DEFAULT_CONFIG = {
     'auth.api_key.endpoint_restrictions': ENABLE_API_KEYS_ENDPOINT_RESTRICTIONS,
     'auth.api_key.allowed_endpoints': API_KEYS_ALLOWED_ENDPOINTS,
     'auth.jwt_expiry': JWT_EXPIRES_IN,
+    'oauth.enable': ENABLE_OAUTH,
     'oauth.enable_signup': ENABLE_OAUTH_SIGNUP,
     'oauth.auto_redirect': OAUTH_AUTO_REDIRECT,
     'oauth.refresh_token.include_scope': OAUTH_REFRESH_TOKEN_INCLUDE_SCOPE,

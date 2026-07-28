@@ -1,7 +1,7 @@
 <script lang="ts">
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
-	import ThemeLogo from '$lib/components/common/ThemeLogo.svelte';
 	import Plus from '$lib/components/icons/Plus.svelte';
+	import { WEBUI_BASE_URL } from '$lib/constants';
 
 	let selected = '';
 </script>
@@ -29,7 +29,12 @@
 					}
 				}}
 			>
-				<ThemeLogo kind="splash" className="size-11 p-0.5" alt="logo" draggable={false} />
+				<img
+					src="{WEBUI_BASE_URL}/static/splash.png"
+					class="size-11 dark:invert p-0.5"
+					alt="logo"
+					draggable="false"
+				/>
 			</button>
 		</Tooltip>
 	</div>
@@ -49,11 +54,11 @@
 				selected = '';
 			}}
 		>
-			<ThemeLogo
-				kind="mark"
-				className={`size-10 ${selected === '' ? 'rounded-2xl' : 'rounded-full'}`}
+			<img
+				src="{WEBUI_BASE_URL}/static/favicon.png"
+				class="size-10 {selected === '' ? 'rounded-2xl' : 'rounded-full'}"
 				alt="logo"
-				draggable={false}
+				draggable="false"
 			/>
 		</button>
 	</div>

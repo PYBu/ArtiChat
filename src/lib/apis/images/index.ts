@@ -254,12 +254,14 @@ export const imageEdits = async (
 			...(token && { authorization: `Bearer ${token}` })
 		},
 		body: JSON.stringify({
-			image: images,
-			prompt,
-			...(model && { model }),
-			...(size && { size }),
-			...(n && { n }),
-			...(background && { background })
+			form_data: {
+				image: images,
+				prompt,
+				...(model && { model }),
+				...(size && { size }),
+				...(n && { n }),
+				...(background && { background })
+			}
 		})
 	})
 		.then(async (res) => {

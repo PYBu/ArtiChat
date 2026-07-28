@@ -163,7 +163,14 @@ export const getModels = async (
 		// Remove duplicates
 		const modelsMap = {};
 		for (const model of models) {
-			modelsMap[model.id] = model;
+			const existing = modelsMap[model.id];
+			modelsMap[model.id] = existing
+				? {
+						...existing,
+						...model,
+						info: existing.info ?? model.info
+					}
+				: model;
 		}
 
 		models = Object.values(modelsMap);
@@ -1545,6 +1552,33 @@ export const getVersion = async (token: string) => {
 	return res;
 };
 
+export const getVersionUpdates = async (token: string) => {
+	let error = null;
+
+	const res = await fetch(`${WEBUI_BASE_URL}/api/version/updates`, {
+		method: 'GET',
+		headers: {
+			'Content-Type': 'application/json',
+			Authorization: `Bearer ${token}`
+		}
+	})
+		.then(async (res) => {
+			if (!res.ok) throw await res.json();
+			return res.json();
+		})
+		.catch((err) => {
+			console.error(err);
+			error = err;
+			return null;
+		});
+
+	if (error) {
+		throw error;
+	}
+
+	return res;
+};
+
 export type EventCatalogItem = {
 	event: string;
 	description: string;
@@ -1726,15 +1760,6 @@ export interface ModelMeta {
 	description?: string;
 	capabilities?: object;
 	profile_image_url?: string;
-	reasoning_control?: ReasoningControlConfig;
 }
 
 export interface ModelParams {}
-
-export type ReasoningProfile = 'gpt' | 'claude';
-export type ReasoningLevel = 'low' | 'medium' | 'high' | 'extra' | 'max';
-
-export interface ReasoningControlConfig {
-	enabled: boolean;
-	profile: ReasoningProfile | null;
-}

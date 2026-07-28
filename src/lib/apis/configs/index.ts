@@ -1,36 +1,6 @@
 import { WEBUI_API_BASE_URL, WEBUI_BASE_URL } from '$lib/constants';
 import type { Banner } from '$lib/types';
 
-const platformJsonFetch = async (url: string, token: string, options: RequestInit = {}) => {
-	const response = await fetch(url, {
-		...options,
-		headers: { authorization: `Bearer ${token}`, 'Content-Type': 'application/json', ...(options.headers ?? {}) }
-	});
-	if (!response.ok) throw (await response.json())?.detail ?? 'PLATFORM_SETTINGS_ERROR';
-	return response.json();
-};
-
-export const getPlatformSettings = async (token: string) =>
-	platformJsonFetch(`${WEBUI_API_BASE_URL}/configs/platform`, token);
-
-export const setPlatformSettings = async (token: string, settings: Record<string, unknown>) =>
-	platformJsonFetch(`${WEBUI_API_BASE_URL}/configs/platform`, token, {
-		method: 'POST',
-		body: JSON.stringify(settings)
-	});
-
-export const uploadPlatformLogo = async (token: string, theme: 'light' | 'dark', file: File) => {
-	const body = new FormData();
-	body.append('file', file);
-	const response = await fetch(`${WEBUI_API_BASE_URL}/configs/platform/logo/${theme}`, {
-		method: 'POST',
-		headers: { authorization: `Bearer ${token}` },
-		body
-	});
-	if (!response.ok) throw (await response.json())?.detail ?? 'PLATFORM_LOGO_UPLOAD_ERROR';
-	return response.json();
-};
-
 export const importConfig = async (token: string, config: object) => {
 	let error = null;
 
@@ -261,7 +231,7 @@ export const setTerminalServerConnections = async (token: string, connections: o
 
 /**
  * Detect whether a terminal server URL points to an Orchestrator or a direct
- * Local terminal server instance.
+ * Open Terminal instance.
  *
  * - GET {url}/api/v1/policies → 200 → "orchestrator"
  * - GET {url}/api/config      → 200 → "terminal"
@@ -298,7 +268,7 @@ export const detectTerminalServerType = async (
 
 /**
  * Create or update a policy on the orchestrator.
- * Proxied through the ArtiChat backend to keep API keys server-side.
+ * Proxied through the Open WebUI backend to keep API keys server-side.
  */
 export const putOrchestratorPolicy = async (
 	token: string,
@@ -341,6 +311,33 @@ export const putOrchestratorPolicy = async (
 	return res;
 };
 
+export const getOrchestratorPolicy = async (
+	token: string,
+	url: string,
+	key: string,
+	policyId: string,
+	authType: string = 'bearer'
+): Promise<any> => {
+	const res = await fetch(`${WEBUI_API_BASE_URL}/configs/terminal_servers/policy`, {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+			Authorization: `Bearer ${token}`
+		},
+		body: JSON.stringify({
+			url: url.replace(/\/$/, ''),
+			key,
+			auth_type: authType,
+			policy_id: policyId
+		})
+	});
+	if (!res.ok) {
+		const body = await res.json();
+		throw Object.assign(new Error(body.detail || 'Failed to read policy'), { status: res.status });
+	}
+	return res.json();
+};
+
 export const putOrchestratorLifecycle = async (
 	token: string,
 	url: string,
@@ -380,6 +377,35 @@ export const putOrchestratorLifecycle = async (
 	}
 
 	return res;
+};
+
+export const getOrchestratorLifecycle = async (
+	token: string,
+	url: string,
+	key: string,
+	policyId: string,
+	authType: string = 'bearer'
+): Promise<any> => {
+	const res = await fetch(`${WEBUI_API_BASE_URL}/configs/terminal_servers/lifecycle`, {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+			Authorization: `Bearer ${token}`
+		},
+		body: JSON.stringify({
+			url: url.replace(/\/$/, ''),
+			key,
+			auth_type: authType,
+			policy_id: policyId
+		})
+	});
+	if (!res.ok) {
+		const body = await res.json();
+		throw Object.assign(new Error(body.detail || 'Failed to read lifecycle'), {
+			status: res.status
+		});
+	}
+	return res.json();
 };
 
 export const refreshOrchestratorTerminals = async (
@@ -689,6 +715,31 @@ export const setModelsConfig = async (token: string, config: object) => {
 	}
 
 	return res;
+};
+
+export const getSubagentsConfig = async (token: string) => {
+	const res = await fetch(`${WEBUI_API_BASE_URL}/configs/subagents`, {
+		method: 'GET',
+		headers: {
+			'Content-Type': 'application/json',
+			Authorization: `Bearer ${token}`
+		}
+	});
+	if (!res.ok) throw await res.json();
+	return res.json();
+};
+
+export const setSubagentsConfig = async (token: string, config: object) => {
+	const res = await fetch(`${WEBUI_API_BASE_URL}/configs/subagents`, {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+			Authorization: `Bearer ${token}`
+		},
+		body: JSON.stringify(config)
+	});
+	if (!res.ok) throw await res.json();
+	return res.json();
 };
 
 export const setDefaultPromptSuggestions = async (token: string, promptSuggestions: string) => {

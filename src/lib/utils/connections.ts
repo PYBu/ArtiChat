@@ -96,7 +96,7 @@ export const addTerminalConnection = async (
 		url: connection.url,
 		key: connection.key ?? '',
 		auth_type: connection.auth_type ?? 'bearer',
-		name: connection.name ?? 'Local Terminal Server',
+		name: connection.name ?? 'Open Terminal',
 		enabled: true
 	});
 
