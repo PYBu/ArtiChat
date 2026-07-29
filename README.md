@@ -1,13 +1,17 @@
 
 
+目前正在升级ArtiChat0.2.0，在保证与0.1版本无缝更新的前提下推送更新并删除此条。
+
 <p align="center"><img src="artivis-ass/title.png" alt="演示图片" width="100%"></p>
 
 # ArtiChat
 
 **ArtiChat 可私有化部署的功能丰富的AI对话平台。**
 
-它基于 <a href="https://github.com/open-webui/open-webui">OpenWebUI</a> ，是一个可以完全离线运行，并且基于原版新增了诸多面向用户功能的AI对话工作台。
-> 以 OpenWebUI 0.10.2 作为二次开发版本
+This is ArtiChat ProEdition 0.2+
+<br>
+它基于 <a href="https://github.com/open-webui/open-webui">OpenWebUI</a> 但拥有更多丰富功能且以运营与用户体验为主的AI对话工作台。
+> 以 OpenWebUI 0.11.0 作为二次开发版本（ArtiChat 0.2+）
 > Powered By Artivis Studio | <a href="https://chat.artivis.cc">Web ArtiChat</a> | <a href="https://chatbug.artivis.cc">访问ArtiChat 反馈中心</a>
 
 ![SvelteKit](https://img.shields.io/badge/frontend-SvelteKit-ff3e00?logo=svelte&logoColor=white)
@@ -17,56 +21,88 @@
 
 
 
-![ArtiChat 界面](artivis-ass/b6b57ca1dac196f47880bdfdba3bc0e8.png)
+![ArtiChat 界面](artivis-ass/n1.png)
 
-## 核心功能
+## 核心功能 Features
 
-- **原版兼容**：保留原OpenWebUI的全部功能。
-- **订阅与用量**：支持订阅计划、Chatpoint 额度、四类 Token 计价和用量审计。
+> [!TIP]  
+> **核心功能承接 ArtiChat 0.1+ 版本**
+>
+> 保留原版功能的前提下并且兼容 **旧版 ArtiChat** ，做到无缝衔接更新！
+
+- **✅️ 原版兼容 / Original Compatibility**
+  保留原 OpenWebUI 绝大部分功能，同时移除了部分冗余 UI 元素及 Ollama 相关内容。
+> Retains nearly all core features of the original OpenWebUI, while removing certain redundant UI elements and Ollama-specific content.
+
+- **🏛️ 订阅与用量 / Subscriptions & Usage**
+  支持订阅计划、Chatpoint 额度、四类 Token 计价模式以及完整的用量审计功能。
+> Supports subscription plans, Chatpoint quotas, four token pricing models, and comprehensive usage auditing.
+
+
 <img src="/artivis-ass/5f1d3fbf73802d221dc80af588ea6875.png">
 
 > 定价方式已重写，改为类似模型官方API四类定价（输入/输出/创缓/读缓）
 
-- **用户与权限**：支持角色访问控制（RBAC）、用户组、管理员用户管理和细粒度模型权限。
-- **注册与邮件**：支持注册域名限制、邮箱验证码登录、密码重置、SMTP 和邮件模板管理。
-- **兑换码/礼品卡**: 新增兑换码功能，可以发放订阅/余额，并且加入礼品卡，可以直接给特定用户发放或是全体用户。
-- **公告系统**: 增添公告系统，可以给全体or特定的用户组发放一次/每次登录等公告。
-- **平台自定义**：搭建后包括平台名称、LOGO资源、关于页面均可自定义修改。
-- **用量管理**：管理员后台/用户后台可以清晰的得知用量信息，管理员端可见用户IP。
-- **模型广场**：将支持的模型列出并且展示定价、权限访问、介绍等。
-- **后续功能**：ArtiChat会听取社区意见，持续更新，若有 Bug/更新 反馈或建议可以大胆提出！
+- **🎈 用户与权限 / Users & Permissions**
+  支持角色访问控制（RBAC）、用户组、管理员用户管理和细粒度模型权限。
+  > Supports role-based access control (RBAC), user groups, admin user management, and fine-grained model permissions.
+- **☂️ 注册与邮件 / Registration & Email**
+  支持注册域名限制、邮箱验证码登录、密码重置、SMTP 配置和邮件模板管理。
+  > Supports domain-restricted registration, email verification code login, password reset, SMTP configuration, and email template management.
+- **🎟️ 兑换码 / 礼品卡 / Redemption Codes & Gift Cards**
+  新增兑换码功能，可发放订阅或余额；礼品卡支持向特定用户或全体用户发放。
+  > Introduces redemption codes for granting subscriptions or credits, plus gift cards that can be issued to specific users or all users.
+- **🖼️ 公告系统 / Announcement System**
+  可向全体或特定用户组发布一次性或每次登录时的公告。
+  > Supports sending one-time or login-triggered announcements to all users or specific user groups.
+- **☄️ 平台自定义 / Platform Customization**
+  平台名称、LOGO 资源、关于页面均可自定义修改。
+  > Platform name, logo assets, and the About page are all fully customizable after deployment.
+- **🌈 用量管理 / Usage Management**
+  管理员后台与用户后台均可清晰查看用量信息，管理员端可见用户 IP。
+  > Both admin and user dashboards provide clear usage statistics; admin panel also displays user IP addresses.
+- **🎁 模型广场 / Model Marketplace**
+  将支持的模型列出并展示定价、访问权限及介绍等信息。
+  > Lists all supported models with their pricing, access permissions, and descriptions.
+- **🪄 推理强度 / Inference Intensity**
+  新增推理强度选择，支持 Codex 与 Claude 的 5 档强度：Low、Mid、High、XHigh、Max。
+  > Adds inference intensity selection with 5 levels — Low, Mid, High, XHigh, and Max — for both Codex and Claude models.
+- **🎹 后续功能 / Upcoming Features**
+  ArtiChat 持续听取社区意见，不断更新迭代。欢迎提交 Bug 反馈与功能建议！
+  > ArtiChat continuously evolves based on community feedback. Bug reports and feature suggestions are always welcome!
+
+  <br>
+  
 <img src="artivis-ass/4dea05393d4fcaa23bedee1d19481ca9.png">
 <img src="artivis-ass/4fde7dee62fd3b77b9026bbe3eda62d1.png">
 <img src="https://github.com/PYBu/ArtiChat/blob/main/artivis-ass/c3398c5ac541a8f83001b50417f78511.png?raw=true">
 <img src="artivis-ass/a90b2eb989b596b71ef046eb5868569a.png" height="200">
+<img src="https://github.com/PYBu/ArtiChat/blob/main/artivis-ass/tuili.png?raw=true">
+<br>
+> 采用类Codex、Claude的桌面端的推理强度弹窗滑块以及动效。
 
 > 用户用量用环状图显示，包括两种Point，订阅分配的可以月刷新的Point以及充值的不参与重置的Point。优先使用可刷新Point。
 
 <br>
 
-- **New 推理强度**：新增推理强度选择，支持Codex与Claude的5档Low、Mid、High、XHigh、Max推理强度。
-<img src="https://github.com/PYBu/ArtiChat/blob/main/artivis-ass/tuili.png?raw=true">
 
-> 采用类Codex、Claude的桌面端的推理强度弹窗滑块以及动效。
-
-- **New 文件管理**：新增文件管理器，可以查看用户上传的文件，并进行管理。
+- **🖌️New 文件管理**：新增文件管理器，可以查看用户上传的文件，并进行管理。
+  
+- **🖌️New 新的UI**：ArtiChat新增组件UI重构，更加服务用户体验，并且准备重构原本UI。
 
 
-## 未来企划（计划的0.2版本更新与开发）
-- Github 开源了 Claude Code 的代码，我将二次开发为 ArtiCode （开源Agent工具，已在内测）。
-- ArtiCode 将 ArtiChat 的账号、额度系统，让人人都能拥有自己的Agent软件并分化使用（画饼ing）。
-- ArtiCode 数据（Token）将从 ArtiChat 的根服务器传输并且计费，请求直接打到上游或是你自己的Ollama，相当于为每个用户开通了独立的API（类中转站）服务。
-- 本项目配合 Sub2API/CLIProxyAPI/NewAPI/ChatGPT2API 等项目达到最佳。本项目不做号池服务。
+## 未来企划（计划的0.2.x版本更新与开发）
+- **💽ArtiLINK (本地MCP连接)** - 一个内置在ArtiChat随着部署打包好的本地服务，用于与ArtiChat建立通道，让模型能够控制本地的PowerShell、MCP以及管理员权限，做到类似“网页Codex”的效果。
 
-- Grok Build已开源，可能使用此服务二次加工做成配套设施。
+<br><br><hr>
+
 
 ## 快速反馈
-- ArtiChat 服务拥有提交反馈的入口，用户的需求、Bug反馈、改进建议都可以在此提交，并且公开项目进度。
-- chatbug.artivis.cc | <a href="https://chatbug.artivis.cc">访问ArtiChat 反馈中心</a>
+- **🎺ArtiChat 服务拥有提交反馈的入口，用户的需求、Bug反馈、改进建议都可以在此提交，并且公开项目进度。**
+- **chatbug.artivis.cc | <a href="https://chatbug.artivis.cc">访问ArtiChat 反馈中心</a>**
 
-<br><br><br>
+<br><br><br><br>
 <hr>
-
 ## 部署方法已验证。后续我会尝试做一个一键部署的脚本，简化部署流程。
 
 > 建议使用Codex或Claude一键部署，并声明你用的面板和不影响当前服务
