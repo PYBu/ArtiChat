@@ -1,137 +1,286 @@
+<div align="center">
 
+![ArtiChat Banner](artivis-ass/new/ntitle.png)
 
-目前正在升级ArtiChat0.2.0，在保证与0.1版本无缝更新的前提下推送更新并删除此条。
+# ArtiChat 
 
-<p align="center"><img src="artivis-ass/title.png" alt="演示图片" width="100%"></p>
+**企业级私有化定制的 AI 对话平台**
 
-# ArtiChat
+<kbd>开箱即用</kbd> &nbsp; <kbd>订阅计费</kbd> &nbsp; <kbd>体验优化</kbd> &nbsp; <kbd>企业适用</kbd> &nbsp; <kbd>原版优化</kbd>
 
-**ArtiChat 可私有化部署的功能丰富的AI对话平台。**
+<br/>
 
-This is ArtiChat ProEdition 0.2+
+[![Version](https://img.shields.io/badge/version-0.2.0-6366f1?style=flat-square)](https://github.com/PYBu/ArtiChat/releases)
+[![OpenWebUI](https://img.shields.io/badge/based_on-OpenWebUI_0.11.0-0ea5e9?style=flat-square)](https://github.com/open-webui/open-webui)
+[![Docker](https://img.shields.io/badge/Docker-ready-2496ED?style=flat-square&logo=docker&logoColor=white)](https://www.docker.com/)
+[![SvelteKit](https://img.shields.io/badge/SvelteKit-frontend-FF3E00?style=flat-square&logo=svelte&logoColor=white)](https://kit.svelte.dev/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-backend-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+
+[![官网](https://img.shields.io/badge/官网-chat.artivis.cc-22c55e?style=flat-square&logo=safari&logoColor=white)](https://chat.artivis.cc)
+
+</div>
+
+<br/>
+
+## 简介
+
+ArtiChat 是由 **Artivis Studio** 基于 [OpenWebUI 0.11.0](https://github.com/open-webui/open-webui) 深度定制的私有 AI 对话平台。在保留 OpenWebUI 强大对话能力的基础上，ArtiChat 引入了完整的**订阅计费体系**、**用户权限管理**和**用户体验优化**，帮助团队或 SaaS 产品快速搭建一套自主可控的 AI 服务，适用于绝大多数的大模型分发计费商业化以及企业、团队内部模型的使用。
+
+> ⚠️ **商业部署须知** — 超过 50 名用户或用于商业用途，请遵循 [OpenWebUI 许可协议](https://github.com/open-webui/open-webui/blob/main/LICENSE) 并向 OpenWebUI 官方获取授权。
+
+<br/>
+
+![主界面](artivis-ass/new/1.png)
+
+---
+
+<br/>
+
+<table>
+<tr>
+<td width="50%" valign="top">
+
+**💳 &nbsp;订阅计费系统**
+
+四类 Token 精细计价，覆盖推理全链路成本：
+
+- **Input** · **Output** · **Cache Create** · **Cache Read**
+- 礼品卡 & 兑换码发放与核销
+- 用量审计，消费明细随时可查
+
+</td>
+<td width="50%" valign="top">
+
+**⚡ &nbsp;推理强度调节**
+
+针对高阶模型的智能调度控制：
+
+- 五档强度：**Low → Balanced → High → Ultra → Max**
+- 专为Claude 与 Codex 系列优化
+- 一键切换，无需修改任何配置
+
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+
+**👥 &nbsp;权限管理（RBAC）**
+
+灵活的多级角色体系，精准控制访问边界：
+
+- 多级用户组与角色分配
+- 邮箱验证注册流程
+- 模型与功能的细粒度权限控制
+
+</td>
+<td width="50%" valign="top">
+
+**🛒 &nbsp;模型市场**
+
+统一的模型入口，清晰呈现资源信息：
+
+- 集中展示全部可用模型
+- 显示各模型定价与访问条件
+- 用户自助完成模型套餐订阅
+
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+
+**🎨 &nbsp;白标定制**
+
+部署即品牌，零代码完成外观替换：
+
+- 平台名称、Logo 可视化配置
+- About 页面内容完全自定义
+- 适合 SaaS 独立品牌化运营
+
+</td>
+<td width="50%" valign="top">
+
+**🐳 &nbsp;开箱即用**
+
+极简部署，专注业务而非运维：
+
+- 单命令 Docker Compose 启动
+- 已移除 Ollama 依赖，镜像更轻量
+- SvelteKit + FastAPI + SQLAlchemy 全栈
+
+</td>
+</tr>
+</table>
+
+---
+
+## 📸 &nbsp;界面预览
+
+<br/>
+
+<table>
+<tr>
+<td width="50%">
+
+![功能截图](artivis-ass/new/s1.png)
+
+</td>
+<td width="50%">
+
+![功能截图](artivis-ass/new/s2.png)
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+![功能截图](artivis-ass/new/s3.png)
+
+</td>
+<td width="50%">
+
+![功能截图](artivis-ass/new/s4.png)
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+![功能截图](artivis-ass/new/s5.png)
+
+</td>
+<td width="50%">
+
+![功能截图](artivis-ass/new/s6.png)
+
+</td>
+</tr>
+</table>
+
+<br/>
+
+<table>
+<tr>
+<td width="50%">
+
+![后台截图](artivis-ass/new/a1.png)
+
+</td>
+<td width="50%">
+
+![后台截图](artivis-ass/new/a2.png)
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+![后台截图](artivis-ass/new/a3.png)
+
+</td>
+<td width="50%">
+
+![后台截图](artivis-ass/new/a4.png)
+
+</td>
+</tr>
+</table>
+
+<br/>
+
+![用量统计](artivis-ass/new/usage.png)
+
+<br/>
+
+![用户管理](artivis-ass/new/user.png)
+
+<br/>
+
+![订阅页面](artivis-ass/new/sub.png)
+
+<br/>
+
+![登录页面](artivis-ass/new/dy.png)
+
+<br/>
+
+---
+
+## 🎨 &nbsp;设计小巧思
+
+为每一处小细节增添一丝丝设计乐趣。
+
+<br/>
+
+<table>
+<tr>
+<td width="50%" align="center" valign="top">
+
+**环状额度组件**
+
+直观呈现剩余额度，一眼掌握用量状态。
 <br>
-它基于 <a href="https://github.com/open-webui/open-webui">OpenWebUI</a> 但拥有更多丰富功能且以运营与用户体验为主的AI对话工作台。
-> 以 OpenWebUI 0.11.0 作为二次开发版本（ArtiChat 0.2+）
-> Powered By Artivis Studio | <a href="https://chat.artivis.cc">Web ArtiChat</a> | <a href="https://chatbug.artivis.cc">访问ArtiChat 反馈中心</a>
+ -来自 Minier Buper 的建议。
 
-![SvelteKit](https://img.shields.io/badge/frontend-SvelteKit-ff3e00?logo=svelte&logoColor=white)
-![FastAPI](https://img.shields.io/badge/backend-FastAPI-009688?logo=fastapi&logoColor=white)
-![Docker](https://img.shields.io/badge/deploy-Docker-2496ed?logo=docker&logoColor=white)
-![Python](https://img.shields.io/badge/python-3.11+-3776ab?logo=python&logoColor=white)
+![环状额度组件](https://github.com/PYBu/ArtiChat/raw/main/artivis-ass/a90b2eb989b596b71ef046eb5868569a.png)
 
+</td>
+<td width="50%" align="center" valign="top">
 
+**思考强度动画**
 
-![ArtiChat 界面](artivis-ass/n1.png)
-
-## 核心功能 Features
-
-> [!TIP]  
-> **核心功能承接 ArtiChat 0.1+ 版本**
->
-> 保留原版功能的前提下并且兼容 **旧版 ArtiChat** ，做到无缝衔接更新！
-
-- **✅️ 原版兼容 / Original Compatibility**
-  保留原 OpenWebUI 绝大部分功能，同时移除了部分冗余 UI 元素及 Ollama 相关内容。
-> Retains nearly all core features of the original OpenWebUI, while removing certain redundant UI elements and Ollama-specific content.
-
-- **🏛️ 订阅与用量 / Subscriptions & Usage**
-  支持订阅计划、Chatpoint 额度、四类 Token 计价模式以及完整的用量审计功能。
-> Supports subscription plans, Chatpoint quotas, four token pricing models, and comprehensive usage auditing.
-
-
-<img src="/artivis-ass/5f1d3fbf73802d221dc80af588ea6875.png">
-
-> 定价方式已重写，改为类似模型官方API四类定价（输入/输出/创缓/读缓）
-
-- **🎈 用户与权限 / Users & Permissions**
-  支持角色访问控制（RBAC）、用户组、管理员用户管理和细粒度模型权限。
-  > Supports role-based access control (RBAC), user groups, admin user management, and fine-grained model permissions.
-- **☂️ 注册与邮件 / Registration & Email**
-  支持注册域名限制、邮箱验证码登录、密码重置、SMTP 配置和邮件模板管理。
-  > Supports domain-restricted registration, email verification code login, password reset, SMTP configuration, and email template management.
-- **🎟️ 兑换码 / 礼品卡 / Redemption Codes & Gift Cards**
-  新增兑换码功能，可发放订阅或余额；礼品卡支持向特定用户或全体用户发放。
-  > Introduces redemption codes for granting subscriptions or credits, plus gift cards that can be issued to specific users or all users.
-- **🖼️ 公告系统 / Announcement System**
-  可向全体或特定用户组发布一次性或每次登录时的公告。
-  > Supports sending one-time or login-triggered announcements to all users or specific user groups.
-- **☄️ 平台自定义 / Platform Customization**
-  平台名称、LOGO 资源、关于页面均可自定义修改。
-  > Platform name, logo assets, and the About page are all fully customizable after deployment.
-- **🌈 用量管理 / Usage Management**
-  管理员后台与用户后台均可清晰查看用量信息，管理员端可见用户 IP。
-  > Both admin and user dashboards provide clear usage statistics; admin panel also displays user IP addresses.
-- **🎁 模型广场 / Model Marketplace**
-  将支持的模型列出并展示定价、访问权限及介绍等信息。
-  > Lists all supported models with their pricing, access permissions, and descriptions.
-- **🪄 推理强度 / Inference Intensity**
-  新增推理强度选择，支持 Codex 与 Claude 的 5 档强度：Low、Mid、High、XHigh、Max。
-  > Adds inference intensity selection with 5 levels — Low, Mid, High, XHigh, and Max — for both Codex and Claude models.
-- **🎹 后续功能 / Upcoming Features**
-  ArtiChat 持续听取社区意见，不断更新迭代。欢迎提交 Bug 反馈与功能建议！
-  > ArtiChat continuously evolves based on community feedback. Bug reports and feature suggestions are always welcome!
-
-  <br>
-  
-<img src="artivis-ass/4dea05393d4fcaa23bedee1d19481ca9.png">
-<img src="artivis-ass/4fde7dee62fd3b77b9026bbe3eda62d1.png">
-<img src="https://github.com/PYBu/ArtiChat/blob/main/artivis-ass/c3398c5ac541a8f83001b50417f78511.png?raw=true">
-<img src="artivis-ass/a90b2eb989b596b71ef046eb5868569a.png" height="200">
-<img src="https://github.com/PYBu/ArtiChat/blob/main/artivis-ass/tuili.png?raw=true">
+五档强度切换配合流畅过渡动效，操作即反馈。
 <br>
-> 采用类Codex、Claude的桌面端的推理强度弹窗滑块以及动效。
+ -学习 Codex /CC 的强度动画。
 
-> 用户用量用环状图显示，包括两种Point，订阅分配的可以月刷新的Point以及充值的不参与重置的Point。优先使用可刷新Point。
+![思考强度动画](artivis-ass/new/ed.png)
 
-<br>
+</td>
+</tr>
+</table>
 
+<br/>
 
-- **🖌️New 文件管理**：新增文件管理器，可以查看用户上传的文件，并进行管理。
-  
-- **🖌️New 新的UI**：ArtiChat新增组件UI重构，更加服务用户体验，并且准备重构原本UI。
+---
 
+## 💬 &nbsp;参与反馈
 
-## 未来企划（计划的0.2.x版本更新与开发）
-- **💽ArtiLINK (本地MCP连接)** - 一个内置在ArtiChat随着部署打包好的本地服务，用于与ArtiChat建立通道，让模型能够控制本地的PowerShell、MCP以及管理员权限，做到类似“网页Codex”的效果。
+ArtiChat 的每一次迭代都来自用户的真实声音。如果你遇到了Bug、有新功能想法，或者只是想聊聊使用体验——欢迎到反馈站告诉我们，我们很期待社区以及用户的声音！本项目历经 0.1 到 0.2 的系统性升级，可能存在不少Bug，但是我依旧会坚持更新（感情牌）！
 
-<br><br><hr>
+<div align="center">
 
+<br/>
 
-## 快速反馈
-- **🎺ArtiChat 服务拥有提交反馈的入口，用户的需求、Bug反馈、改进建议都可以在此提交，并且公开项目进度。**
-- **chatbug.artivis.cc | <a href="https://chatbug.artivis.cc">访问ArtiChat 反馈中心</a>**
+[![前往反馈站](https://img.shields.io/badge/前往反馈站提交反馈-chatbug.artivis.cc-f59e0b?style=for-the-badge&logo=gitbook&logoColor=white)](https://chatbug.artivis.cc)
 
-<br><br><br><br>
-<hr>
-## 部署方法已验证。后续我会尝试做一个一键部署的脚本，简化部署流程。
+<br/>
 
-> 建议使用Codex或Claude一键部署，并声明你用的面板和不影响当前服务
+</div>
 
-> 例子：{服务器ip和ssh密钥地址} 这是我的服务器ip以及我的SSH密钥，帮我部署 https://github.com/PYBu/ArtiChat 这个项目，我用的是 1panel 面板，请不要影响其它正在运行的服务。
+---
 
-## 技术栈
+## 🚀 &nbsp;快速部署
 
-| 层 | 技术 |
-| --- | --- |
-| 前端 | SvelteKit · TypeScript · Tailwind CSS · Vite |
-| 后端 | Python · FastAPI · SQLAlchemy |
-| 部署 | Docker · Docker Compose |
+### 环境要求
 
-## 快速开始
+| 依赖 | 版本要求 |
+|:-----|:--------|
+| Docker | 20.10+ |
+| Docker Compose | v2.x |
+| 服务器内存 | ≥ 2 GB（推荐 4 GB+） |
+| 网络 | 可访问目标 AI API |
 
-推荐使用 Docker 部署，可将运行环境与主机隔离，免去本地依赖配置。
-
-### 方式一：Docker Compose（推荐）
+### 一键启动
 
 ```bash
+# 1. 克隆仓库
 git clone https://github.com/PYBu/ArtiChat.git
 cd ArtiChat
 
-# 构建并启动 ArtiChat
+# 2. 启动服务（首次构建约需 3–5 分钟）
 docker compose -p artichat up -d --build artichat
 ```
 
-启动后访问 [http://localhost:3000](http://localhost:3000)，首次进入即可完成管理员账号初始化。
+启动完成后访问 **[http://localhost:3000](http://localhost:3000)**，首次进入即可完成管理员账号初始化。
 
 健康检查：
 
@@ -140,72 +289,76 @@ curl http://localhost:3000/health
 # {"status":true}
 ```
 
-> 默认将主机 `3000` 端口映射到容器内 `8080` 端口，可通过环境变量 `ARTICHAT_PORT` 修改主机端口。Compose 只运行 ArtiChat；如需使用 Ollama，请连接主机或其他服务器上已有的 Ollama 服务。
+<br/>
 
-### 方式二：本地开发
+### 生产环境配置
 
-需要 **Node.js `>=18.13 <=22`** 与 **Python 3.11+**。
+| 参数 | 说明 | 默认值 |
+|:-----|:-----|:------|
+| `WEBUI_SECRET_KEY` | 会话加密密钥，**生产必须修改** | 空（不安全） |
+| `CORS_ALLOW_ORIGIN` | 跨域来源白名单 | `*`（不安全） |
+| `DATABASE_URL` | 数据库连接字符串 | SQLite 本地文件 |
+| `OPENAI_API_BASE_URL` | OpenAI 兼容 API 地址 | — |
+| `OPENAI_API_KEY` | 对应 API 密钥 | — |
 
-前端：
+> 💡 生产环境务必将 `CORS_ALLOW_ORIGIN` 从默认的 `*` 收紧为实际域名，并随机生成 `WEBUI_SECRET_KEY`。
 
-```bash
-npm install
-npm run dev
-npm run build
+<br/>
+
+---
+
+## 🗺️ &nbsp;路线图
+
+```
+v0.1.0 - v0.1.8  ✅  底层适配与修改，加固与ArtiChat稳定运行。
+v0.2.0 - now     ✅  系统性升级，ArtiChat组件UI重置与完善，以新功能与用户体验作为优先更新动力。
+
+v0.3.0           🔜  ArtiLINK — 本地 MCP 接入，让模型直接操控 PowerShell 与本地系统资源，实现真正意义上的「网页版 Codex」
 ```
 
-后端：
+<br/>
 
-```bash
-cd backend
-pip install -r requirements.txt
-bash start.sh
-```
+---
 
-## 配置
+## 🛠️ &nbsp;技术栈
 
-复制示例环境文件并按需修改：
+<div align="center">
 
-```bash
-cp .env.example .env
-```
+| 层级 | 技术选型 |
+|:----:|:--------|
+| **前端** | SvelteKit · TypeScript · Tailwind CSS · Vite |
+| **后端** | FastAPI · SQLAlchemy · Python 3.11+ |
+| **基础平台** | OpenWebUI 0.11.0 |
+| **容器化** | Docker · Docker Compose |
 
-常用环境变量：
+</div>
 
-| 变量 | 说明 |
-| --- | --- |
-| `OPENAI_API_BASE_URL` | OpenAI 兼容 API 地址 |
-| `OPENAI_API_KEY` | 对应 API 密钥 |
-| `OLLAMA_BASE_URL` | 本地 Ollama 服务地址 |
-| `WEBUI_SECRET_KEY` | 会话及敏感配置加密密钥，生产环境务必设置并保持稳定 |
-| `CORS_ALLOW_ORIGIN` | 允许的跨域来源，生产环境应收紧 |
-| `ARTICHAT_PORT` | Docker 部署时映射到主机的端口 |
+<br/>
 
-> 生产部署请务必设置稳定的 `WEBUI_SECRET_KEY`，并将 `CORS_ALLOW_ORIGIN` 从默认的 `*` 收紧为实际来源域名。
+---
 
-## 目录结构
+## 🙏 &nbsp;致谢
 
-```text
-ArtiChat/
-├── src/                 # 前端（SvelteKit）
-├── backend/             # 后端（FastAPI）
-├── static/              # 静态资源与品牌图标
-├── artivis-ass/         # ArtiChat 品牌与文档资产
-├── scripts/             # 构建与工具脚本
-├── docs/                # 安全说明、知识文本与发布说明
-├── docker-compose.yaml  # Docker 编排
-└── Dockerfile
-```
+感谢以下项目与社区对 ArtiChat 的支持与启发：
 
-## 第三方许可
+[**OpenWebUI**](https://github.com/open-webui/open-webui) — ArtiChat 的基础平台，提供了强大的对话界面与工程底座
 
-第三方版权与许可信息保留在 [`LICENSE`](LICENSE)、[`LICENSE_NOTICE`](LICENSE_NOTICE) 与 [`LICENSE_HISTORY`](LICENSE_HISTORY) 中。
+[**Linux.Do 社区**](https://linux.do) — 感谢社区成员的反馈、讨论与持续支持
 
-## 许可证
+<br/>
 
-本项目沿用上游的多许可证约定，详见 [`LICENSE`](LICENSE) 与 [`LICENSE_NOTICE`](LICENSE_NOTICE)。使用与分发前请阅读相关许可条款。
-若您的部署用户超过50人或用于商业请移步OpenWebUI官方获取商用版权。
-致谢OpenWebUI项目组的开源。
+---
 
-## 推荐社区
-<a href="https://linux.do/">LinuxDo</a> | ArtivisCom [装修中未开放]
+## 📄 &nbsp;开源声明
+
+本项目基于 [OpenWebUI](https://github.com/open-webui/open-webui) 进行二次开发，遵循其许可协议。上游版权与许可信息保留在 [`LICENSE`](LICENSE)、[`LICENSE_NOTICE`](LICENSE_NOTICE) 与 [`LICENSE_HISTORY`](LICENSE_HISTORY) 中。**超过 50 名用户的部署或任何商业用途，请直接联系 OpenWebUI 官方获取授权。**
+
+<br/>
+
+---
+
+<div align="center">
+
+Built with ❤️ by &nbsp;<strong>Artivis Studio</strong> | <b>Art</b> W<b>i</b>th <b>Vis</b>ion
+
+</div>
