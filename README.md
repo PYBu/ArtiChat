@@ -2,7 +2,7 @@
 
 ![ArtiChat Banner](artivis-ass/new/ntitle.png)
 
-# ArtiChat 
+# ArtiChat
 
 **企业级私有化定制的 AI 对话平台**
 
@@ -21,6 +21,8 @@
 </div>
 
 <br/>
+
+> 注意：本项目版本为 ArtiChat ProEdition 0.2+ ，次代版本为 ArtiChat ArtivisAlpha 0.1+（0.1.7为已发布最新版），0.2 版本历经重做存在一些不稳定因素或Bug，但 0.1 系列版本仍然可以无缝更新到 0.2，若稳定使用建议依旧使用 0.1 版本，或等待 0.2 正式版本发布以后选择更新！
 
 ## 简介
 
