@@ -27,7 +27,7 @@ def _mint_forward_user_jwt(user: Any) -> str:
         'email': str(user.email),
         'name': str(user.name),
         'role': str(user.role),
-        'iss': 'open-webui',
+        'iss': 'artichat',
         'iat': now,
         'exp': now + FORWARD_USER_INFO_HEADER_JWT_EXPIRES_SECONDS,
     }
@@ -38,7 +38,7 @@ def include_user_info_headers(headers: dict, user: Optional[Any] = None) -> dict
     """
     Forward user identity to external backends: signed JWT in
     FORWARD_USER_INFO_HEADER_JWT if FORWARD_USER_INFO_HEADER_JWT_SECRET is set;
-    otherwise the legacy X-OpenWebUI-User-* headers.
+    otherwise the legacy X-ArtiChat-User-* headers.
     """
     if user is None:
         return headers

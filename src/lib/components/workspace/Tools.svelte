@@ -38,7 +38,6 @@
 	import XMark from '../icons/XMark.svelte';
 	import ImportModal from '../ImportModal.svelte';
 	import ViewSelector from './common/ViewSelector.svelte';
-	import CommunityDiscover from './common/CommunityDiscover.svelte';
 	import Badge from '$lib/components/common/Badge.svelte';
 	import ChevronDown from '../icons/ChevronDown.svelte';
 	import ChevronUp from '../icons/ChevronUp.svelte';
@@ -169,30 +168,6 @@
 
 	const shouldIgnoreRowClick = (target: EventTarget | null) => {
 		return target instanceof Element && !!target.closest('button, a, input, [role="menu"]');
-	};
-
-	const shareHandler = async (tool) => {
-		const item = await getToolById(localStorage.token, tool.id).catch((error) => {
-			toast.error(`${error}`);
-			return null;
-		});
-
-		toast.success($i18n.t('Redirecting you to Open WebUI Community'));
-
-		const url = 'https://openwebui.com';
-
-		const tab = await window.open(`${url}/tools/create`, '_blank');
-
-		const messageHandler = (event) => {
-			if (event.origin !== url) return;
-			if (event.data === 'loaded') {
-				tab.postMessage(JSON.stringify(item), '*');
-				window.removeEventListener('message', messageHandler);
-			}
-		};
-
-		window.addEventListener('message', messageHandler, false);
-		console.log(item);
 	};
 
 	const cloneHandler = async (tool) => {
@@ -568,9 +543,6 @@
 											editHandler={() => {
 												goto(`/workspace/tools/edit?id=${encodeURIComponent(tool.id)}`);
 											}}
-											shareHandler={() => {
-												shareHandler(tool);
-											}}
 											cloneHandler={() => {
 												cloneHandler(tool);
 											}}
@@ -617,13 +589,6 @@
 		{/if}
 	</div>
 
-	{#if $config?.features.enable_community_sharing}
-		<CommunityDiscover
-			href="https://openwebui.com/tools"
-			title={$i18n.t('Discover a tool')}
-			description={$i18n.t('Discover, download, and explore custom tools')}
-		/>
-	{/if}
 
 	<DeleteConfirmDialog
 		bind:show={showDeleteConfirm}

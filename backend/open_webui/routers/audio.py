@@ -72,9 +72,33 @@ MAX_FILE_SIZE_MB: int = 20
 MAX_FILE_SIZE: int = MAX_FILE_SIZE_MB * 1024 * 1024
 AZURE_MAX_FILE_SIZE_MB: int = 200
 AZURE_MAX_FILE_SIZE: int = AZURE_MAX_FILE_SIZE_MB * 1024 * 1024
+MAX_TTS_REQUEST_BYTES: int = 256 * 1024
+MAX_TTS_INPUT_CHARS: int = 50_000
+MAX_TTS_OUTPUT_BYTES: int = 50 * 1024 * 1024
+MAX_TTS_JSON_RESPONSE_BYTES: int = ((MAX_TTS_OUTPUT_BYTES + 2) // 3) * 4 + 1024 * 1024
+MAX_TRANSCRIPTION_UPLOAD_BYTES: int = 200 * 1024 * 1024
+MAX_TRANSCRIPTION_CHUNKS: int = 32
+MAX_CONCURRENT_TRANSCRIPTIONS: int = 3
 
 SPEECH_CACHE_DIR = CACHE_DIR / 'audio' / 'speech'
 SPEECH_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def _purge_legacy_tts_request_sidecars() -> None:
+    """Remove obsolete cache metadata files that contain the full TTS input."""
+    for sidecar in SPEECH_CACHE_DIR.glob('*.json'):
+        if len(sidecar.stem) != 64:
+            continue
+        try:
+            int(sidecar.stem, 16)
+            sidecar.unlink(missing_ok=True)
+        except OSError:
+            log.warning('Unable to remove legacy TTS request sidecar %s', sidecar.name)
+        except ValueError:
+            continue
+
+
+_purge_legacy_tts_request_sidecars()
 
 TTS_CONFIG_KEYS = {
     'OPENAI_API_BASE_URL': 'audio.tts.openai.api_base_url',
@@ -330,7 +354,7 @@ def load_speech_pipeline(request):
 async def _raise_tts_error(exc: Exception, r=None) -> None:
     """Raise a standardised HTTPException from a TTS provider failure."""
     code = r.status if r is not None else 500
-    detail = 'Open WebUI: Server Connection Error'
+    detail = 'ArtiChat: Server Connection Error'
     if r is not None:
         try:
             res = await r.json()
@@ -347,17 +371,47 @@ async def _raise_tts_error(exc: Exception, r=None) -> None:
 async def _write_tts_cache(
     file_path: Path,
     audio: bytes,
-    body_path: Path,
-    payload: dict,
 ) -> None:
-    """Persist audio + request metadata to the speech cache."""
+    """Persist only generated audio; request text must never enter the cache."""
+    if not audio or len(audio) > MAX_TTS_OUTPUT_BYTES:
+        raise ValueError('TTS response is empty or exceeds the 50 MB limit')
     async with aiofiles.open(file_path, 'wb') as f:
         await f.write(audio)
-    async with aiofiles.open(body_path, 'w') as f:
-        await f.write(json.dumps(payload))
 
 
-async def _tts_openai(request, payload, file_path, file_body_path, user):
+async def _read_response_body_limited(response, limit: int = MAX_TTS_OUTPUT_BYTES) -> bytes:
+    content_length = getattr(response, 'content_length', None)
+    if content_length is not None and content_length > limit:
+        raise ValueError('TTS response exceeds the configured size limit')
+
+    chunks = bytearray()
+    async for chunk in response.content.iter_chunked(AIOHTTP_FILE_STREAM_CHUNK_SIZE):
+        chunks.extend(chunk)
+        if len(chunks) > limit:
+            raise ValueError('TTS response exceeds the configured size limit')
+    if not chunks:
+        raise ValueError('TTS response is empty')
+    return bytes(chunks)
+
+
+async def _read_request_body_limited(request: Request, limit: int) -> bytes:
+    content_length = request.headers.get('content-length')
+    if content_length:
+        try:
+            if int(content_length) > limit:
+                raise HTTPException(status_code=status.HTTP_413_CONTENT_TOO_LARGE, detail='Request body is too large')
+        except ValueError:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Invalid Content-Length header')
+
+    chunks = bytearray()
+    async for chunk in request.stream():
+        chunks.extend(chunk)
+        if len(chunks) > limit:
+            raise HTTPException(status_code=status.HTTP_413_CONTENT_TOO_LARGE, detail='Request body is too large')
+    return bytes(chunks)
+
+
+async def _tts_openai(request, payload, file_path, user):
     """Generate speech via an OpenAI-compatible TTS endpoint."""
     payload['model'] = await Config.get('audio.tts.model')
     if not payload.get('voice'):
@@ -384,15 +438,12 @@ async def _tts_openai(request, payload, file_path, file_body_path, user):
         )
         r.raise_for_status()
 
-        audio_data = await r.read()
+        audio_data = await _read_response_body_limited(r)
         content_type = r.headers.get('Content-Type', 'audio/mpeg')
 
         if not await asyncio.to_thread(transcode_audio_to_mp3, audio_data, content_type, file_path):
             async with aiofiles.open(file_path, 'wb') as f:
                 await f.write(audio_data)
-
-        async with aiofiles.open(file_body_path, 'w') as f:
-            await f.write(json.dumps(payload))
 
         return FileResponse(file_path)
     except Exception as exc:
@@ -400,7 +451,7 @@ async def _tts_openai(request, payload, file_path, file_body_path, user):
         await _raise_tts_error(exc, r)
 
 
-async def _tts_elevenlabs(request, payload, file_path, file_body_path, user):
+async def _tts_elevenlabs(request, payload, file_path, user):
     """Generate speech via the ElevenLabs TTS API."""
     voice_id = (payload.get('voice') or '').strip()
     if not voice_id:
@@ -428,14 +479,14 @@ async def _tts_elevenlabs(request, payload, file_path, file_body_path, user):
             ssl=AIOHTTP_CLIENT_SESSION_SSL,
         ) as r:
             r.raise_for_status()
-            await _write_tts_cache(file_path, await r.read(), file_body_path, payload)
+            await _write_tts_cache(file_path, await _read_response_body_limited(r))
         return FileResponse(file_path)
     except Exception as exc:
         log.exception(exc)
         await _raise_tts_error(exc, r)
 
 
-async def _tts_azure(request, payload, file_path, file_body_path, user):
+async def _tts_azure(request, payload, file_path, user):
     """Generate speech via Azure Cognitive Services TTS."""
     az_region = await Config.get('audio.tts.azure.speech_region') or 'eastus'
     az_base = await Config.get('audio.tts.azure.speech_base_url')
@@ -463,14 +514,14 @@ async def _tts_azure(request, payload, file_path, file_body_path, user):
             ssl=AIOHTTP_CLIENT_SESSION_SSL,
         ) as r:
             r.raise_for_status()
-            await _write_tts_cache(file_path, await r.read(), file_body_path, payload)
+            await _write_tts_cache(file_path, await _read_response_body_limited(r))
         return FileResponse(file_path)
     except Exception as exc:
         log.exception(exc)
         await _raise_tts_error(exc, r)
 
 
-async def _tts_transformers(request, payload, file_path, file_body_path, user):
+async def _tts_transformers(request, payload, file_path, user):
     """Generate speech via the local HuggingFace SpeechT5 pipeline (thread-offloaded)."""
     import soundfile as sf
     import torch
@@ -498,13 +549,10 @@ async def _tts_transformers(request, payload, file_path, file_body_path, user):
 
     await asyncio.to_thread(_run_pipeline)
 
-    # Audio file already written by sf.write; just persist the request metadata.
-    async with aiofiles.open(file_body_path, 'w') as f:
-        await f.write(json.dumps(payload))
     return FileResponse(file_path)
 
 
-async def _tts_mistral(request, payload, file_path, file_body_path, user):
+async def _tts_mistral(request, payload, file_path, user):
     """Generate speech via the Mistral TTS API."""
     api_key = await Config.get('audio.tts.mistral.api_key')
     api_base_url = await Config.get('audio.tts.mistral.api_base_url') or 'https://api.mistral.ai/v1'
@@ -531,12 +579,16 @@ async def _tts_mistral(request, payload, file_path, file_body_path, user):
         )
         r.raise_for_status()
 
-        res = await r.json()
+        response_body = await _read_response_body_limited(r, MAX_TTS_JSON_RESPONSE_BYTES)
+        res = json.loads(response_body)
         audio_b64 = res.get('audio_data', '')
         if not audio_b64:
             raise ValueError('No audio_data in Mistral TTS response')
 
-        await _write_tts_cache(file_path, base64.b64decode(audio_b64), file_body_path, payload)
+        if len(audio_b64) > ((MAX_TTS_OUTPUT_BYTES + 2) // 3) * 4 + 4:
+            raise ValueError('TTS response exceeds the 50 MB limit')
+
+        await _write_tts_cache(file_path, base64.b64decode(audio_b64, validate=True))
         return FileResponse(file_path)
     except Exception as exc:
         log.exception(exc)
@@ -568,14 +620,12 @@ async def speech(request: Request, user=Depends(get_verified_user)):
             detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
         )
 
-    body = await request.body()
+    body = await _read_request_body_limited(request, MAX_TTS_REQUEST_BYTES)
     name = hashlib.sha256(
         body + str(engine).encode('utf-8') + str(await Config.get('audio.tts.model')).encode('utf-8')
     ).hexdigest()
 
     file_path = SPEECH_CACHE_DIR.joinpath(f'{name}.mp3')
-    file_body_path = SPEECH_CACHE_DIR.joinpath(f'{name}.json')
-
     # Return cached result if available
     if file_path.is_file():
         await publish_event(
@@ -593,11 +643,20 @@ async def speech(request: Request, user=Depends(get_verified_user)):
         log.exception(exc)
         raise HTTPException(status_code=400, detail='Invalid JSON payload')
 
+    input_text = payload.get('input')
+    if not isinstance(input_text, str) or not input_text.strip():
+        raise HTTPException(status_code=400, detail='TTS input must be a non-empty string')
+    if len(input_text) > MAX_TTS_INPUT_CHARS:
+        raise HTTPException(
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+            detail=f'TTS input exceeds the {MAX_TTS_INPUT_CHARS} character limit',
+        )
+
     handler = _TTS_ENGINES.get(engine)
     if handler is None:
         raise HTTPException(status_code=400, detail=f'Unsupported TTS engine: {engine}')
 
-    response = await handler(request, payload, file_path, file_body_path, user)
+    response = await handler(request, payload, file_path, user)
     await publish_event(
         request,
         EVENTS.AUDIO_SPEECH_REQUESTED,
@@ -606,7 +665,6 @@ async def speech(request: Request, user=Depends(get_verified_user)):
         data={
             'engine': engine,
             'model': payload.get('model'),
-            'input_preview': str(payload.get('input', ''))[:300],
             'cached': False,
         },
     )
@@ -711,7 +769,7 @@ async def _transcribe_openai(request, file_path, filename, languages, file_dir, 
                     detail = f'External: {res["error"].get("message", "")}'
             except Exception:
                 detail = f'External: {e}'
-        raise Exception(detail if detail else 'Open WebUI: Server Connection Error')
+        raise Exception(detail if detail else 'ArtiChat: Server Connection Error')
 
 
 async def _transcribe_deepgram(request, file_path, languages, file_dir, id):
@@ -761,7 +819,7 @@ async def _transcribe_deepgram(request, file_path, languages, file_dir, id):
 
     except Exception as e:
         log.exception(e)
-        detail = 'Open WebUI: Server Connection Error'
+        detail = 'ArtiChat: Server Connection Error'
         if r is not None:
             try:
                 res = await r.json()
@@ -892,7 +950,7 @@ async def _transcribe_azure(request, file_path, filename, file_dir, id):
             detail = f'External: {e}'
         raise HTTPException(
             status_code=e.status if e.status else 500,
-            detail=detail if detail else 'Open WebUI: Server Connection Error',
+            detail=detail if detail else 'ArtiChat: Server Connection Error',
         )
 
 
@@ -1056,7 +1114,7 @@ async def _transcribe_mistral(request, file_path, filename, metadata, file_dir, 
             detail = f'External: {e}'
         raise HTTPException(
             status_code=e.status if e.status else 500,
-            detail=detail if detail else 'Open WebUI: Server Connection Error',
+            detail=detail if detail else 'ArtiChat: Server Connection Error',
         )
 
 
@@ -1092,7 +1150,19 @@ async def transcribe(request: Request, file_path: str, metadata: Optional[dict] 
             )
 
     try:
-        tasks = [transcription_handler(request, chunk_path, metadata, user) for chunk_path in chunk_paths]
+        if len(chunk_paths) > MAX_TRANSCRIPTION_CHUNKS:
+            raise HTTPException(
+                status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+                detail=f'Audio requires more than {MAX_TRANSCRIPTION_CHUNKS} transcription chunks',
+            )
+
+        semaphore = asyncio.Semaphore(MAX_CONCURRENT_TRANSCRIPTIONS)
+
+        async def transcribe_chunk(chunk_path):
+            async with semaphore:
+                return await transcription_handler(request, chunk_path, metadata, user)
+
+        tasks = [transcribe_chunk(chunk_path) for chunk_path in chunk_paths]
         # gather keeps results in chunk order, unlike as_completed
         results = await asyncio.gather(*tasks)
     except HTTPException:
@@ -1154,6 +1224,14 @@ def split_audio(file_path, max_bytes, format='mp3', bitrate='32k'):
     base, _ = os.path.splitext(file_path)
 
     while start < duration_ms:
+        if len(chunks) >= MAX_TRANSCRIPTION_CHUNKS:
+            for existing_chunk in chunks:
+                try:
+                    os.remove(existing_chunk)
+                except OSError:
+                    pass
+            raise ValueError(f'Audio requires more than {MAX_TRANSCRIPTION_CHUNKS} transcription chunks')
+
         end = min(start + approx_chunk_ms, duration_ms)
         chunk = audio[start:end]
         chunk_path = f'{base}_chunk_{i}.{format}'
@@ -1211,7 +1289,6 @@ async def transcription(
         id = uuid.uuid4()
 
         filename = f'{id}.{ext}'
-        contents = await file.read()
 
         file_dir = os.path.join(CACHE_DIR, 'audio', 'transcriptions')
         os.makedirs(file_dir, exist_ok=True)
@@ -1221,8 +1298,22 @@ async def transcription(
         if not os.path.realpath(file_path).startswith(os.path.realpath(file_dir)):
             raise ValueError('Invalid file path detected')
 
-        async with aiofiles.open(file_path, 'wb') as f:
-            await f.write(contents)
+        total_bytes = 0
+        try:
+            async with aiofiles.open(file_path, 'wb') as f:
+                while chunk := await file.read(AIOHTTP_FILE_STREAM_CHUNK_SIZE):
+                    total_bytes += len(chunk)
+                    if total_bytes > MAX_TRANSCRIPTION_UPLOAD_BYTES:
+                        raise HTTPException(
+                            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+                            detail='Audio upload exceeds the 200 MB limit',
+                        )
+                    await f.write(chunk)
+            if total_bytes == 0:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Audio upload is empty')
+        except Exception:
+            await asyncio.to_thread(Path(file_path).unlink, missing_ok=True)
+            raise
 
         try:
             metadata = None

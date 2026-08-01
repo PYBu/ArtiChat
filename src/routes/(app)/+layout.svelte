@@ -7,17 +7,14 @@
 
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
-	import { fade } from 'svelte/transition';
-
-	import { getModels, getToolServersData, getVersionUpdates } from '$lib/apis';
+	import { getModels, getToolServersData } from '$lib/apis';
 	import { getTools } from '$lib/apis/tools';
 	import { getBanners } from '$lib/apis/configs';
 	import { getTerminalServers } from '$lib/apis/terminal';
 	import { getUserSettings } from '$lib/apis/users';
 	import { setTextScale } from '$lib/utils/text-scale';
 
-	import { WEBUI_VERSION, WEBUI_API_BASE_URL } from '$lib/constants';
-	import { compareVersion } from '$lib/utils';
+	import { WEBUI_API_BASE_URL } from '$lib/constants';
 
 	import {
 		config,
@@ -46,8 +43,8 @@
 	import Sidebar from '$lib/components/layout/Sidebar.svelte';
 	import SettingsModal from '$lib/components/chat/SettingsModal.svelte';
 	import ChangelogModal from '$lib/components/ChangelogModal.svelte';
+	import AnnouncementModal from '$lib/components/AnnouncementModal.svelte';
 	import AccountPending from '$lib/components/layout/Overlay/AccountPending.svelte';
-	import UpdateInfoToast from '$lib/components/layout/UpdateInfoToast.svelte';
 	import Spinner from '$lib/components/common/Spinner.svelte';
 	import { loadKeybindings, matchKeybinding, Shortcut } from '$lib/shortcuts';
 
@@ -57,7 +54,6 @@
 	let DB = null;
 	let localDBChats = [];
 
-	let version;
 	let handledSettingsUrl = '';
 
 	const clearChatInputStorage = () => {
@@ -211,15 +207,26 @@
 		}
 		handledSettingsUrl = urlKey;
 
-		showSettings.set(
-			requestedSettings.startsWith('admin:') && $user?.role !== 'admin'
-				? 'general'
-				: requestedSettings
-		);
-
 		const params = new URLSearchParams($page.url.searchParams);
 		params.delete('settings');
 		const query = params.toString();
+
+		if (requestedSettings.startsWith('admin:')) {
+			if ($user?.role === 'admin') {
+				const requestedAdminTab = requestedSettings.slice('admin:'.length);
+				const adminTab = /^[a-z0-9-]+$/.test(requestedAdminTab) ? requestedAdminTab : 'general';
+				await goto(`/admin/settings/${adminTab}${query ? `?${query}` : ''}${$page.url.hash}`, {
+					replaceState: true,
+					noScroll: true,
+					keepFocus: true
+				});
+				return;
+			}
+			showSettings.set('general');
+		} else {
+			showSettings.set(requestedSettings);
+		}
+
 		await goto(`${$page.url.pathname}${query ? `?${query}` : ''}${$page.url.hash}`, {
 			replaceState: true,
 			noScroll: true,
@@ -380,20 +387,6 @@
 			}
 		}
 
-		// Check for version updates
-		if ($user?.role === 'admin' && $config?.features?.enable_version_update_check) {
-			// Check if the user has dismissed the update toast in the last 24 hours
-			if (localStorage.dismissedUpdateToast) {
-				const dismissedUpdateToast = new Date(Number(localStorage.dismissedUpdateToast));
-				const now = new Date();
-
-				if (now - dismissedUpdateToast > 24 * 60 * 60 * 1000) {
-					checkForVersionUpdates();
-				}
-			} else {
-				checkForVersionUpdates();
-			}
-		}
 		// Persist showControls: track open/close state separately from saved size
 		// chatControlsSize always retains the last width for openPane()
 		await showControls.set(!$mobile ? localStorage.showControls === 'true' : false);
@@ -425,31 +418,11 @@
 	$: if (loaded && ($user === undefined || $user === null)) {
 		void gotoAuth();
 	}
-
-	const checkForVersionUpdates = async () => {
-		version = await getVersionUpdates(localStorage.token).catch((error) => {
-			return {
-				current: WEBUI_VERSION,
-				latest: WEBUI_VERSION
-			};
-		});
-	};
 </script>
 
 <SettingsModal bind:show={$showSettings} />
 <ChangelogModal bind:show={$showChangelog} />
-
-{#if version && compareVersion(version.latest, version.current) && ($settings?.showUpdateToast ?? true)}
-	<div class=" absolute bottom-8 right-8 z-50" in:fade={{ duration: 100 }}>
-		<UpdateInfoToast
-			{version}
-			on:close={() => {
-				localStorage.setItem('dismissedUpdateToast', Date.now().toString());
-				version = null;
-			}}
-		/>
-	</div>
-{/if}
+<AnnouncementModal />
 
 {#if $user}
 	<div class="app relative">

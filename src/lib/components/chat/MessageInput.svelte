@@ -54,7 +54,7 @@
 		getWeekday
 	} from '$lib/utils';
 	import { uploadFile } from '$lib/apis/files';
-	import { generateAutoCompletion } from '$lib/apis';
+	import { generateAutoCompletion, type ReasoningLevel, type ReasoningProfile } from '$lib/apis';
 	import { deleteFileById } from '$lib/apis/files';
 	import { getChatById } from '$lib/apis/chats';
 	import { getFolderById } from '$lib/apis/folders';
@@ -64,6 +64,7 @@
 	import { WEBUI_BASE_URL, WEBUI_API_BASE_URL, PASTED_TEXT_CHARACTER_LIMIT } from '$lib/constants';
 	import { initiateOAuthRedirect } from '$lib/apis/configs';
 	import { matchKeybinding, Shortcut } from '$lib/shortcuts';
+	import { DEFAULT_REASONING_LEVEL, getReasoningControl } from '$lib/utils/reasoning';
 
 	import { createNoteHandler } from '../notes/utils';
 	import { getSuggestionRenderer } from '../common/RichTextInput/suggestions';
@@ -107,6 +108,7 @@
 	import Expand from '../icons/Expand.svelte';
 	import QueuedMessageItem from './MessageInput/QueuedMessageItem.svelte';
 	import TaskList from './Messages/ResponseMessage/TaskList.svelte';
+	import ReasoningEffortControl from './MessageInput/ReasoningEffortControl.svelte';
 
 	const i18n = getContext('i18n');
 
@@ -129,9 +131,16 @@
 
 	export let atSelectedModel: Model | undefined = undefined;
 	export let selectedModels: [''];
+	export let reasoningLevel: ReasoningLevel = DEFAULT_REASONING_LEVEL;
 
 	let selectedModelIds = [];
 	$: selectedModelIds = atSelectedModel !== undefined ? [atSelectedModel.id] : selectedModels;
+	let reasoningProfile: ReasoningProfile | null = null;
+	$: reasoningProfile =
+		selectedModelIds.length === 1
+			? (getReasoningControl($models.find((model) => model.id === selectedModelIds[0]))?.profile ??
+				null)
+			: null;
 	$: hasChatVariables = selectedModelIds.some(
 		(modelId) =>
 			($models.find((model) => model.id === modelId)?.info?.meta?.chat_variables_schema?.fields
@@ -162,7 +171,13 @@
 
 	let showTerminalMenu = false;
 
-	export let messageQueue: { id: string; prompt: string; files: any[] }[] = [];
+	export let messageQueue: {
+		id: string;
+		prompt: string;
+		files: any[];
+		models?: string[];
+		reasoningLevel?: ReasoningLevel;
+	}[] = [];
 	export let onQueueSendNow: (id: string) => void = () => {};
 	export let onQueueEdit: (id: string) => void = () => {};
 	export let onQueueDelete: (id: string) => void = () => {};
@@ -2016,6 +2031,15 @@
 													<Component className="size-4.5" strokeWidth="1.5" />
 												</button>
 											</IntegrationsMenu>
+										{/if}
+
+										{#if reasoningProfile}
+											<div class="ml-1 shrink-0">
+												<ReasoningEffortControl
+													profile={reasoningProfile}
+													bind:level={reasoningLevel}
+												/>
+											</div>
 										{/if}
 
 										{#if selectedModelIds.length === 1 && $models.find((m) => m.id === selectedModelIds[0])?.has_user_valves}

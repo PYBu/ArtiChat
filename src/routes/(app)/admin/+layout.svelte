@@ -1,16 +1,29 @@
 <script lang="ts">
 	import { onMount, getContext } from 'svelte';
+	import type { Writable } from 'svelte/store';
 	import { goto } from '$app/navigation';
 
-	import { WEBUI_NAME, config, mobile, showSettings, showSidebar, user } from '$lib/stores';
+	import { WEBUI_NAME, config, mobile, showSidebar, user } from '$lib/stores';
 	import { page } from '$app/stores';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 
 	import Sidebar from '$lib/components/icons/Sidebar.svelte';
+	import AdminSettingsModal from '$lib/components/admin/AdminSettingsModal.svelte';
 
-	const i18n = getContext('i18n');
+	const i18n: Writable<any> = getContext('i18n');
 
 	let loaded = false;
+	let showAdminSettings: boolean | string = false;
+	$: analyticsEnabled = $config?.features?.enable_admin_analytics ?? true;
+
+	const handleAdminSectionChange = async (event: Event) => {
+		const target = (event.currentTarget as HTMLSelectElement).value;
+		if (target === '/admin/settings') {
+			showAdminSettings = 'general';
+			return;
+		}
+		await goto(target);
+	};
 
 	onMount(async () => {
 		if ($user?.role !== 'admin') {
@@ -62,8 +75,35 @@
 				{/if}
 
 				<div class="flex w-full items-center">
+					<select
+						id="admin-mobile-section"
+						class="mr-2 min-w-0 flex-1 bg-transparent px-2 py-1 text-sm outline-hidden md:hidden"
+						value={$page.url.pathname.startsWith('/admin/settings')
+							? '/admin/settings'
+							: $page.url.pathname.startsWith('/admin/subscriptions')
+								? '/admin/subscriptions'
+								: analyticsEnabled && $page.url.pathname.startsWith('/admin/analytics')
+									? '/admin/analytics'
+									: $page.url.pathname.startsWith('/admin/evaluations')
+										? '/admin/evaluations'
+										: $page.url.pathname.startsWith('/admin/functions')
+											? '/admin/functions'
+											: '/admin'}
+						on:change={handleAdminSectionChange}
+					>
+						<option value="/admin">{$i18n.t('Users')}</option>
+						{#if analyticsEnabled}
+							<option value="/admin/analytics">{$i18n.t('Analytics')}</option>
+						{/if}
+						<option value="/admin/evaluations">{$i18n.t('Evaluations')}</option>
+						<option value="/admin/subscriptions">{$i18n.t('Operations')}</option>
+						{#if $config?.features?.enable_plugins}
+							<option value="/admin/functions">{$i18n.t('Functions')}</option>
+						{/if}
+						<option value="/admin/settings">{$i18n.t('Settings')}</option>
+					</select>
 					<div
-						class="flex min-w-0 mr-1.5 items-center gap-0.5 md:gap-1 scrollbar-none overflow-x-auto w-fit text-center text-sm font-normal rounded-full bg-transparent py-1 touch-auto pointer-events-auto"
+						class="hidden min-w-0 mr-1.5 items-center gap-0.5 md:flex md:gap-1 scrollbar-none overflow-x-auto w-fit text-center text-sm font-normal rounded-full bg-transparent py-1 touch-auto pointer-events-auto"
 					>
 						<a
 							draggable="false"
@@ -72,6 +112,15 @@
 								: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition select-none"
 							href="/admin">{$i18n.t('Users')}</a
 						>
+						{#if analyticsEnabled}
+							<a
+								draggable="false"
+								class="min-w-fit px-1 text-sm {$page.url.pathname.includes('/admin/analytics')
+									? ''
+									: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition select-none"
+								href="/admin/analytics">{$i18n.t('Analytics')}</a
+							>
+						{/if}
 
 						<a
 							draggable="false"
@@ -79,6 +128,14 @@
 								? ''
 								: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition select-none"
 							href="/admin/evaluations">{$i18n.t('Evaluations')}</a
+						>
+
+						<a
+							draggable="false"
+							class="min-w-fit px-1 text-sm {$page.url.pathname.includes('/admin/subscriptions')
+								? ''
+								: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition select-none"
+							href="/admin/subscriptions">{$i18n.t('Operations')}</a
 						>
 
 						{#if $config?.features?.enable_plugins}
@@ -93,13 +150,14 @@
 
 						<a
 							draggable="false"
-							class="min-w-fit px-1 text-sm {$page.url.pathname.includes('/admin/settings')
+							class="min-w-fit px-1 text-sm {$page.url.pathname.includes('/admin/settings') ||
+							showAdminSettings
 								? ''
 								: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition select-none"
 							href="/admin/settings"
 							on:click={(event) => {
 								event.preventDefault();
-								showSettings.set('admin:general');
+								showAdminSettings = 'general';
 							}}>{$i18n.t('Settings')}</a
 						>
 					</div>
@@ -111,4 +169,6 @@
 			<slot />
 		</div>
 	</div>
+
+	<AdminSettingsModal bind:show={showAdminSettings} />
 {/if}

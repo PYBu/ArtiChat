@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { getContext } from 'svelte';
+	import { goto } from '$app/navigation';
 
 	import { settings, showSettings, terminalServers, selectedTerminalId, user } from '$lib/stores';
 	import { getToolServersData } from '$lib/apis';
@@ -194,7 +195,7 @@
 									class="p-0.5 rounded-md text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 transition"
 									on:click|stopPropagation={() => {
 										show = false;
-										showSettings.set('admin:integrations');
+										goto('/admin/settings/integrations');
 									}}
 								>
 									<svg

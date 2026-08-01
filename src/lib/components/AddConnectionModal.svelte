@@ -595,7 +595,9 @@
 											class="text-xs text-gray-700 dark:text-gray-300 bg-transparent outline-hidden"
 										>
 											<option value="">{$i18n.t('Default')}</option>
+											<option value="openai-compatible">{$i18n.t('OpenAI-compatible')}</option>
 											<option value="azure">{$i18n.t('Azure OpenAI')}</option>
+											<option value="anthropic">{$i18n.t('Anthropic')}</option>
 											<option value="llama.cpp">{$i18n.t('llama.cpp')}</option>
 											<option value="litellm">{$i18n.t('LiteLLM')}</option>
 										</select>

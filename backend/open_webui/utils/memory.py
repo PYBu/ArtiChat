@@ -526,7 +526,7 @@ async def _generate_memory_operations(
     existing_text: str,
     transcript: str,
 ) -> list[dict[str, Any]]:
-    from open_webui.utils.chat import generate_chat_completion
+    from open_webui.utils.hosted_inference import generate_billed_chat_completion
 
     review_prompt = f"""Review the completed conversation turn and decide whether long-term memory should change.
 
@@ -558,14 +558,14 @@ Conversation:
 {transcript}
 """
 
-    response = await generate_chat_completion(
+    response = await generate_billed_chat_completion(
         request,
         form_data={
             'model': model_id,
             'messages': [
                 {
                     'role': 'system',
-                    'content': "You are Open WebUI's private memory reviewer. Return only valid JSON.",
+                    'content': "You are ArtiChat's private memory reviewer. Return only valid JSON.",
                 },
                 {'role': 'user', 'content': review_prompt},
             ],

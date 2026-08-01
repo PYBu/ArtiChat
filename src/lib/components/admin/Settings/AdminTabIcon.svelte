@@ -13,14 +13,20 @@
 	import SoundHigh from '$lib/components/icons/SoundHigh.svelte';
 	import UserCircle from '$lib/components/icons/UserCircle.svelte';
 	import WrenchAlt from '$lib/components/icons/WrenchAlt.svelte';
+	import CloudArrowUp from '$lib/components/icons/CloudArrowUp.svelte';
+	import AppNotification from '$lib/components/icons/AppNotification.svelte';
 
 	export let id: string;
 	export let className = 'size-3.5';
 	export let strokeWidth = '2';
 </script>
 
-{#if id === 'general'}
+{#if id === 'platform'}
+	<GlobeAlt {className} {strokeWidth} />
+{:else if id === 'general'}
 	<SettingsAlt {className} {strokeWidth} />
+{:else if id === 'update'}
+	<CloudArrowUp {className} {strokeWidth} />
 {:else if id === 'authentication'}
 	<Lock {className} {strokeWidth} />
 {:else if id === 'connections'}
@@ -87,4 +93,6 @@
 	<QueueList {className} {strokeWidth} />
 {:else if id === 'db'}
 	<Database {className} {strokeWidth} />
+{:else if id === 'email'}
+	<AppNotification {className} {strokeWidth} />
 {/if}

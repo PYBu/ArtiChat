@@ -1,6 +1,6 @@
 {
-	"name": "open-webui",
-	"version": "0.11.0",
+	"name": "artichat",
+	"version": "0.2.1",
 	"private": true,
 	"scripts": {
 		"dev": "npm run pyodide:fetch && vite dev --host",
@@ -19,6 +19,10 @@
 		"i18n:parse": "i18next --config i18next-parser.config.ts && prettier --write \"src/lib/i18n/**/*.{js,json}\"",
 		"cy:open": "cypress open",
 		"test:frontend": "vitest --passWithNoTests",
+		"test:branding": "node scripts/check-branding.mjs",
+		"test:release-version": "node scripts/check-release-version.mjs",
+		"test:subscriptions": "node scripts/check-subscriptions.mjs",
+		"test:updates": "node scripts/check-update-system.mjs",
 		"pyodide:fetch": "node scripts/prepare-pyodide.js"
 	},
 	"devDependencies": {

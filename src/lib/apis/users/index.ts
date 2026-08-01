@@ -1,5 +1,9 @@
 import { WEBUI_API_BASE_URL } from '$lib/constants';
 import { getUserPosition } from '$lib/utils';
+import {
+	mergeLocalDirectConnections,
+	prepareUserSettingsForServer
+} from '$lib/utils/direct-connections';
 
 export const getUserGroups = async (token: string) => {
 	let error = null;
@@ -282,7 +286,7 @@ export const getUserSettings = async (token: string) => {
 	})
 		.then(async (res) => {
 			if (!res.ok) throw await res.json();
-			return res.json();
+			return mergeLocalDirectConnections(token, await res.json());
 		})
 		.catch((err) => {
 			console.error(err);
@@ -306,9 +310,7 @@ export const updateUserSettings = async (token: string, settings: object) => {
 			'Content-Type': 'application/json',
 			Authorization: `Bearer ${token}`
 		},
-		body: JSON.stringify({
-			...settings
-		})
+		body: JSON.stringify(prepareUserSettingsForServer(token, settings))
 	})
 		.then(async (res) => {
 			if (!res.ok) throw await res.json();

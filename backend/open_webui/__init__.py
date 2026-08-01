@@ -10,7 +10,14 @@ import uvicorn
 
 app = typer.Typer()
 
-KEY_FILE = Path.cwd() / '.webui_secret_key'
+LEGACY_KEY_FILE = Path.cwd() / '.webui_secret_key'
+
+
+def secret_key_file() -> Path:
+    configured = os.getenv('WEBUI_SECRET_KEY_FILE')
+    if configured:
+        return Path(configured)
+    return Path(os.getenv('DATA_DIR', str(Path.cwd() / 'data'))) / '.webui_secret_key'
 DEFAULT_SECRET_KEY_LENGTH = 24
 
 
@@ -18,7 +25,7 @@ def version_callback(value: bool) -> None:
     if value:
         from open_webui.env import VERSION
 
-        typer.echo(f'Open WebUI version: {VERSION}')
+        typer.echo(f'ArtiChat version: {VERSION}')
         raise typer.Exit()
 
 
@@ -36,15 +43,23 @@ def serve(
 ):
     os.environ['FROM_INIT_PY'] = 'true'
     if os.getenv('WEBUI_SECRET_KEY') is None:
+        key_file = secret_key_file()
         typer.echo('Loading WEBUI_SECRET_KEY from file, not provided as an environment variable.')
-        if not KEY_FILE.exists():
+        if not key_file.exists() and LEGACY_KEY_FILE.exists():
+            key_file.parent.mkdir(parents=True, exist_ok=True)
+            key_file.write_bytes(LEGACY_KEY_FILE.read_bytes())
+            key_file.chmod(0o600)
+            typer.echo('Migrated the legacy WEBUI_SECRET_KEY file into the persistent data directory.')
+        if not key_file.exists():
             key_length = int(os.getenv('WEBUI_SECRET_KEY_LENGTH', DEFAULT_SECRET_KEY_LENGTH))
             if key_length < 1:
                 raise ValueError('WEBUI_SECRET_KEY_LENGTH must be a positive integer')
-            typer.echo(f'Generating a new secret key and saving it to {KEY_FILE}')
-            KEY_FILE.write_bytes(base64.b64encode(random.randbytes(key_length)))
-        typer.echo(f'Loading WEBUI_SECRET_KEY from {KEY_FILE}')
-        os.environ['WEBUI_SECRET_KEY'] = KEY_FILE.read_text()
+            key_file.parent.mkdir(parents=True, exist_ok=True)
+            typer.echo(f'Generating a new secret key and saving it to {key_file}')
+            key_file.write_bytes(base64.b64encode(random.randbytes(key_length)))
+            key_file.chmod(0o600)
+        typer.echo(f'Loading WEBUI_SECRET_KEY from {key_file}')
+        os.environ['WEBUI_SECRET_KEY'] = key_file.read_text()
 
     if os.getenv('USE_CUDA_DOCKER', 'false') == 'true':
         typer.echo('CUDA is enabled, appending LD_LIBRARY_PATH to include torch/cudnn & cublas libraries.')
@@ -71,7 +86,7 @@ def serve(
             os.environ['LD_LIBRARY_PATH'] = ':'.join(LD_LIBRARY_PATH)
 
     import open_webui.main  # noqa: F401
-    from open_webui.env import UVICORN_WORKERS  # Import the workers setting
+    from open_webui.env import TRUSTED_PROXY_IPS, UVICORN_WORKERS
 
     # On Windows, uvicorn's default loop factory hardcodes ProactorEventLoop,
     # which is incompatible with psycopg v3 async.  Setting loop='none' lets
@@ -82,7 +97,7 @@ def serve(
         'open_webui.main:app',
         host=host,
         port=port,
-        forwarded_allow_ips='*',
+        forwarded_allow_ips=TRUSTED_PROXY_IPS,
         workers=UVICORN_WORKERS,
         loop=loop,
     )
@@ -94,12 +109,14 @@ def dev(
     port: int = 8080,
     reload: bool = True,
 ):
+    from open_webui.env import TRUSTED_PROXY_IPS
+
     uvicorn.run(
         'open_webui.main:app',
         host=host,
         port=port,
         reload=reload,
-        forwarded_allow_ips='*',
+        forwarded_allow_ips=TRUSTED_PROXY_IPS,
     )
 
 

@@ -10,6 +10,7 @@
 	export let ariaLabelledbyId = '';
 	export let ariaLabel = '';
 	export let tooltip = false;
+	export let disabled = false;
 
 	const i18n = getContext('i18n');
 	const dispatch = createEventDispatcher();
@@ -28,6 +29,7 @@
 	<Switch.Root
 		bind:checked={state}
 		{id}
+		{disabled}
 		aria-labelledby={ariaLabelledbyId || undefined}
 		aria-label={ariaLabel || undefined}
 		class="relative h-4 min-h-4 w-7 shrink-0 cursor-pointer rounded-full mx-[1px] transition-colors duration-150 {($settings?.highContrastMode ??

@@ -24,7 +24,7 @@
 			console.log('Version is lower than required');
 			toast.error(
 				$i18n.t(
-					'Open WebUI version (v{{OPEN_WEBUI_VERSION}}) is lower than required version (v{{REQUIRED_VERSION}})',
+					'ArtiChat version (v{{OPEN_WEBUI_VERSION}}) is lower than required version (v{{REQUIRED_VERSION}})',
 					{
 						OPEN_WEBUI_VERSION: WEBUI_VERSION,
 						REQUIRED_VERSION: manifest?.required_open_webui_version ?? '0.0.0'
@@ -64,22 +64,6 @@
 		if (!$config?.features?.enable_plugins) {
 			goto('/admin', { replaceState: true });
 			return;
-		}
-
-		window.addEventListener('message', async (event) => {
-			if (
-				!['https://openwebui.com', 'https://www.openwebui.com', 'http://localhost:9999'].includes(
-					event.origin
-				)
-			)
-				return;
-
-			func = JSON.parse(event.data);
-			console.log(func);
-		});
-
-		if (window.opener ?? false) {
-			window.opener.postMessage('loaded', '*');
 		}
 
 		if (sessionStorage.function) {

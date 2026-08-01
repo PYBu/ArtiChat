@@ -1,0 +1,94 @@
+from io import BytesIO
+
+import pytest
+from PIL import Image
+
+from open_webui.utils.platform import (
+    DEFAULT_PLATFORM_ABOUT_CONTENT,
+    normalize_platform_settings,
+    normalize_sidebar_buttons,
+    platform_about_defaults,
+    save_platform_logo,
+)
+
+
+def image_bytes(image_format: str = 'PNG') -> bytes:
+    output = BytesIO()
+    Image.new('RGB', (32, 32), '#111111').save(output, format=image_format)
+    return output.getvalue()
+
+
+def test_platform_text_settings_are_trimmed_and_defaulted():
+    assert normalize_platform_settings(
+        {'name': '  My Platform  ', 'about_title': '  About us ', 'about_content': '  Body\n'}
+    ) == {
+        'name': 'My Platform',
+        'about_title': 'About us',
+        'about_content': 'Body',
+        'sidebar_buttons': [],
+    }
+
+    with pytest.raises(ValueError, match='PLATFORM_NAME_REQUIRED'):
+        normalize_platform_settings({'name': '   ', 'about_title': '', 'about_content': ''})
+
+
+def test_platform_about_defaults_use_current_version_and_product_copy():
+    assert platform_about_defaults('0.2.1') == {
+        'about_title': 'ArtiChat ProEdition v0.2.1',
+        'about_content': DEFAULT_PLATFORM_ABOUT_CONTENT,
+    }
+    assert platform_about_defaults('') == {
+        'about_title': 'ArtiChat ProEdition v0.2.1',
+        'about_content': DEFAULT_PLATFORM_ABOUT_CONTENT,
+    }
+
+
+def test_sidebar_buttons_accept_safe_internal_and_external_urls():
+    assert normalize_sidebar_buttons(
+        [
+            {'name': 'Docs', 'url': '/docs', 'icon': 'book'},
+            {'name': 'Status', 'url': 'https://status.example.com/path', 'icon': 'globe'},
+        ]
+    ) == [
+        {'name': 'Docs', 'url': '/docs', 'icon': 'book'},
+        {'name': 'Status', 'url': 'https://status.example.com/path', 'icon': 'globe'},
+    ]
+
+
+@pytest.mark.parametrize(
+    'button,error',
+    [
+        ({'name': 'Unsafe', 'url': 'javascript:alert(1)', 'icon': 'link'}, 'URL'),
+        ({'name': 'Protocol relative', 'url': '//example.com', 'icon': 'link'}, 'URL'),
+        ({'name': 'Bad icon', 'url': '/ok', 'icon': 'custom-svg'}, 'ICON'),
+    ],
+)
+def test_sidebar_buttons_reject_unsafe_urls_and_unknown_icons(button, error):
+    with pytest.raises(ValueError, match=f'PLATFORM_SIDEBAR_BUTTON_{error}_INVALID'):
+        normalize_sidebar_buttons([button])
+
+
+@pytest.mark.parametrize('image_format', ['PNG', 'JPEG', 'WEBP'])
+def test_platform_logo_accepts_supported_raster_images_and_reencodes_png(tmp_path, image_format):
+    saved = save_platform_logo(
+        content=image_bytes(image_format),
+        content_type=f'image/{image_format.lower()}',
+        theme='dark',
+        assets_dir=tmp_path,
+    )
+
+    assert saved.name == 'logo-dark.png'
+    assert Image.open(saved).format == 'PNG'
+
+
+def test_platform_logo_rejects_invalid_type_content_and_size(tmp_path):
+    with pytest.raises(ValueError, match='PLATFORM_LOGO_TYPE_INVALID'):
+        save_platform_logo(content=image_bytes(), content_type='image/gif', theme='light', assets_dir=tmp_path)
+    with pytest.raises(ValueError, match='PLATFORM_LOGO_INVALID'):
+        save_platform_logo(content=b'not-an-image', content_type='image/png', theme='light', assets_dir=tmp_path)
+    with pytest.raises(ValueError, match='PLATFORM_LOGO_TOO_LARGE'):
+        save_platform_logo(
+            content=b'x' * (2 * 1024 * 1024 + 1), content_type='image/png', theme='light', assets_dir=tmp_path
+        )
+    with pytest.raises(ValueError, match='PLATFORM_LOGO_THEME_INVALID'):
+        save_platform_logo(content=image_bytes(), content_type='image/png', theme='other', assets_dir=tmp_path)

@@ -6,6 +6,7 @@ from typing import Optional
 
 from open_webui.config import (
     OPENSEARCH_CERT_VERIFY,
+    OPENSEARCH_INDEX_PREFIX,
     OPENSEARCH_PASSWORD,
     OPENSEARCH_SSL,
     OPENSEARCH_URI,
@@ -24,7 +25,7 @@ from opensearchpy.helpers import bulk
 
 class OpenSearchClient(VectorDBBase):
     def __init__(self):
-        self.index_prefix = 'open_webui'
+        self.index_prefix = OPENSEARCH_INDEX_PREFIX
         self.client = OpenSearch(
             hosts=[OPENSEARCH_URI],
             use_ssl=OPENSEARCH_SSL,

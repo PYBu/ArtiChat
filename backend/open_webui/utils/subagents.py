@@ -15,7 +15,7 @@ from open_webui.models.chats import Chat, ChatForm, Chats
 from open_webui.models.config import Config
 from open_webui.models.users import UserModel, Users
 from open_webui.tasks import create_task, has_active_tasks
-from open_webui.utils.auth import create_token
+from open_webui.utils.auth import create_user_token
 from open_webui.utils.misc import get_message_list
 from sqlalchemy import select
 from starlette.datastructures import Headers
@@ -44,7 +44,7 @@ _foreground_semaphore: asyncio.Semaphore | None = None
 _parent_locks: dict[str, asyncio.Lock] = {}
 
 
-def _build_request(source: Request, user_id: str, *, internal: bool) -> Request:
+def _build_request(source: Request, user: UserModel, *, internal: bool) -> Request:
     scope = {
         'type': 'http',
         'asgi': {'version': '3.0', 'spec_version': '2.0'},
@@ -58,9 +58,10 @@ def _build_request(source: Request, user_id: str, *, internal: bool) -> Request:
         'app': source.app,
     }
     request = Request(scope)
-    token = create_token(
-        data={'id': user_id, 'typ': 'subagent'},
+    token = create_user_token(
+        user,
         expires_delta=timedelta(hours=1),
+        typ='subagent',
     )
     request.state.token = HTTPAuthorizationCredentials(scheme='Bearer', credentials=token)
     request.state.enable_api_keys = False
@@ -263,7 +264,7 @@ async def process_pending_internal_messages(
         if run.get('terminal_id'):
             form_data['terminal_id'] = run['terminal_id']
 
-        request = _build_request(source_request, user.id, internal=False)
+        request = _build_request(source_request, user, internal=False)
         await source_request.app.state.CHAT_COMPLETION_HANDLER(request, form_data, user=user)
 
 
@@ -412,7 +413,7 @@ async def delegate(
 
     async def run_reserved() -> dict:
         try:
-            child_request = _build_request(request, user.id, internal=True)
+            child_request = _build_request(request, user, internal=True)
             child_request.state.max_tool_call_iterations = max_iterations
             parent_system_prompt = run.get('system_prompt') or ''
             subagent_system_prompt = (

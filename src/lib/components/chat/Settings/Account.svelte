@@ -8,6 +8,7 @@
 	import { WEBUI_BASE_URL } from '$lib/constants';
 
 	import UpdatePassword from './Account/UpdatePassword.svelte';
+	import AccountSecurity from './Account/AccountSecurity.svelte';
 	import { getGravatarUrl } from '$lib/apis/utils';
 	import { generateInitialsImage, canvasPixelTest } from '$lib/utils';
 	import { copyToClipboard } from '$lib/utils';
@@ -341,6 +342,10 @@
 				})}
 			</div>
 		</section>
+
+		<UserSettingSection title={$i18n.t('Account security')}>
+			<AccountSecurity />
+		</UserSettingSection>
 
 		{#if $config?.features.enable_login_form && $config?.features.enable_password_change_form}
 			<UserSettingSection title={$i18n.t('Password')}>

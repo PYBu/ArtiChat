@@ -23,7 +23,6 @@ from open_webui.config import (
     CACHE_DIR,
 )
 from open_webui.constants import ERROR_MESSAGES
-from open_webui.events import EVENTS, publish_event, publish_model_provider_request_failed
 from open_webui.env import (
     AIOHTTP_CLIENT_SESSION_SSL,
     AIOHTTP_CLIENT_TIMEOUT_MODEL_LIST,
@@ -33,6 +32,7 @@ from open_webui.env import (
     FORWARD_SESSION_INFO_HEADER_CHAT_ID,
     MODELS_CACHE_TTL,
 )
+from open_webui.events import EVENTS, publish_event, publish_model_provider_request_failed
 from open_webui.internal.db import get_async_session
 from open_webui.models.access_grants import AccessGrants
 from open_webui.models.config import Config
@@ -40,25 +40,28 @@ from open_webui.models.groups import Groups
 from open_webui.models.models import Models
 from open_webui.models.users import UserModel
 from open_webui.utils.access_control import check_model_access, has_connection_access, has_permission
-from open_webui.utils.anthropic import get_anthropic_models, is_anthropic_url
+from open_webui.utils.anthropic import get_anthropic_models, is_anthropic_connection
 from open_webui.utils.auth import get_admin_user, get_verified_user
 from open_webui.utils.headers import get_custom_headers, include_user_info_headers
+from open_webui.utils.inference_access import assert_raw_embedding_access, assert_raw_provider_generation_access
 from open_webui.utils.json_codec import JSONCodec
-from open_webui.utils.model_ids import strip_provider_model_prefix
 from open_webui.utils.misc import (
     convert_logit_bias_input_to_json,
     stream_chunks_handler,
 )
+from open_webui.utils.model_ids import strip_provider_model_prefix
 from open_webui.utils.payload import (
     apply_model_params_to_body_openai,
     apply_system_prompt_to_body,
 )
+from open_webui.utils.reasoning import apply_reasoning_metadata_to_payload, move_reasoning_effort_to_responses
 from open_webui.utils.session_pool import (
     cleanup_response,
     get_client_timeout,
     get_session,
     stream_wrapper,
 )
+from open_webui.utils.subscriptions import ensure_metered_stream_usage_options
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -127,7 +130,7 @@ async def get_models_request(
     user: UserModel = None,
     config=None,
 ):
-    if is_anthropic_url(url):
+    if is_anthropic_connection(url, config):
         return await get_anthropic_models(url, key, user=user)
     return await send_get_request(request, f'{url}/models', key, user=user, config=config)
 
@@ -166,8 +169,8 @@ async def get_headers_and_cookies(
         'Content-Type': 'application/json',
         **(
             {
-                'HTTP-Referer': 'https://openwebui.com/',
-                'X-Title': 'Open WebUI',
+                'HTTP-Referer': 'https://github.com/PYBu/ArtiChat',
+                'X-Title': 'ArtiChat',
             }
             if 'openrouter.ai' in url
             else {}
@@ -210,7 +213,11 @@ async def get_headers_and_cookies(
         token = get_microsoft_entra_id_access_token()
 
     if token:
-        headers['Authorization'] = f'Bearer {token}'
+        if is_anthropic_connection(url, config):
+            headers['x-api-key'] = token
+            headers.setdefault('anthropic-version', '2023-06-01')
+        else:
+            headers['Authorization'] = f'Bearer {token}'
 
     if config.get('headers') and isinstance(config.get('headers'), dict):
         custom_headers = await get_custom_headers(config.get('headers'), user, metadata, request=request)
@@ -454,6 +461,7 @@ async def update_config(request: Request, form_data: OpenAIConfigForm, user=Depe
 
 @router.post('/audio/speech')
 async def speech(request: Request, user=Depends(get_verified_user)):
+    assert_raw_provider_generation_access(request, user)
     if user.role != 'admin' and not await has_permission(user.id, 'chat.tts', await Config.get('user.permissions')):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -465,13 +473,27 @@ async def speech(request: Request, user=Depends(get_verified_user)):
         _, api_base_urls, _, _ = await get_openai_runtime_config()
         idx = api_base_urls.index('https://api.openai.com/v1')
 
-        body = await request.body()
+        body_chunks = bytearray()
+        async for chunk in request.stream():
+            body_chunks.extend(chunk)
+            if len(body_chunks) > 256 * 1024:
+                raise HTTPException(
+                    status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+                    detail='Speech request exceeds the 256 KB limit',
+                )
+        body = bytes(body_chunks)
+        try:
+            payload = json.loads(body)
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail='Invalid JSON payload') from exc
+        input_text = payload.get('input')
+        if not isinstance(input_text, str) or not input_text.strip() or len(input_text) > 50_000:
+            raise HTTPException(status_code=400, detail='Speech input is empty or too long')
         name = hashlib.sha256(body).hexdigest()
 
         SPEECH_CACHE_DIR = CACHE_DIR / 'audio' / 'speech'
         SPEECH_CACHE_DIR.mkdir(parents=True, exist_ok=True)
         file_path = SPEECH_CACHE_DIR.joinpath(f'{name}.mp3')
-        file_body_path = SPEECH_CACHE_DIR.joinpath(f'{name}.json')
 
         # Check if the file already exists in the cache
         if file_path.is_file():
@@ -494,17 +516,20 @@ async def speech(request: Request, user=Depends(get_verified_user)):
 
             r.raise_for_status()
 
+            written_bytes = 0
+            max_speech_bytes = 50 * 1024 * 1024
             async with aiofiles.open(file_path, 'wb') as f:
                 async for chunk in r.content.iter_chunked(8192):
+                    written_bytes += len(chunk)
+                    if written_bytes > max_speech_bytes:
+                        raise ValueError('Speech response exceeds the 50 MB limit')
                     await f.write(chunk)
-
-            async with aiofiles.open(file_body_path, 'w') as f:
-                await f.write(json.dumps(json.loads(body.decode('utf-8'))))
 
             # Return the saved file
             return FileResponse(file_path)
 
         except Exception as e:
+            await asyncio.to_thread(file_path.unlink, missing_ok=True)
             log.exception(e)
 
             detail = None
@@ -518,7 +543,7 @@ async def speech(request: Request, user=Depends(get_verified_user)):
 
             raise HTTPException(
                 status_code=r.status if r else 500,
-                detail=detail if detail else 'Open WebUI: Server Connection Error',
+                detail=detail if detail else 'ArtiChat: Server Connection Error',
             )
 
     except ValueError:
@@ -739,7 +764,7 @@ async def get_models(request: Request, url_idx: int | None = None, user=Depends(
                         'data': api_config.get('model_ids', []) or [],
                         'object': 'list',
                     }
-                elif is_anthropic_url(url):
+                elif is_anthropic_connection(url, api_config):
                     models = await get_anthropic_models(url, key, user=user)
                     if models is None:
                         raise Exception('Failed to connect to Anthropic API')
@@ -773,7 +798,7 @@ async def get_models(request: Request, url_idx: int | None = None, user=Depends(
             except aiohttp.ClientError as e:
                 # ClientError covers all aiohttp requests issues
                 log.exception(f'Client error: {str(e)}')
-                raise HTTPException(status_code=500, detail='Open WebUI: Server Connection Error')
+                raise HTTPException(status_code=500, detail='ArtiChat: Server Connection Error')
             except Exception as e:
                 log.exception(f'Unexpected error: {e}')
                 error_detail = f'Unexpected error: {str(e)}'
@@ -844,7 +869,7 @@ async def verify_connection(
                             return PlainTextResponse(status_code=r.status, content=response_data)
 
                     return response_data
-            elif is_anthropic_url(url):
+            elif is_anthropic_connection(url, api_config):
                 result = await get_anthropic_models(url, key)
                 if result is None:
                     raise HTTPException(status_code=500, detail=ERROR_MESSAGES.SERVER_CONNECTION_ERROR)
@@ -988,7 +1013,7 @@ RESPONSES_ALLOWED_FIELDS: dict[str, set[str]] = {
 def _normalize_stored_item(item: dict) -> dict:
     """Strip local-only fields from a stored output item before replaying it.
 
-    Open WebUI stores extra bookkeeping fields (``id``, ``status``,
+    ArtiChat stores extra bookkeeping fields (``id``, ``status``,
     ``started_at``, ``ended_at``, ``duration``, ``_tag_type``,
     ``attributes``, ``summary``, etc.) that the Responses API does
     not accept.  This helper returns a copy containing only the
@@ -1141,7 +1166,7 @@ def convert_to_responses_payload(payload: dict) -> dict:
                 converted_tools.append(tool)
         responses_payload['tools'] = converted_tools
 
-    return responses_payload
+    return move_reasoning_effort_to_responses(responses_payload)
 
 
 def convert_responses_result(response: dict) -> dict:
@@ -1184,6 +1209,8 @@ async def generate_chat_completion(
     form_data: dict,
     user=Depends(get_verified_user),
 ):
+    assert_raw_provider_generation_access(request, user)
+
     if not await Config.get('openai.enable'):
         raise HTTPException(status_code=503, detail='OpenAI API is disabled')
 
@@ -1230,6 +1257,8 @@ async def generate_chat_completion(
         await check_model_access(user, model_info, bypass_filter)
     else:
         await check_model_access(user, None, bypass_filter)
+
+    payload = apply_reasoning_metadata_to_payload(payload, metadata)
 
     # Check if model is already in app state cache to avoid expensive get_all_models() call
     models = request.app.state.OPENAI_MODELS
@@ -1282,6 +1311,8 @@ async def generate_chat_completion(
     headers, cookies = await get_headers_and_cookies(request, url, key, api_config, metadata, user=user)
 
     is_responses = api_config.get('api_type') == 'responses'
+    if not is_responses:
+        ensure_metered_stream_usage_options(payload, metadata)
 
     if api_config.get('azure') or api_config.get('provider') == 'azure':
         # Only set api-key header if not using Azure Entra ID authentication
@@ -1447,6 +1478,8 @@ async def embeddings(request: Request, form_data: dict, user):
     Returns:
         dict: OpenAI-compatible embeddings response.
     """
+    assert_raw_embedding_access(user)
+
     idx = 0
     # Prepare payload/body
     body = json.dumps(form_data)
@@ -1571,6 +1604,8 @@ async def responses(
     Forward requests to the OpenAI Responses API endpoint.
     Routes to the correct upstream backend based on the model field.
     """
+    assert_raw_provider_generation_access(request, user)
+
     payload = form_data.model_dump(exclude_none=True)
     is_streaming_request = bool(payload.get('stream', False))
 
@@ -1677,6 +1712,8 @@ async def proxy(path: str, request: Request, user=Depends(get_verified_user)):
     Deprecated: proxy all requests to OpenAI API.
     Disabled by default. Set ENABLE_OPENAI_API_PASSTHROUGH=True to enable.
     """
+
+    assert_raw_provider_generation_access(request, user)
 
     if not ENABLE_OPENAI_API_PASSTHROUGH:
         raise HTTPException(
@@ -1786,7 +1823,7 @@ async def proxy(path: str, request: Request, user=Depends(get_verified_user)):
         log.exception(e)
         raise HTTPException(
             status_code=r.status if r else 500,
-            detail='Open WebUI: Server Connection Error',
+            detail='ArtiChat: Server Connection Error',
         )
     finally:
         if not streaming:

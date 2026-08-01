@@ -13,6 +13,7 @@ from open_webui.routers.ollama import (
     embed as ollama_embed,
 )
 from open_webui.routers.openai import embeddings as openai_embeddings
+from open_webui.utils.inference_access import assert_raw_embedding_access
 from open_webui.utils.models import check_model_access
 from open_webui.utils.payload import convert_embed_payload_openai_to_ollama
 from open_webui.utils.response import convert_embedding_response_ollama_to_openai
@@ -39,6 +40,8 @@ async def generate_embeddings(
     Returns:
         dict: The embeddings response, following OpenAI API compatibility.
     """
+    assert_raw_embedding_access(user)
+
     if BYPASS_MODEL_ACCESS_CONTROL:
         bypass_filter = True
 

@@ -35,6 +35,23 @@ def is_anthropic_url(url: str) -> bool:
     return 'api.anthropic.com' in url
 
 
+def get_provider_profile(url: str, api_config: dict | None = None) -> str:
+    """Resolve a connection profile without making URL inference authoritative."""
+    api_config = api_config or {}
+    provider = str(api_config.get('provider') or '').strip().lower()
+    if provider:
+        return provider
+    if api_config.get('azure'):
+        return 'azure'
+    if is_anthropic_url(url or ''):
+        return 'anthropic'
+    return 'openai-compatible'
+
+
+def is_anthropic_connection(url: str, api_config: dict | None = None) -> bool:
+    return get_provider_profile(url, api_config) == 'anthropic'
+
+
 async def get_anthropic_models(url: str, key: str, user: UserModel = None) -> dict:
     """
     Fetch models from Anthropic's /v1/models endpoint with pagination.
@@ -128,9 +145,9 @@ def _finalize_openai_content(blocks: list) -> str | list:
 
 def is_anthropic_messages_passthrough(url: str, api_config: dict | None = None) -> bool:
     api_config = api_config or {}
-    provider = str(api_config.get('provider', '')).lower()
+    provider = str(api_config.get('provider') or '').strip().lower()
 
-    return is_anthropic_url(url or '') or provider == 'litellm'
+    return is_anthropic_connection(url, api_config) or provider == 'litellm'
 
 
 def convert_anthropic_to_openai_payload(

@@ -979,7 +979,7 @@
 			{$i18n.t('No Terminal connection configured.')}
 		</div>
 		<div class="text-[10px] text-gray-400 dark:text-gray-500">
-			{$i18n.t('Add your Open Terminal URL and API key in Settings → Integrations.')}
+			{$i18n.t('Add your terminal service URL and API key in Settings → Integrations.')}
 		</div>
 	</div>
 {:else}

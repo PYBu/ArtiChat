@@ -80,7 +80,7 @@ generate() {
     dim "Scanning resolved manifests with Syft..."
     syft scan "dir:$WORK_DIR" \
         --output "cyclonedx-json=$OUTPUT" \
-        --source-name open-webui \
+        --source-name artichat \
         --source-version "$VERSION" \
         --quiet
 
@@ -103,7 +103,7 @@ print(f'  Timestamp: {data.get(\"metadata\", {}).get(\"timestamp\", \"none\")}')
 }
 
 generate_docker() {
-    local IMAGE="${1:-ghcr.io/open-webui/open-webui:latest}"
+    local IMAGE="${1:-artichat:main}"
     info "Generating SBOM from Docker image: $IMAGE"
 
     if ! command -v syft &>/dev/null; then

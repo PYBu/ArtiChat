@@ -95,7 +95,7 @@
 
 						<AdminSettingRow
 							label={$i18n.t('Jupyter Auth')}
-							description={$i18n.t('Select how Open WebUI authenticates with the Jupyter server.')}
+							description={$i18n.t('Select how ArtiChat authenticates with the Jupyter server.')}
 						>
 							<SettingsSelect
 								bind:value={config.CODE_EXECUTION_JUPYTER_AUTH}
@@ -196,7 +196,7 @@
 
 						<AdminSettingRow
 							label={$i18n.t('Jupyter Auth')}
-							description={$i18n.t('Select how Open WebUI authenticates with the Jupyter server.')}
+							description={$i18n.t('Select how ArtiChat authenticates with the Jupyter server.')}
 						>
 							<SettingsSelect
 								bind:value={config.CODE_INTERPRETER_JUPYTER_AUTH}

@@ -1,0 +1,3183 @@
+<!doctype html>
+<html lang="zh-CN">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>ArtiChat 0.2.0 - 运营与设置视觉方案</title>
+		<style>
+			@font-face {
+				font-family: Inter;
+				src: url('../../static/assets/fonts/Inter-Variable.ttf') format('truetype');
+				font-display: swap;
+			}
+
+			:root {
+				color-scheme: light;
+				--bg: #ffffff;
+				--sidebar: #f9fafb;
+				--surface: #ffffff;
+				--surface-soft: #f7f7f8;
+				--surface-hover: #f3f4f6;
+				--text: #111827;
+				--text-soft: #4b5563;
+				--muted: #6b7280;
+				--faint: #9ca3af;
+				--line: #eef0f2;
+				--line-strong: #dfe3e8;
+				--inverse: #111111;
+				--inverse-text: #ffffff;
+				--green: #15803d;
+				--green-soft: #f0fdf4;
+				--blue: #2563eb;
+				--blue-soft: #eff6ff;
+				--amber: #a16207;
+				--amber-soft: #fffbeb;
+				--red: #dc2626;
+				--red-soft: #fef2f2;
+				--shadow: 0 16px 38px rgb(17 24 39 / 10%), 0 2px 8px rgb(17 24 39 / 6%);
+			}
+
+			html[data-theme='dark'] {
+				color-scheme: dark;
+				--bg: #171717;
+				--sidebar: #111111;
+				--surface: #1d1d1d;
+				--surface-soft: #242424;
+				--surface-hover: #2a2a2a;
+				--text: #f5f5f5;
+				--text-soft: #d1d5db;
+				--muted: #9ca3af;
+				--faint: #737373;
+				--line: #2b2b2b;
+				--line-strong: #3a3a3a;
+				--inverse: #f5f5f5;
+				--inverse-text: #111111;
+				--green: #4ade80;
+				--green-soft: #14291c;
+				--blue: #60a5fa;
+				--blue-soft: #17243a;
+				--amber: #facc15;
+				--amber-soft: #332b12;
+				--red: #f87171;
+				--red-soft: #37191b;
+				--shadow: 0 20px 42px rgb(0 0 0 / 38%), 0 2px 8px rgb(0 0 0 / 24%);
+			}
+
+			* {
+				box-sizing: border-box;
+			}
+
+			html,
+			body {
+				margin: 0;
+				min-height: 100%;
+				background: var(--bg);
+				color: var(--text);
+				font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+				font-size: 14px;
+				letter-spacing: 0;
+			}
+
+			button,
+			input,
+			select,
+			textarea {
+				font: inherit;
+				letter-spacing: 0;
+			}
+
+			button,
+			select {
+				cursor: pointer;
+			}
+
+			button {
+				color: inherit;
+			}
+
+			button:focus-visible,
+			input:focus-visible,
+			select:focus-visible,
+			textarea:focus-visible {
+				outline: 2px solid var(--blue);
+				outline-offset: 2px;
+			}
+
+			.app-shell {
+				display: grid;
+				grid-template-columns: 244px minmax(0, 1fr);
+				min-height: 100dvh;
+			}
+
+			.sidebar {
+				position: sticky;
+				top: 0;
+				display: flex;
+				flex-direction: column;
+				height: 100dvh;
+				border-right: 1px solid var(--line);
+				background: var(--sidebar);
+				padding: 10px 8px;
+				z-index: 30;
+			}
+
+			.brand {
+				display: flex;
+				align-items: center;
+				gap: 9px;
+				height: 38px;
+				padding: 0 8px;
+				font-size: 13px;
+				font-weight: 600;
+			}
+
+			.brand img {
+				width: 22px;
+				height: 22px;
+				border-radius: 6px;
+				object-fit: contain;
+			}
+
+			.version-tag {
+				margin-left: auto;
+				color: var(--faint);
+				font-size: 10px;
+				font-weight: 500;
+			}
+
+			.sidebar-scroll {
+				min-height: 0;
+				flex: 1;
+				overflow-y: auto;
+				padding-top: 10px;
+			}
+
+			.nav-label {
+				margin: 13px 8px 5px;
+				color: var(--faint);
+				font-size: 10px;
+			}
+
+			.nav-item {
+				display: flex;
+				align-items: center;
+				gap: 8px;
+				width: 100%;
+				height: 28px;
+				border: 0;
+				border-radius: 8px;
+				background: transparent;
+				padding: 0 8px;
+				color: var(--muted);
+				font-size: 12px;
+				text-align: left;
+				transition:
+					background 120ms ease,
+					color 120ms ease;
+			}
+
+			.nav-item:hover {
+				background: var(--surface-hover);
+				color: var(--text-soft);
+			}
+
+			.nav-item.active {
+				background: var(--surface-hover);
+				color: var(--text);
+				font-weight: 550;
+			}
+
+			.nav-item svg,
+			.icon-button svg,
+			.button svg,
+			.tile-icon svg,
+			.inline-icon svg,
+			.status-icon svg {
+				width: 15px;
+				height: 15px;
+				stroke-width: 1.8;
+				flex: none;
+			}
+
+			.sidebar-footer {
+				border-top: 1px solid var(--line);
+				padding: 9px 4px 0;
+			}
+
+			.gift-entry {
+				display: inline-flex;
+				align-items: center;
+				gap: 7px;
+				min-height: 30px;
+				border: 1px solid var(--line-strong);
+				border-radius: 8px;
+				background: transparent;
+				padding: 5px 9px;
+				font-size: 12px;
+				transition: background 120ms ease;
+			}
+
+			.gift-entry:hover {
+				background: var(--surface-hover);
+			}
+
+			.identity-row {
+				display: flex;
+				align-items: center;
+				gap: 7px;
+				margin-top: 6px;
+			}
+
+			.identity {
+				display: flex;
+				min-width: 0;
+				flex: 1;
+				align-items: center;
+				gap: 8px;
+				border: 0;
+				border-radius: 8px;
+				background: transparent;
+				padding: 5px 6px;
+				font-size: 12px;
+			}
+
+			.avatar {
+				display: grid;
+				width: 24px;
+				height: 24px;
+				place-items: center;
+				border-radius: 50%;
+				background: #1f2937;
+				color: white;
+				font-size: 10px;
+			}
+
+			.quota-trigger {
+				display: flex;
+				align-items: center;
+				gap: 5px;
+				border: 0;
+				border-radius: 8px;
+				background: transparent;
+				padding: 4px 5px;
+				font-size: 10px;
+			}
+
+			.quota-trigger:hover {
+				background: var(--surface-hover);
+			}
+
+			.quota-ring {
+				width: 24px;
+				height: 24px;
+				border-radius: 50%;
+				background: conic-gradient(#22c55e 0 72%, var(--line-strong) 72% 100%);
+				position: relative;
+			}
+
+			.quota-ring::after {
+				position: absolute;
+				inset: 3px;
+				border-radius: 50%;
+				background: var(--sidebar);
+				content: '';
+			}
+
+			.quota-popover {
+				position: fixed;
+				left: 8px;
+				bottom: 70px;
+				display: none;
+				width: min(280px, calc(100vw - 16px));
+				border: 1px solid var(--line-strong);
+				border-radius: 8px;
+				background: var(--surface);
+				box-shadow: var(--shadow);
+				padding: 12px;
+				z-index: 80;
+			}
+
+			.quota-popover.show {
+				display: block;
+			}
+
+			.mobile-bar {
+				display: none;
+			}
+
+			.main {
+				min-width: 0;
+				padding: 22px clamp(18px, 4vw, 52px) 64px;
+			}
+
+			.content {
+				width: 100%;
+				max-width: 1180px;
+				margin: 0 auto;
+			}
+
+			.view {
+				display: none;
+			}
+
+			.view.active {
+				display: block;
+			}
+
+			.page-head {
+				display: flex;
+				align-items: flex-start;
+				justify-content: space-between;
+				gap: 16px;
+				border-bottom: 1px solid var(--line);
+				padding: 0 1px 14px;
+			}
+
+			.page-head h1 {
+				margin: 0;
+				font-size: 14px;
+				font-weight: 600;
+				line-height: 1.35;
+			}
+
+			.page-head p {
+				max-width: 680px;
+				margin: 4px 0 0;
+				color: var(--muted);
+				font-size: 11px;
+				line-height: 1.55;
+			}
+
+			.head-actions,
+			.toolbar,
+			.button-row,
+			.card-actions,
+			.filter-row {
+				display: flex;
+				align-items: center;
+				gap: 8px;
+				flex-wrap: wrap;
+			}
+
+			.button,
+			.icon-button {
+				display: inline-flex;
+				align-items: center;
+				justify-content: center;
+				border: 1px solid transparent;
+				background: transparent;
+				transition:
+					background 120ms ease,
+					border-color 120ms ease,
+					color 120ms ease;
+			}
+
+			.button {
+				min-height: 28px;
+				gap: 6px;
+				border-radius: 999px;
+				padding: 5px 12px;
+				font-size: 12px;
+			}
+
+			.button.rect {
+				border-radius: 8px;
+				white-space: nowrap;
+			}
+
+			.button.primary {
+				background: var(--inverse);
+				color: var(--inverse-text);
+			}
+
+			.button.secondary {
+				border-color: var(--line-strong);
+				background: var(--surface);
+			}
+
+			.button.ghost:hover,
+			.icon-button:hover,
+			.button.secondary:hover {
+				background: var(--surface-hover);
+			}
+
+			.button.danger {
+				color: var(--red);
+			}
+
+			.icon-button {
+				width: 28px;
+				height: 28px;
+				border-radius: 8px;
+				color: var(--muted);
+			}
+
+			.section-title {
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				gap: 12px;
+				margin: 22px 1px 10px;
+			}
+
+			.section-title h2 {
+				margin: 0;
+				font-size: 13px;
+				font-weight: 600;
+			}
+
+			.section-title span,
+			.helper,
+			.muted {
+				color: var(--muted);
+				font-size: 11px;
+			}
+
+			.metric-strip {
+				display: grid;
+				grid-template-columns: repeat(4, minmax(0, 1fr));
+				border-bottom: 1px solid var(--line);
+				padding: 17px 0;
+			}
+
+			.metric {
+				padding: 0 18px;
+				border-right: 1px solid var(--line);
+			}
+
+			.metric:first-child {
+				padding-left: 1px;
+			}
+
+			.metric:last-child {
+				border-right: 0;
+			}
+
+			.metric-label {
+				color: var(--muted);
+				font-size: 11px;
+			}
+
+			.metric-value {
+				margin-top: 5px;
+				font-size: 16px;
+				font-weight: 600;
+			}
+
+			.metric-note {
+				margin-top: 2px;
+				color: var(--faint);
+				font-size: 10px;
+			}
+
+			.tile-grid {
+				display: grid;
+				grid-template-columns: repeat(3, minmax(0, 1fr));
+				gap: 10px;
+			}
+
+			.nav-tile {
+				display: flex;
+				min-height: 82px;
+				flex-direction: column;
+				align-items: stretch;
+				justify-content: space-between;
+				border: 1px solid var(--line);
+				border-radius: 8px;
+				background: var(--surface);
+				padding: 11px;
+				text-align: left;
+				transition:
+					background 120ms ease,
+					border-color 120ms ease;
+			}
+
+			.nav-tile:hover {
+				border-color: var(--line-strong);
+				background: var(--surface-soft);
+			}
+
+			.tile-top {
+				display: flex;
+				align-items: flex-start;
+				justify-content: space-between;
+			}
+
+			.tile-icon,
+			.status-icon {
+				display: grid;
+				width: 28px;
+				height: 28px;
+				place-items: center;
+				border-radius: 8px;
+				background: var(--surface-soft);
+				color: var(--text-soft);
+			}
+
+			.tile-copy strong {
+				display: block;
+				font-size: 13px;
+				font-weight: 550;
+			}
+
+			.tile-copy span {
+				display: block;
+				margin-top: 4px;
+				color: var(--muted);
+				font-size: 11px;
+				line-height: 1.45;
+			}
+
+			.surface,
+			.item-card,
+			.plan-card,
+			.preview-frame {
+				border: 1px solid var(--line);
+				border-radius: 8px;
+				background: var(--surface);
+			}
+
+			.surface {
+				padding: 14px;
+			}
+
+			.item-card,
+			.plan-card {
+				padding: 13px;
+			}
+
+			.form-grid {
+				display: grid;
+				grid-template-columns: repeat(4, minmax(0, 1fr));
+				gap: 12px;
+			}
+
+			.field {
+				min-width: 0;
+			}
+
+			.field.span-2 {
+				grid-column: span 2;
+			}
+
+			.field.span-full {
+				grid-column: 1 / -1;
+			}
+
+			.field label,
+			.field-label {
+				display: block;
+				margin-bottom: 5px;
+				color: var(--text-soft);
+				font-size: 11px;
+			}
+
+			.input,
+			.select,
+			.textarea {
+				width: 100%;
+				border: 1px solid var(--line-strong);
+				border-radius: 8px;
+				background: transparent;
+				color: var(--text);
+				outline: none;
+			}
+
+			.input,
+			.select {
+				height: 28px;
+				padding: 0 10px;
+				font-size: 12px;
+			}
+
+			.textarea {
+				min-height: 88px;
+				padding: 9px 10px;
+				font-size: 12px;
+				line-height: 1.55;
+				resize: vertical;
+			}
+
+			.input::placeholder,
+			.textarea::placeholder {
+				color: var(--faint);
+			}
+
+			.segmented {
+				display: inline-flex;
+				align-items: center;
+				gap: 2px;
+				border-radius: 8px;
+				background: var(--surface-soft);
+				padding: 2px;
+			}
+
+			.segmented button {
+				min-height: 28px;
+				border: 0;
+				border-radius: 6px;
+				background: transparent;
+				padding: 4px 10px;
+				color: var(--muted);
+				font-size: 11px;
+			}
+
+			.segmented button.active {
+				background: var(--surface);
+				box-shadow: 0 1px 3px rgb(17 24 39 / 9%);
+				color: var(--text);
+			}
+
+			.switch {
+				position: relative;
+				width: 34px;
+				height: 20px;
+				border: 0;
+				border-radius: 999px;
+				background: var(--line-strong);
+				padding: 0;
+				transition: background 120ms ease;
+			}
+
+			.switch::after {
+				position: absolute;
+				top: 3px;
+				left: 3px;
+				width: 14px;
+				height: 14px;
+				border-radius: 50%;
+				background: white;
+				box-shadow: 0 1px 2px rgb(0 0 0 / 16%);
+				content: '';
+				transition: transform 120ms ease;
+			}
+
+			.switch[aria-checked='true'] {
+				background: #22c55e;
+			}
+
+			.switch[aria-checked='true']::after {
+				transform: translateX(14px);
+			}
+
+			.badge {
+				display: inline-flex;
+				align-items: center;
+				gap: 5px;
+				min-height: 21px;
+				border-radius: 999px;
+				background: var(--surface-soft);
+				padding: 2px 7px;
+				color: var(--muted);
+				font-size: 10px;
+				white-space: nowrap;
+			}
+
+			.badge.green {
+				background: var(--green-soft);
+				color: var(--green);
+			}
+
+			.badge.blue {
+				background: var(--blue-soft);
+				color: var(--blue);
+			}
+
+			.badge.amber {
+				background: var(--amber-soft);
+				color: var(--amber);
+			}
+
+			.badge.red {
+				background: var(--red-soft);
+				color: var(--red);
+			}
+
+			.plan-grid {
+				display: grid;
+				grid-template-columns: repeat(3, minmax(0, 1fr));
+				gap: 10px;
+			}
+
+			.card-head,
+			.item-head,
+			.setting-row,
+			.list-row,
+			.code-main {
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				gap: 12px;
+			}
+
+			.card-title {
+				font-size: 13px;
+				font-weight: 600;
+			}
+
+			.card-subtitle {
+				margin-top: 3px;
+				color: var(--muted);
+				font-size: 11px;
+			}
+
+			.plan-amount {
+				margin: 18px 0 12px;
+				font-size: 18px;
+				font-weight: 600;
+			}
+
+			.plan-amount small {
+				color: var(--muted);
+				font-size: 11px;
+				font-weight: 400;
+			}
+
+			.definition-list {
+				display: grid;
+				gap: 7px;
+				margin: 0;
+			}
+
+			.definition-list div {
+				display: flex;
+				justify-content: space-between;
+				gap: 10px;
+				font-size: 11px;
+			}
+
+			.definition-list dt {
+				color: var(--muted);
+			}
+
+			.definition-list dd {
+				margin: 0;
+				text-align: right;
+			}
+
+			.list-box {
+				border: 1px solid var(--line);
+				border-radius: 8px;
+				overflow: hidden;
+			}
+
+			.list-row {
+				min-height: 54px;
+				border-bottom: 1px solid var(--line);
+				padding: 10px 12px;
+			}
+
+			.list-row:last-child {
+				border-bottom: 0;
+			}
+
+			.model-info,
+			.user-info {
+				min-width: 190px;
+				flex: 1;
+			}
+
+			.model-info strong,
+			.user-info strong {
+				display: block;
+				font-size: 12px;
+				font-weight: 550;
+			}
+
+			.model-info span,
+			.user-info span {
+				display: block;
+				max-width: 340px;
+				overflow: hidden;
+				color: var(--muted);
+				font-size: 10px;
+				text-overflow: ellipsis;
+				white-space: nowrap;
+			}
+
+			.tier-checks {
+				display: flex;
+				gap: 5px;
+				flex-wrap: wrap;
+			}
+
+			.check-pill {
+				display: inline-flex;
+				align-items: center;
+				gap: 5px;
+				border: 1px solid var(--line);
+				border-radius: 999px;
+				padding: 4px 7px;
+				color: var(--muted);
+				font-size: 10px;
+			}
+
+			.check-pill input {
+				accent-color: #111111;
+				width: 12px;
+				height: 12px;
+				margin: 0;
+			}
+
+			.code-list,
+			.announcement-list,
+			.gift-list {
+				display: grid;
+				gap: 8px;
+			}
+
+			.code-meta,
+			.card-meta {
+				display: flex;
+				align-items: center;
+				gap: 6px;
+				flex-wrap: wrap;
+				margin-top: 8px;
+				color: var(--muted);
+				font-size: 10px;
+			}
+
+			.code-value {
+				font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+				font-size: 12px;
+				font-weight: 600;
+				word-break: break-all;
+			}
+
+			.table-wrap {
+				overflow-x: auto;
+			}
+
+			table {
+				width: 100%;
+				border-collapse: collapse;
+				font-size: 11px;
+				white-space: nowrap;
+			}
+
+			th,
+			td {
+				border-bottom: 1px solid var(--line);
+				padding: 9px 10px;
+				text-align: left;
+			}
+
+			th {
+				color: var(--muted);
+				font-size: 10px;
+				font-weight: 500;
+			}
+
+			td.numeric,
+			th.numeric {
+				text-align: right;
+			}
+
+			tbody tr:hover {
+				background: var(--surface-soft);
+			}
+
+			.usage-layout {
+				display: grid;
+				grid-template-columns: minmax(0, 1.4fr) minmax(300px, 0.6fr);
+				gap: 18px;
+			}
+
+			.token-bars {
+				display: grid;
+				gap: 12px;
+				padding: 8px 0;
+			}
+
+			.token-row {
+				display: grid;
+				grid-template-columns: 68px minmax(0, 1fr) 58px;
+				align-items: center;
+				gap: 9px;
+				font-size: 10px;
+			}
+
+			.bar {
+				height: 6px;
+				overflow: hidden;
+				border-radius: 999px;
+				background: var(--surface-soft);
+			}
+
+			.bar span {
+				display: block;
+				height: 100%;
+				border-radius: inherit;
+				background: #4b5563;
+			}
+
+			.bar.output span {
+				background: #2563eb;
+			}
+
+			.bar.cache-create span {
+				background: #d97706;
+			}
+
+			.bar.cache-read span {
+				background: #059669;
+			}
+
+			.editor-grid {
+				display: grid;
+				grid-template-columns: minmax(0, 1fr) minmax(300px, 0.82fr);
+				gap: 20px;
+			}
+
+			.editor-pane {
+				padding-right: 20px;
+				border-right: 1px solid var(--line);
+			}
+
+			.preview-frame {
+				overflow: hidden;
+			}
+
+			.preview-frame img {
+				display: block;
+				width: 100%;
+				aspect-ratio: 16 / 7;
+				object-fit: cover;
+			}
+
+			.preview-copy {
+				padding: 14px;
+			}
+
+			.preview-copy h3 {
+				margin: 0;
+				font-size: 14px;
+				font-weight: 600;
+			}
+
+			.preview-copy p {
+				margin: 7px 0 0;
+				color: var(--muted);
+				font-size: 11px;
+				line-height: 1.55;
+			}
+
+			.announcement-card {
+				display: grid;
+				grid-template-columns: 88px minmax(0, 1fr) auto;
+				align-items: center;
+				gap: 12px;
+				border: 1px solid var(--line);
+				border-radius: 8px;
+				padding: 9px;
+			}
+
+			.announcement-thumb {
+				width: 88px;
+				aspect-ratio: 16 / 9;
+				border-radius: 6px;
+				object-fit: cover;
+			}
+
+			.settings-shell {
+				display: grid;
+				grid-template-columns: 202px minmax(0, 1fr);
+				min-height: 620px;
+				border-top: 1px solid var(--line);
+			}
+
+			.settings-nav {
+				border-right: 1px solid var(--line);
+				padding: 12px 9px 12px 0;
+			}
+
+			.settings-nav .nav-item {
+				height: 29px;
+			}
+
+			.settings-content {
+				padding: 18px 4px 18px 22px;
+			}
+
+			.settings-content h2 {
+				margin: 0 0 17px;
+				font-size: 14px;
+				font-weight: 600;
+			}
+
+			.setting-section {
+				margin-top: 20px;
+			}
+
+			.setting-section:first-of-type {
+				margin-top: 0;
+			}
+
+			.setting-section h3 {
+				margin: 0 0 5px;
+				color: var(--muted);
+				font-size: 11px;
+				font-weight: 500;
+			}
+
+			.setting-row {
+				min-height: 46px;
+				border-bottom: 1px solid var(--line);
+				padding: 8px 0;
+			}
+
+			.setting-row:last-child {
+				border-bottom: 0;
+			}
+
+			.setting-copy {
+				min-width: 0;
+				padding-right: 16px;
+			}
+
+			.setting-copy strong {
+				display: block;
+				font-size: 11px;
+				font-weight: 500;
+			}
+
+			.setting-copy span {
+				display: block;
+				margin-top: 2px;
+				color: var(--muted);
+				font-size: 10px;
+				line-height: 1.4;
+			}
+
+			.logo-well {
+				display: flex;
+				align-items: center;
+				gap: 10px;
+				width: min(100%, 330px);
+				border: 1px dashed var(--line-strong);
+				border-radius: 8px;
+				padding: 10px;
+			}
+
+			.logo-well img {
+				width: 38px;
+				height: 38px;
+				border-radius: 8px;
+				object-fit: contain;
+			}
+
+			.user-demo {
+				width: min(100%, 680px);
+				margin: 20px auto 0;
+			}
+
+			.user-card-grid {
+				display: grid;
+				grid-template-columns: minmax(0, 1fr);
+				gap: 10px;
+			}
+
+			.redeem-input {
+				display: flex;
+				gap: 8px;
+			}
+
+			.redeem-input .button {
+				min-width: 72px;
+			}
+
+			.template-row {
+				display: flex;
+				align-items: center;
+				gap: 8px;
+			}
+
+			.template-row .input {
+				min-width: 0;
+				flex: 1;
+				font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+			}
+
+			.payment-card {
+				min-height: 150px;
+			}
+
+			.entry-layout {
+				display: grid;
+				grid-template-columns: minmax(280px, 340px) minmax(280px, 1fr);
+				gap: 18px;
+			}
+
+			.sidebar-specimen {
+				display: flex;
+				min-height: 410px;
+				flex-direction: column;
+				border: 1px solid var(--line);
+				border-radius: 8px;
+				background: var(--sidebar);
+				padding: 10px;
+			}
+
+			.chat-skeleton {
+				display: grid;
+				gap: 8px;
+				margin-top: 18px;
+			}
+
+			.skeleton-line {
+				height: 28px;
+				border-radius: 8px;
+				background: var(--surface-soft);
+			}
+
+			.entry-footer {
+				margin-top: auto;
+			}
+
+			.mobile-specimen {
+				width: min(100%, 360px);
+				min-height: 410px;
+				border: 1px solid var(--line);
+				border-radius: 8px;
+				background: var(--surface);
+				padding: 14px;
+			}
+
+			.mobile-bottom {
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				margin-top: 250px;
+				border-top: 1px solid var(--line);
+				padding-top: 10px;
+			}
+
+			.modal-backdrop {
+				position: fixed;
+				inset: 0;
+				display: none;
+				align-items: center;
+				justify-content: center;
+				background: rgb(17 24 39 / 36%);
+				backdrop-filter: blur(2px);
+				padding: 16px;
+				z-index: 100;
+			}
+
+			.modal-backdrop.open {
+				display: flex;
+			}
+
+			.modal {
+				width: min(720px, 100%);
+				max-height: min(720px, calc(100dvh - 32px));
+				overflow: auto;
+				border: 1px solid var(--line-strong);
+				border-radius: 8px;
+				background: var(--surface);
+				box-shadow: var(--shadow);
+			}
+
+			.modal-head {
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				gap: 12px;
+				border-bottom: 1px solid var(--line);
+				padding: 12px 14px;
+			}
+
+			.modal-head h2 {
+				margin: 0;
+				font-size: 14px;
+				font-weight: 600;
+			}
+
+			.modal-body {
+				padding: 14px;
+			}
+
+			.scrim {
+				position: fixed;
+				inset: 0;
+				display: none;
+				background: rgb(17 24 39 / 30%);
+				z-index: 25;
+			}
+
+			.hidden {
+				display: none !important;
+			}
+
+			@media (max-width: 980px) {
+				.tile-grid,
+				.plan-grid {
+					grid-template-columns: repeat(2, minmax(0, 1fr));
+				}
+
+				.form-grid {
+					grid-template-columns: repeat(2, minmax(0, 1fr));
+				}
+
+				.usage-layout,
+				.editor-grid {
+					grid-template-columns: 1fr;
+				}
+
+				.editor-pane {
+					border-right: 0;
+					border-bottom: 1px solid var(--line);
+					padding: 0 0 18px;
+				}
+			}
+
+			@media (max-width: 820px) {
+				.app-shell {
+					display: block;
+				}
+
+				.sidebar {
+					position: fixed;
+					left: 0;
+					transform: translateX(-100%);
+					width: min(280px, calc(100vw - 44px));
+					transition: transform 160ms ease;
+				}
+
+				.sidebar.open {
+					transform: translateX(0);
+				}
+
+				.scrim.open {
+					display: block;
+				}
+
+				.mobile-bar {
+					position: sticky;
+					top: 0;
+					display: flex;
+					align-items: center;
+					justify-content: space-between;
+					height: 48px;
+					border-bottom: 1px solid var(--line);
+					background: color-mix(in srgb, var(--bg) 92%, transparent);
+					backdrop-filter: blur(12px);
+					padding: 0 12px;
+					z-index: 20;
+				}
+
+				.mobile-brand {
+					display: flex;
+					align-items: center;
+					gap: 7px;
+					font-size: 12px;
+					font-weight: 600;
+				}
+
+				.mobile-brand img {
+					width: 22px;
+					height: 22px;
+					border-radius: 6px;
+				}
+
+				.main {
+					padding: 16px 14px 48px;
+				}
+
+				.settings-shell {
+					grid-template-columns: 1fr;
+				}
+
+				.settings-nav {
+					display: flex;
+					overflow-x: auto;
+					border-right: 0;
+					border-bottom: 1px solid var(--line);
+					padding: 8px 0;
+				}
+
+				.settings-nav .nav-label {
+					display: none;
+				}
+
+				.settings-nav .nav-item {
+					width: auto;
+					flex: none;
+				}
+
+				.settings-content {
+					padding: 16px 0;
+				}
+			}
+
+			@media (max-width: 640px) {
+				.page-head {
+					align-items: stretch;
+					flex-direction: column;
+				}
+
+				.metric-strip {
+					grid-template-columns: repeat(2, minmax(0, 1fr));
+					gap: 14px 0;
+				}
+
+				.metric:nth-child(2) {
+					border-right: 0;
+				}
+
+				.metric:nth-child(3) {
+					padding-left: 1px;
+				}
+
+				.tile-grid,
+				.plan-grid,
+				.form-grid,
+				.user-card-grid,
+				.entry-layout {
+					grid-template-columns: 1fr;
+				}
+
+				.field.span-2 {
+					grid-column: span 1;
+				}
+
+				.list-row,
+				.code-main {
+					align-items: flex-start;
+					flex-direction: column;
+				}
+
+				.model-info {
+					min-width: 0;
+				}
+
+				.announcement-card {
+					grid-template-columns: 64px minmax(0, 1fr);
+				}
+
+				.announcement-thumb {
+					width: 64px;
+				}
+
+				.announcement-card .card-actions {
+					grid-column: 1 / -1;
+					justify-content: flex-end;
+				}
+
+				.redeem-input {
+					flex-direction: column;
+				}
+
+				.template-row {
+					align-items: stretch;
+					flex-direction: column;
+				}
+			}
+		</style>
+	</head>
+	<body>
+		<div class="scrim" id="nav-scrim"></div>
+		<div class="mobile-bar">
+			<button class="icon-button" id="menu-button" aria-label="打开导航" title="打开导航">
+				<i data-lucide="menu"></i>
+			</button>
+			<div class="mobile-brand">
+				<img src="../../static/static/logo.png" alt="" />
+				<span>ArtiChat</span>
+			</div>
+			<button class="icon-button theme-toggle" aria-label="切换主题" title="切换主题">
+				<i data-lucide="sun-moon"></i>
+			</button>
+		</div>
+
+		<div class="app-shell">
+			<aside class="sidebar" id="sidebar">
+				<div class="brand">
+					<img src="../../static/static/logo.png" alt="ArtiChat" />
+					<span>ArtiChat</span>
+					<span class="version-tag">0.2.0</span>
+				</div>
+
+				<div class="sidebar-scroll">
+					<div class="nav-label">运营管理</div>
+					<button class="nav-item active" data-view="overview">
+						<i data-lucide="layout-dashboard"></i><span>总览</span>
+					</button>
+					<button class="nav-item" data-view="plans">
+						<i data-lucide="badge-check"></i><span>订阅计划</span>
+					</button>
+					<button class="nav-item" data-view="models">
+						<i data-lucide="boxes"></i><span>模型权限</span>
+					</button>
+					<button class="nav-item" data-view="codes">
+						<i data-lucide="ticket-check"></i><span>兑换码</span>
+					</button>
+					<button class="nav-item" data-view="gifts">
+						<i data-lucide="gift"></i><span>礼品卡</span>
+					</button>
+					<button class="nav-item" data-view="ledger">
+						<i data-lucide="chart-no-axes-combined"></i><span>用量账本</span>
+					</button>
+					<button class="nav-item" data-view="announcements">
+						<i data-lucide="megaphone"></i><span>公告</span>
+					</button>
+
+					<div class="nav-label">管理员设置</div>
+					<button class="nav-item" data-view="platform">
+						<i data-lucide="palette"></i><span>平台自定义</span>
+					</button>
+					<button class="nav-item" data-view="email">
+						<i data-lucide="mail"></i><span>电子邮箱</span>
+					</button>
+
+					<div class="nav-label">用户侧</div>
+					<button class="nav-item" data-view="redeem">
+						<i data-lucide="scan-line"></i><span>兑换与礼品</span>
+					</button>
+					<button class="nav-item" data-view="payments">
+						<i data-lucide="credit-card"></i><span>付款信息</span>
+					</button>
+					<button class="nav-item" data-view="entries">
+						<i data-lucide="panel-left"></i><span>主页入口</span>
+					</button>
+				</div>
+
+				<div class="sidebar-footer">
+					<button class="gift-entry" data-view="redeem">
+						<i data-lucide="gift"></i><span>领取礼品</span>
+					</button>
+					<div class="identity-row">
+						<button class="identity">
+							<span class="avatar">AL</span
+							><span style="overflow: hidden; text-overflow: ellipsis">Alex Li</span>
+						</button>
+						<button class="quota-trigger" id="quota-trigger" aria-expanded="false">
+							<span>Plus</span><span class="quota-ring" aria-hidden="true"></span>
+						</button>
+					</div>
+				</div>
+			</aside>
+
+			<main class="main">
+				<div class="content">
+					<section class="view active" data-view-panel="overview">
+						<div class="page-head">
+							<div>
+								<h1>运营管理</h1>
+								<p>管理订阅权益、兑换与礼品发放、公告和计费账本。</p>
+							</div>
+							<div class="head-actions">
+								<button class="icon-button theme-toggle" aria-label="切换主题" title="切换主题">
+									<i data-lucide="sun-moon"></i>
+								</button>
+								<button class="button secondary"><i data-lucide="download"></i>导出报表</button>
+							</div>
+						</div>
+
+						<div class="metric-strip">
+							<div class="metric">
+								<div class="metric-label">有效订阅</div>
+								<div class="metric-value">1,284</div>
+								<div class="metric-note">本月 +8.4%</div>
+							</div>
+							<div class="metric">
+								<div class="metric-label">待领取礼品</div>
+								<div class="metric-value">36</div>
+								<div class="metric-note">3 个批次</div>
+							</div>
+							<div class="metric">
+								<div class="metric-label">今日消耗</div>
+								<div class="metric-value">28.6K</div>
+								<div class="metric-note">Chatpoint</div>
+							</div>
+							<div class="metric">
+								<div class="metric-label">可用兑换码</div>
+								<div class="metric-value">97</div>
+								<div class="metric-note">订阅 42 · 充值 55</div>
+							</div>
+						</div>
+
+						<div class="section-title">
+							<h2>运营工具</h2>
+							<span>6 个模块</span>
+						</div>
+						<div class="tile-grid">
+							<button class="nav-tile" data-view="plans">
+								<span class="tile-top"
+									><span class="tile-icon"><i data-lucide="badge-check"></i></span
+									><i data-lucide="arrow-up-right"></i
+								></span>
+								<span class="tile-copy"
+									><strong>订阅计划</strong><span>配置周期、额度和用户侧展示内容。</span></span
+								>
+							</button>
+							<button class="nav-tile" data-view="models">
+								<span class="tile-top"
+									><span class="tile-icon"><i data-lucide="boxes"></i></span
+									><i data-lucide="arrow-up-right"></i
+								></span>
+								<span class="tile-copy"
+									><strong>模型权限</strong><span>设置档位可见性与四类 Token 计价。</span></span
+								>
+							</button>
+							<button class="nav-tile" data-view="codes">
+								<span class="tile-top"
+									><span class="tile-icon"><i data-lucide="ticket-check"></i></span
+									><span class="badge green">97 可用</span></span
+								>
+								<span class="tile-copy"
+									><strong>兑换码</strong><span>创建订阅卡或额度充值卡。</span></span
+								>
+							</button>
+							<button class="nav-tile" data-view="gifts">
+								<span class="tile-top"
+									><span class="tile-icon"><i data-lucide="gift"></i></span
+									><span class="badge amber">36 待领取</span></span
+								>
+								<span class="tile-copy"
+									><strong>礼品卡</strong><span>向指定用户或现有全体用户发放。</span></span
+								>
+							</button>
+							<button class="nav-tile" data-view="announcements">
+								<span class="tile-top"
+									><span class="tile-icon"><i data-lucide="megaphone"></i></span
+									><span class="badge green">2 启用</span></span
+								>
+								<span class="tile-copy"
+									><strong>公告</strong><span>创建、预览并控制登录公告状态。</span></span
+								>
+							</button>
+							<button class="nav-tile" data-view="ledger">
+								<span class="tile-top"
+									><span class="tile-icon"><i data-lucide="chart-no-axes-combined"></i></span
+									><i data-lucide="arrow-up-right"></i
+								></span>
+								<span class="tile-copy"
+									><strong>用量账本</strong><span>核对 Token、Chatpoint 与余额变动。</span></span
+								>
+							</button>
+						</div>
+
+						<div class="section-title">
+							<h2>最近订阅变动</h2>
+							<button class="button ghost" data-view="ledger">
+								查看订阅账本 <i data-lucide="chevron-right"></i>
+							</button>
+						</div>
+						<div class="table-wrap">
+							<table>
+								<thead>
+									<tr>
+										<th>用户</th>
+										<th>事件</th>
+										<th>来源</th>
+										<th class="numeric">Chatpoint</th>
+										<th>时间</th>
+									</tr>
+								</thead>
+								<tbody>
+									<tr>
+										<td>lin@example.com</td>
+										<td>订阅续期</td>
+										<td>系统周期重置</td>
+										<td class="numeric">计划重置</td>
+										<td>刚刚</td>
+									</tr>
+									<tr>
+										<td>rui@example.com</td>
+										<td>管理员调整订阅</td>
+										<td>Plus -&gt; ChatPower</td>
+										<td class="numeric">+2,000</td>
+										<td>4 分钟前</td>
+									</tr>
+									<tr>
+										<td>mei@example.com</td>
+										<td>兑换订阅</td>
+										<td>PLUS-30D-8K2M</td>
+										<td class="numeric">计划重置</td>
+										<td>11 分钟前</td>
+									</tr>
+								</tbody>
+							</table>
+						</div>
+					</section>
+
+					<section class="view" data-view-panel="plans">
+						<div class="page-head">
+							<div>
+								<h1>订阅计划</h1>
+								<p>计划变更用于新订阅和后续周期重置，现有用户保留当前快照。</p>
+							</div>
+							<button class="button primary"><i data-lucide="save"></i>保存更改</button>
+						</div>
+						<div class="section-title">
+							<h2>计划</h2>
+							<span>3 个启用</span>
+						</div>
+						<div class="plan-grid">
+							<article class="plan-card">
+								<div class="card-head">
+									<div>
+										<div class="card-title">Free</div>
+										<div class="card-subtitle">基础体验</div>
+									</div>
+									<button
+										class="switch"
+										role="switch"
+										aria-checked="true"
+										aria-label="启用 Free"
+									></button>
+								</div>
+								<div class="plan-amount">100 <small>Chatpoint / 30 天</small></div>
+								<dl class="definition-list">
+									<div>
+										<dt>模型范围</dt>
+										<dd>基础模型</dd>
+									</div>
+									<div>
+										<dt>当前用户</dt>
+										<dd>826</dd>
+									</div>
+									<div>
+										<dt>状态</dt>
+										<dd><span class="badge green">启用</span></dd>
+									</div>
+								</dl>
+								<div class="button-row" style="margin-top: 14px">
+									<button class="button secondary"><i data-lucide="pencil"></i>编辑计划</button>
+								</div>
+							</article>
+							<article class="plan-card">
+								<div class="card-head">
+									<div>
+										<div class="card-title">Plus</div>
+										<div class="card-subtitle">日常高频使用</div>
+									</div>
+									<button
+										class="switch"
+										role="switch"
+										aria-checked="true"
+										aria-label="启用 Plus"
+									></button>
+								</div>
+								<div class="plan-amount">3,000 <small>Chatpoint / 30 天</small></div>
+								<dl class="definition-list">
+									<div>
+										<dt>模型范围</dt>
+										<dd>进阶模型</dd>
+									</div>
+									<div>
+										<dt>当前用户</dt>
+										<dd>391</dd>
+									</div>
+									<div>
+										<dt>状态</dt>
+										<dd><span class="badge green">启用</span></dd>
+									</div>
+								</dl>
+								<div class="button-row" style="margin-top: 14px">
+									<button class="button secondary"><i data-lucide="pencil"></i>编辑计划</button>
+								</div>
+							</article>
+							<article class="plan-card">
+								<div class="card-head">
+									<div>
+										<div class="card-title">ChatPower</div>
+										<div class="card-subtitle">高强度创作与研究</div>
+									</div>
+									<button
+										class="switch"
+										role="switch"
+										aria-checked="true"
+										aria-label="启用 ChatPower"
+									></button>
+								</div>
+								<div class="plan-amount">10,000 <small>Chatpoint / 30 天</small></div>
+								<dl class="definition-list">
+									<div>
+										<dt>模型范围</dt>
+										<dd>全部模型</dd>
+									</div>
+									<div>
+										<dt>当前用户</dt>
+										<dd>67</dd>
+									</div>
+									<div>
+										<dt>状态</dt>
+										<dd><span class="badge green">启用</span></dd>
+									</div>
+								</dl>
+								<div class="button-row" style="margin-top: 14px">
+									<button class="button secondary"><i data-lucide="pencil"></i>编辑计划</button>
+								</div>
+							</article>
+						</div>
+						<div class="section-title">
+							<h2>Plus 展示内容</h2>
+							<span>用户订阅页同步展示</span>
+						</div>
+						<div class="surface">
+							<div class="form-grid">
+								<div class="field"><label>计划名称</label><input class="input" value="Plus" /></div>
+								<div class="field"><label>周期天数</label><input class="input" value="30" /></div>
+								<div class="field"><label>周期额度</label><input class="input" value="3000" /></div>
+								<div class="field">
+									<label>图标</label
+									><select class="select">
+										<option>Badge Check</option>
+										<option>Sparkles</option>
+										<option>Zap</option>
+									</select>
+								</div>
+								<div class="field span-2">
+									<label>副标题</label><input class="input" value="日常高频使用" />
+								</div>
+								<div class="field span-2">
+									<label>模型说明</label
+									><input class="input" value="可访问全部进阶对话与推理模型" />
+								</div>
+								<div class="field span-full">
+									<label>计划介绍</label
+									><textarea class="textarea">适合日常工作、长文整理与持续对话。</textarea>
+								</div>
+							</div>
+						</div>
+					</section>
+
+					<section class="view" data-view-panel="models">
+						<div class="page-head">
+							<div>
+								<h1>模型权限</h1>
+								<p>控制订阅档位、扣费模式，以及输入、输出、缓存创建和缓存读取的 Chatpoint 单价。</p>
+							</div>
+							<button class="button primary"><i data-lucide="save"></i>保存更改</button>
+						</div>
+						<div class="toolbar" style="margin: 16px 0 10px">
+							<div class="field" style="min-width: 220px; flex: 1">
+								<input class="input" placeholder="搜索模型" />
+							</div>
+							<select class="select" style="width: 148px">
+								<option>全部提供商</option>
+								<option>OpenAI</option>
+								<option>Anthropic</option>
+							</select>
+							<select class="select" style="width: 132px">
+								<option>全部模式</option>
+								<option>按量扣费</option>
+								<option>无限使用</option>
+							</select>
+						</div>
+						<div class="list-box">
+							<div class="list-row">
+								<div class="model-info">
+									<strong>Claude Sonnet 4</strong><span>anthropic/claude-sonnet-4</span>
+								</div>
+								<div class="tier-checks">
+									<label class="check-pill"><input type="checkbox" /> Free</label
+									><label class="check-pill"><input type="checkbox" checked /> Plus</label
+									><label class="check-pill"><input type="checkbox" checked /> ChatPower</label>
+								</div>
+								<span class="badge blue">按量扣费</span>
+								<button class="icon-button" aria-label="编辑 Claude Sonnet 4 价格" title="编辑价格">
+									<i data-lucide="sliders-horizontal"></i>
+								</button>
+							</div>
+							<div
+								class="list-row"
+								style="align-items: flex-start; background: var(--surface-soft)"
+							>
+								<div class="model-info">
+									<strong>计价详情</strong><span>Chatpoint / 1M Token</span>
+								</div>
+								<div
+									class="form-grid"
+									style="flex: 3; grid-template-columns: repeat(4, minmax(100px, 1fr))"
+								>
+									<div class="field"><label>输入</label><input class="input" value="300" /></div>
+									<div class="field"><label>输出</label><input class="input" value="1500" /></div>
+									<div class="field">
+										<label>缓存创建</label><input class="input" value="375" />
+									</div>
+									<div class="field"><label>缓存读取</label><input class="input" value="30" /></div>
+								</div>
+							</div>
+							<div class="list-row">
+								<div class="model-info"><strong>GPT-5.2</strong><span>openai/gpt-5.2</span></div>
+								<div class="tier-checks">
+									<label class="check-pill"><input type="checkbox" /> Free</label
+									><label class="check-pill"><input type="checkbox" checked /> Plus</label
+									><label class="check-pill"><input type="checkbox" checked /> ChatPower</label>
+								</div>
+								<span class="badge blue">按量扣费</span>
+								<button class="icon-button" aria-label="编辑 GPT-5.2 价格" title="编辑价格">
+									<i data-lucide="sliders-horizontal"></i>
+								</button>
+							</div>
+							<div class="list-row">
+								<div class="model-info">
+									<strong>GPT-4.1 mini</strong><span>openai/gpt-4.1-mini</span>
+								</div>
+								<div class="tier-checks">
+									<label class="check-pill"><input type="checkbox" checked /> Free</label
+									><label class="check-pill"><input type="checkbox" checked /> Plus</label
+									><label class="check-pill"><input type="checkbox" checked /> ChatPower</label>
+								</div>
+								<span class="badge green">无限使用</span>
+								<button class="icon-button" aria-label="编辑 GPT-4.1 mini 价格" title="编辑价格">
+									<i data-lucide="sliders-horizontal"></i>
+								</button>
+							</div>
+						</div>
+					</section>
+
+					<section class="view" data-view-panel="codes">
+						<div class="page-head">
+							<div>
+								<h1>兑换码</h1>
+								<p>新兑换码只能包含一种权益；历史混合权益码保留在归档中。</p>
+							</div>
+							<button class="button secondary" data-open-modal="code-archive">
+								<i data-lucide="archive"></i>已停用与已使用
+							</button>
+						</div>
+						<div class="section-title">
+							<h2>创建兑换码</h2>
+							<span>本次生成后可立即复制</span>
+						</div>
+						<div class="surface">
+							<div class="segmented benefit-segment" data-form="code" style="margin-bottom: 14px">
+								<button class="active" data-benefit="subscription">订阅卡</button
+								><button data-benefit="recharge">额度充值卡</button>
+							</div>
+							<div class="form-grid">
+								<div class="field">
+									<label>使用模式</label
+									><select class="select">
+										<option>单次使用</option>
+										<option>多次使用</option>
+									</select>
+								</div>
+								<div class="field">
+									<label>自定义兑换码</label><input class="input" placeholder="留空自动生成" />
+								</div>
+								<div class="field span-2">
+									<label>自动生成格式</label>
+									<div class="template-row">
+										<input class="input" id="code-template-input" value="ARTIPASS-0000-0000-0000" />
+										<button class="button rect secondary" id="code-template-preview-button">
+											<i data-lucide="wand-sparkles"></i>生成示例
+										</button>
+									</div>
+									<div class="helper" style="margin-top: 5px">
+										每个 0 都会替换为安全随机数字；<span id="code-template-preview"
+											>ARTIPASS-4821-7306-1954</span
+										>
+									</div>
+								</div>
+								<div class="field">
+									<label>生成数量</label><input class="input" type="number" value="10" />
+								</div>
+								<div class="field">
+									<label>有效期</label
+									><select class="select">
+										<option>90 天</option>
+										<option>30 天</option>
+										<option>永不过期</option>
+									</select>
+								</div>
+								<div class="field benefit-subscription">
+									<label>订阅计划</label
+									><select class="select">
+										<option>Plus</option>
+										<option>ChatPower</option>
+										<option>Free</option>
+									</select>
+								</div>
+								<div class="field benefit-subscription">
+									<label>订阅天数</label><input class="input" type="number" value="30" />
+								</div>
+								<div class="field benefit-recharge hidden">
+									<label>充值额度</label><input class="input" value="500" />
+								</div>
+								<div class="field span-2">
+									<label>备注</label><input class="input" placeholder="例如：夏季活动" />
+								</div>
+							</div>
+							<div class="button-row" style="justify-content: flex-end; margin-top: 14px">
+								<button class="button primary"><i data-lucide="plus"></i>创建兑换码</button>
+							</div>
+						</div>
+						<div class="section-title">
+							<h2>可用兑换码</h2>
+							<span>97 个</span>
+						</div>
+						<div class="code-list">
+							<article class="item-card">
+								<div class="code-main">
+									<div>
+										<div class="code-value">ARTIPASS-4821-7306-1954</div>
+										<div class="code-meta">
+											<span class="badge blue">订阅卡</span><span>Plus · 30 天</span
+											><span>0 / 1 次</span><span>90 天后过期</span>
+										</div>
+									</div>
+									<div class="card-actions">
+										<button class="icon-button" aria-label="复制兑换码" title="复制">
+											<i data-lucide="copy"></i></button
+										><button class="button danger"><i data-lucide="circle-stop"></i>停用</button>
+									</div>
+								</div>
+							</article>
+							<article class="item-card">
+								<div class="code-main">
+									<div>
+										<div class="code-value">CP500-SUMMER-P9Q4</div>
+										<div class="code-meta">
+											<span class="badge green">额度充值卡</span><span>500 Chatpoint</span
+											><span>12 / 50 次</span><span>30 天后过期</span>
+										</div>
+									</div>
+									<div class="card-actions">
+										<button class="icon-button" aria-label="复制兑换码" title="复制">
+											<i data-lucide="copy"></i></button
+										><button class="button danger"><i data-lucide="circle-stop"></i>停用</button>
+									</div>
+								</div>
+							</article>
+							<article class="item-card">
+								<div class="code-main">
+									<div>
+										<div class="code-value">CHATPOWER-90D-R7TX</div>
+										<div class="code-meta">
+											<span class="badge blue">订阅卡</span><span>ChatPower · 90 天</span
+											><span>0 / 1 次</span><span>永不过期</span>
+										</div>
+									</div>
+									<div class="card-actions">
+										<button class="icon-button" aria-label="复制兑换码" title="复制">
+											<i data-lucide="copy"></i></button
+										><button class="button danger"><i data-lucide="circle-stop"></i>停用</button>
+									</div>
+								</div>
+							</article>
+						</div>
+					</section>
+
+					<section class="view" data-view-panel="gifts">
+						<div class="page-head">
+							<div>
+								<h1>礼品卡</h1>
+								<p>向指定用户或当前全体用户发放单一权益礼品。</p>
+							</div>
+							<button class="button secondary" data-open-modal="gift-archive">
+								<i data-lucide="archive"></i>发放历史
+							</button>
+						</div>
+						<div class="section-title">
+							<h2>发放礼品卡</h2>
+							<span>领取后自动应用权益</span>
+						</div>
+						<div class="surface">
+							<div class="segmented benefit-segment" data-form="gift" style="margin-bottom: 14px">
+								<button class="active" data-benefit="subscription">订阅卡</button
+								><button data-benefit="recharge">额度充值卡</button>
+							</div>
+							<div class="form-grid">
+								<div class="field span-2">
+									<label>接收对象</label
+									><select class="select">
+										<option>指定用户</option>
+										<option>当前全体用户</option>
+									</select>
+								</div>
+								<div class="field span-2">
+									<label>搜索用户</label
+									><input class="input" value="lin@example.com, rui@example.com" />
+								</div>
+								<div class="field benefit-subscription">
+									<label>订阅计划</label
+									><select class="select">
+										<option>Plus</option>
+										<option>ChatPower</option>
+									</select>
+								</div>
+								<div class="field benefit-subscription">
+									<label>订阅天数</label><input class="input" value="30" />
+								</div>
+								<div class="field benefit-recharge hidden">
+									<label>充值额度</label><input class="input" value="500" />
+								</div>
+								<div class="field span-2">
+									<label>礼品标题</label><input class="input" value="夏季特别礼品" />
+								</div>
+							</div>
+							<div class="button-row" style="justify-content: flex-end; margin-top: 14px">
+								<button class="button primary"><i data-lucide="send"></i>发放礼品卡</button>
+							</div>
+						</div>
+						<div class="section-title">
+							<h2>进行中的批次</h2>
+							<span>2 个</span>
+						</div>
+						<div class="gift-list">
+							<article class="item-card">
+								<div class="item-head">
+									<div>
+										<div class="card-title">夏季特别礼品</div>
+										<div class="card-subtitle">指定用户 · 订阅卡</div>
+									</div>
+									<span class="badge amber">18 / 36 待领取</span>
+								</div>
+								<div class="card-meta">
+									<span>Plus · 30 天</span><span>创建于 2026-07-29 18:20</span
+									><span>批次 GIFT-0729-A</span>
+								</div>
+								<div class="button-row" style="margin-top: 12px">
+									<button class="button secondary"><i data-lucide="users"></i>查看接收人</button
+									><button class="button danger">
+										<i data-lucide="circle-stop"></i>撤销未领取
+									</button>
+								</div>
+							</article>
+							<article class="item-card">
+								<div class="item-head">
+									<div>
+										<div class="card-title">新用户充值礼</div>
+										<div class="card-subtitle">指定用户 · 额度充值卡</div>
+									</div>
+									<span class="badge green">8 / 10 已领取</span>
+								</div>
+								<div class="card-meta">
+									<span>500 Chatpoint</span><span>创建于 2026-07-28 10:05</span
+									><span>批次 GIFT-0728-C</span>
+								</div>
+								<div class="button-row" style="margin-top: 12px">
+									<button class="button secondary"><i data-lucide="users"></i>查看接收人</button
+									><button class="button danger">
+										<i data-lucide="circle-stop"></i>撤销未领取
+									</button>
+								</div>
+							</article>
+						</div>
+					</section>
+
+					<section class="view" data-view-panel="ledger">
+						<div class="page-head">
+							<div>
+								<h1>用量账本</h1>
+								<p>四类 Token 与 Plan、充值额度的实际扣费使用同一权威账本。</p>
+							</div>
+							<button class="button secondary"><i data-lucide="download"></i>导出 CSV</button>
+						</div>
+						<div class="metric-strip">
+							<div class="metric">
+								<div class="metric-label">总请求</div>
+								<div class="metric-value">18,429</div>
+								<div class="metric-note">最近 30 天</div>
+							</div>
+							<div class="metric">
+								<div class="metric-label">总 Token</div>
+								<div class="metric-value">92.8M</div>
+								<div class="metric-note">含创缓与读缓</div>
+							</div>
+							<div class="metric">
+								<div class="metric-label">Plan 消耗</div>
+								<div class="metric-value">21.4K</div>
+								<div class="metric-note">Chatpoint</div>
+							</div>
+							<div class="metric">
+								<div class="metric-label">充值消耗</div>
+								<div class="metric-value">7.2K</div>
+								<div class="metric-note">Chatpoint</div>
+							</div>
+						</div>
+						<div class="filter-row" style="margin: 16px 0 14px">
+							<input
+								class="input"
+								style="min-width: 230px; flex: 1"
+								placeholder="用户邮箱、名称或 ID"
+							/><select class="select" style="width: 150px">
+								<option>全部计费状态</option>
+								<option>已计费</option>
+								<option>部分计费</option>
+								<option>额度不足</option></select
+							><select class="select" style="width: 132px">
+								<option>最近 30 天</option>
+								<option>最近 7 天</option>
+								<option>今天</option>
+							</select>
+						</div>
+						<div class="usage-layout">
+							<div>
+								<div class="section-title" style="margin-top: 0">
+									<h2>模型用量</h2>
+									<span>92.8M Token</span>
+								</div>
+								<div class="token-bars">
+									<div class="token-row">
+										<span>输入</span>
+										<div class="bar"><span style="width: 82%"></span></div>
+										<span style="text-align: right">51.2M</span>
+									</div>
+									<div class="token-row">
+										<span>输出</span>
+										<div class="bar output"><span style="width: 46%"></span></div>
+										<span style="text-align: right">22.7M</span>
+									</div>
+									<div class="token-row">
+										<span>缓存创建</span>
+										<div class="bar cache-create"><span style="width: 28%"></span></div>
+										<span style="text-align: right">11.5M</span>
+									</div>
+									<div class="token-row">
+										<span>缓存读取</span>
+										<div class="bar cache-read"><span style="width: 18%"></span></div>
+										<span style="text-align: right">7.4M</span>
+									</div>
+								</div>
+							</div>
+							<div>
+								<div class="section-title" style="margin-top: 0">
+									<h2>扣费来源</h2>
+									<span>28.6K CP</span>
+								</div>
+								<dl class="definition-list surface">
+									<div>
+										<dt>Plan Chatpoint</dt>
+										<dd>21,402.18</dd>
+									</div>
+									<div>
+										<dt>充值 Chatpoint</dt>
+										<dd>7,201.62</dd>
+									</div>
+									<div>
+										<dt>未扣费用</dt>
+										<dd>41.20</dd>
+									</div>
+									<div>
+										<dt>平均每请求</dt>
+										<dd>1.55 CP</dd>
+									</div>
+								</dl>
+							</div>
+						</div>
+						<div class="section-title">
+							<h2>账本明细</h2>
+							<div class="segmented ledger-tabs">
+								<button class="active" data-ledger="requests">模型请求</button
+								><button data-ledger="balances">余额流水</button>
+							</div>
+						</div>
+						<div class="ledger-panel" data-ledger-panel="requests">
+							<div class="table-wrap">
+								<table>
+									<thead>
+										<tr>
+											<th>时间</th>
+											<th>用户</th>
+											<th>模型</th>
+											<th class="numeric">输入</th>
+											<th class="numeric">输出</th>
+											<th class="numeric">创缓</th>
+											<th class="numeric">读缓</th>
+											<th class="numeric">Plan CP</th>
+											<th class="numeric">充值 CP</th>
+											<th>状态</th>
+										</tr>
+									</thead>
+									<tbody>
+										<tr>
+											<td>21:48:06</td>
+											<td>lin@example.com</td>
+											<td>Claude Sonnet 4</td>
+											<td class="numeric">12,420</td>
+											<td class="numeric">2,816</td>
+											<td class="numeric">4,200</td>
+											<td class="numeric">18,900</td>
+											<td class="numeric">12.84</td>
+											<td class="numeric">0</td>
+											<td><span class="badge green">已计费</span></td>
+										</tr>
+										<tr>
+											<td>21:46:52</td>
+											<td>rui@example.com</td>
+											<td>GPT-5.2</td>
+											<td class="numeric">8,109</td>
+											<td class="numeric">5,227</td>
+											<td class="numeric">0</td>
+											<td class="numeric">0</td>
+											<td class="numeric">4.11</td>
+											<td class="numeric">2.79</td>
+											<td><span class="badge amber">部分计费</span></td>
+										</tr>
+										<tr>
+											<td>21:41:09</td>
+											<td>mei@example.com</td>
+											<td>GPT-4.1 mini</td>
+											<td class="numeric">2,442</td>
+											<td class="numeric">606</td>
+											<td class="numeric">0</td>
+											<td class="numeric">0</td>
+											<td class="numeric">0</td>
+											<td class="numeric">0</td>
+											<td><span class="badge blue">无限使用</span></td>
+										</tr>
+									</tbody>
+								</table>
+							</div>
+						</div>
+						<div class="ledger-panel hidden" data-ledger-panel="balances">
+							<div class="table-wrap">
+								<table>
+									<thead>
+										<tr>
+											<th>时间</th>
+											<th>用户</th>
+											<th>事件</th>
+											<th>来源</th>
+											<th class="numeric">Plan 变动</th>
+											<th class="numeric">充值变动</th>
+											<th class="numeric">变动后余额</th>
+										</tr>
+									</thead>
+									<tbody>
+										<tr>
+											<td>21:46:52</td>
+											<td>rui@example.com</td>
+											<td>模型扣费</td>
+											<td>GPT-5.2</td>
+											<td class="numeric">-4.11</td>
+											<td class="numeric">-2.79</td>
+											<td class="numeric">842.62</td>
+										</tr>
+										<tr>
+											<td>21:20:14</td>
+											<td>rui@example.com</td>
+											<td>领取礼品</td>
+											<td>GIFT-0728-C</td>
+											<td class="numeric">0</td>
+											<td class="numeric">+500.00</td>
+											<td class="numeric">849.52</td>
+										</tr>
+										<tr>
+											<td>20:58:03</td>
+											<td>mei@example.com</td>
+											<td>兑换订阅</td>
+											<td>PLUS-30D-8K2M</td>
+											<td class="numeric">重置为 3,000</td>
+											<td class="numeric">0</td>
+											<td class="numeric">3,188.40</td>
+										</tr>
+									</tbody>
+								</table>
+							</div>
+						</div>
+						<div class="button-row" style="justify-content: flex-end; margin-top: 12px">
+							<button class="button secondary" disabled>上一页</button
+							><button class="button secondary">下一页</button>
+						</div>
+					</section>
+
+					<section class="view" data-view-panel="announcements">
+						<div class="page-head">
+							<div>
+								<h1>公告</h1>
+								<p>公告可独立启停；删除会同时移除查看记录并永久删除公告。</p>
+							</div>
+						</div>
+						<div class="section-title">
+							<h2>创建公告</h2>
+							<span>实时预览</span>
+						</div>
+						<div class="editor-grid">
+							<div class="editor-pane">
+								<div class="form-grid">
+									<div class="field span-2">
+										<label>标题</label
+										><input
+											class="input announcement-input"
+											data-preview="title"
+											value="ArtiChat 0.2.0 已准备就绪"
+										/>
+									</div>
+									<div class="field span-2">
+										<label>弹出规则</label
+										><select class="select">
+											<option>弹出一次</option>
+											<option>每次登录</option>
+											<option>仅新用户</option>
+										</select>
+									</div>
+									<div class="field span-full">
+										<label>摘要</label
+										><textarea class="textarea announcement-input" data-preview="summary">
+订阅、用量和推理控制迎来一轮完整更新。</textarea
+										>
+									</div>
+									<div class="field span-2">
+										<label>主按钮</label
+										><input
+											class="input announcement-input"
+											data-preview="button"
+											value="查看更新"
+										/>
+									</div>
+									<div class="field span-2">
+										<label>关闭按钮</label><input class="input" value="稍后查看" />
+									</div>
+									<div class="field span-full">
+										<label>展开内容</label
+										><textarea class="textarea" style="min-height: 120px">
+本次更新新增统一用量中心，并重新整理管理员运营入口。</textarea
+										>
+									</div>
+								</div>
+								<div class="button-row" style="justify-content: flex-end; margin-top: 14px">
+									<button class="button primary"><i data-lucide="plus"></i>创建公告</button>
+								</div>
+							</div>
+							<div>
+								<div class="preview-frame">
+									<img src="../../static/assets/welcome.webp" alt="公告封面预览" />
+									<div class="preview-copy">
+										<h3 id="preview-title">ArtiChat 0.2.0 已准备就绪</h3>
+										<p id="preview-summary">订阅、用量和推理控制迎来一轮完整更新。</p>
+										<div class="button-row" style="justify-content: flex-end; margin-top: 13px">
+											<button class="button ghost">稍后查看</button
+											><button class="button primary" id="preview-button">查看更新</button>
+										</div>
+									</div>
+								</div>
+							</div>
+						</div>
+						<div class="section-title">
+							<h2>现有公告</h2>
+							<span>2 条</span>
+						</div>
+						<div class="announcement-list">
+							<article class="announcement-card">
+								<img class="announcement-thumb" src="../../static/assets/welcome.webp" alt="" />
+								<div>
+									<div class="card-title">欢迎使用 ArtiChat</div>
+									<div class="card-meta">
+										<span class="badge green">启用</span><span>弹出一次</span><span>排序 10</span>
+									</div>
+								</div>
+								<div class="card-actions">
+									<button
+										class="switch"
+										role="switch"
+										aria-checked="true"
+										aria-label="启用欢迎公告"
+									></button
+									><button class="icon-button" aria-label="编辑欢迎公告" title="编辑">
+										<i data-lucide="pencil"></i></button
+									><button class="icon-button" aria-label="永久删除欢迎公告" title="永久删除">
+										<i data-lucide="trash-2"></i>
+									</button>
+								</div>
+							</article>
+							<article class="announcement-card">
+								<img class="announcement-thumb" src="../../static/assets/welcome.webp" alt="" />
+								<div>
+									<div class="card-title">0.2.0 更新说明</div>
+									<div class="card-meta">
+										<span class="badge">已停止</span><span>每次登录</span><span>排序 5</span>
+									</div>
+								</div>
+								<div class="card-actions">
+									<button
+										class="switch"
+										role="switch"
+										aria-checked="false"
+										aria-label="启用更新公告"
+									></button
+									><button class="icon-button" aria-label="编辑更新公告" title="编辑">
+										<i data-lucide="pencil"></i></button
+									><button class="icon-button" aria-label="永久删除更新公告" title="永久删除">
+										<i data-lucide="trash-2"></i>
+									</button>
+								</div>
+							</article>
+						</div>
+					</section>
+
+					<section class="view" data-view-panel="platform">
+						<div class="page-head">
+							<div>
+								<h1>管理员设置</h1>
+								<p>管理员设置保留为独立面板；通用设置不再展示版本，更新位于导航末尾。</p>
+							</div>
+							<button class="button primary"><i data-lucide="save"></i>保存</button>
+						</div>
+						<div class="settings-shell">
+							<nav class="settings-nav">
+								<div class="nav-label">管理员</div>
+								<button class="nav-item active"><i data-lucide="palette"></i>平台自定义</button
+								><button class="nav-item"><i data-lucide="settings-2"></i>通用</button
+								><button class="nav-item"><i data-lucide="shield-check"></i>身份验证</button
+								><button class="nav-item"><i data-lucide="plug"></i>连接</button
+								><button class="nav-item"><i data-lucide="box"></i>模型</button
+								><button class="nav-item"><i data-lucide="chart-bar"></i>分析</button
+								><button class="nav-item"><i data-lucide="mail"></i>电子邮箱</button
+								><button class="nav-item"><i data-lucide="database"></i>数据库</button
+								><button class="nav-item"><i data-lucide="refresh-cw"></i>更新</button>
+							</nav>
+							<div class="settings-content">
+								<h2>平台自定义</h2>
+								<div class="setting-section">
+									<h3>品牌</h3>
+									<div class="setting-row">
+										<div class="setting-copy">
+											<strong>平台名称</strong><span>用于页面标题、侧边栏和系统邮件。</span>
+										</div>
+										<input class="input" style="width: min(280px, 48%)" value="ArtiChat" />
+									</div>
+									<div class="setting-row" style="align-items: flex-start">
+										<div class="setting-copy">
+											<strong>品牌图标</strong><span>分别上传浅色和深色背景使用的图标。</span>
+										</div>
+										<div class="logo-well">
+											<img src="../../static/static/logo.png" alt="ArtiChat Logo" />
+											<div style="min-width: 0; flex: 1">
+												<div style="font-size: 11px; font-weight: 550">logo.png</div>
+												<div class="helper">512 × 512 PNG</div>
+											</div>
+											<button class="button secondary"><i data-lucide="upload"></i>更换</button>
+										</div>
+									</div>
+								</div>
+								<div class="setting-section">
+									<h3>外观</h3>
+									<div class="setting-row">
+										<div class="setting-copy">
+											<strong>登录页背景</strong><span>使用平台素材，不影响聊天界面背景。</span>
+										</div>
+										<button class="button secondary"><i data-lucide="image"></i>选择图片</button>
+									</div>
+									<div class="setting-row">
+										<div class="setting-copy">
+											<strong>侧边栏品牌名称</strong><span>关闭后仅显示品牌图标。</span>
+										</div>
+										<button
+											class="switch"
+											role="switch"
+											aria-checked="true"
+											aria-label="显示侧边栏品牌名称"
+										></button>
+									</div>
+								</div>
+								<div class="setting-section">
+									<h3>公开信息</h3>
+									<div class="setting-row">
+										<div class="setting-copy">
+											<strong>支持链接</strong><span>显示在帮助与账户相关页面。</span>
+										</div>
+										<input
+											class="input"
+											style="width: min(360px, 52%)"
+											value="https://support.artichat.example"
+										/>
+									</div>
+									<div class="setting-row">
+										<div class="setting-copy">
+											<strong>服务条款</strong><span>留空时不显示入口。</span>
+										</div>
+										<button class="button secondary">
+											<i data-lucide="external-link"></i>编辑链接
+										</button>
+									</div>
+								</div>
+							</div>
+						</div>
+					</section>
+
+					<section class="view" data-view-panel="email">
+						<div class="page-head">
+							<div>
+								<h1>管理员设置</h1>
+								<p>邮件配置按连接、发件身份、模板与投递记录分组。</p>
+							</div>
+							<button class="button primary"><i data-lucide="save"></i>保存</button>
+						</div>
+						<div class="settings-shell">
+							<nav class="settings-nav">
+								<div class="nav-label">管理员</div>
+								<button class="nav-item"><i data-lucide="palette"></i>平台自定义</button
+								><button class="nav-item"><i data-lucide="settings-2"></i>通用</button
+								><button class="nav-item"><i data-lucide="shield-check"></i>身份验证</button
+								><button class="nav-item"><i data-lucide="plug"></i>连接</button
+								><button class="nav-item"><i data-lucide="box"></i>模型</button
+								><button class="nav-item"><i data-lucide="chart-bar"></i>分析</button
+								><button class="nav-item active"><i data-lucide="mail"></i>电子邮箱</button
+								><button class="nav-item"><i data-lucide="database"></i>数据库</button
+								><button class="nav-item"><i data-lucide="refresh-cw"></i>更新</button>
+							</nav>
+							<div class="settings-content">
+								<h2>电子邮箱</h2>
+								<div class="setting-section">
+									<h3>状态</h3>
+									<div class="setting-row">
+										<div class="setting-copy">
+											<strong>启用系统邮件</strong><span>用于验证码、密码重置和账户通知。</span>
+										</div>
+										<button
+											class="switch"
+											role="switch"
+											aria-checked="true"
+											aria-label="启用系统邮件"
+										></button>
+									</div>
+									<div class="setting-row">
+										<div class="setting-copy">
+											<strong>连接状态</strong><span>最近一次测试于 2 分钟前完成。</span>
+										</div>
+										<span class="badge green"><i data-lucide="check"></i>连接正常</span>
+									</div>
+								</div>
+								<div class="setting-section">
+									<h3>SMTP 连接</h3>
+									<div class="setting-row">
+										<div class="setting-copy">
+											<strong>服务器与端口</strong><span>通过 TLS 连接邮件服务器。</span>
+										</div>
+										<div class="button-row" style="width: min(390px, 58%)">
+											<input class="input" style="flex: 1" value="smtp.example.com" /><input
+												class="input"
+												style="width: 88px"
+												value="465"
+											/>
+										</div>
+									</div>
+									<div class="setting-row">
+										<div class="setting-copy">
+											<strong>登录账户</strong><span>密码保存后不会再次显示。</span>
+										</div>
+										<input
+											class="input"
+											style="width: min(390px, 58%)"
+											value="no-reply@example.com"
+										/>
+									</div>
+									<div class="setting-row">
+										<div class="setting-copy">
+											<strong>连接安全</strong><span>建议使用 TLS；STARTTLS 适用于 587 端口。</span>
+										</div>
+										<select class="select" style="width: 160px">
+											<option>TLS</option>
+											<option>STARTTLS</option>
+											<option>无</option>
+										</select>
+									</div>
+									<div class="setting-row">
+										<div class="setting-copy">
+											<strong>测试连接</strong><span>仅验证 SMTP 登录，不发送邮件。</span>
+										</div>
+										<button class="button secondary"><i data-lucide="plug-zap"></i>测试连接</button>
+									</div>
+								</div>
+								<div class="setting-section">
+									<h3>发件身份</h3>
+									<div class="setting-row">
+										<div class="setting-copy">
+											<strong>发件人名称</strong><span>收件箱中显示的名称。</span>
+										</div>
+										<input class="input" style="width: min(300px, 52%)" value="ArtiChat" />
+									</div>
+									<div class="setting-row">
+										<div class="setting-copy">
+											<strong>发件地址</strong><span>应与已验证域名保持一致。</span>
+										</div>
+										<input
+											class="input"
+											style="width: min(300px, 52%)"
+											value="no-reply@example.com"
+										/>
+									</div>
+									<div class="setting-row">
+										<div class="setting-copy">
+											<strong>发送测试邮件</strong><span>使用当前草稿配置发送测试消息。</span>
+										</div>
+										<button class="button secondary"><i data-lucide="send"></i>发送测试</button>
+									</div>
+								</div>
+								<div class="setting-section">
+									<h3>模板与投递</h3>
+									<div class="setting-row">
+										<div class="setting-copy">
+											<strong>邮件模板</strong><span>验证码、重置密码、账户通知共 6 个模板。</span>
+										</div>
+										<button class="button secondary">
+											<i data-lucide="file-pen-line"></i>管理模板
+										</button>
+									</div>
+									<div class="setting-row">
+										<div class="setting-copy">
+											<strong>投递记录</strong><span>最近 24 小时成功 284 封，失败 2 封。</span>
+										</div>
+										<button class="button secondary"><i data-lucide="list"></i>查看记录</button>
+									</div>
+								</div>
+							</div>
+						</div>
+					</section>
+
+					<section class="view" data-view-panel="redeem">
+						<div class="page-head">
+							<div>
+								<h1>兑换码</h1>
+								<p>兑换权益或领取管理员发放的礼品。</p>
+							</div>
+						</div>
+						<div class="user-demo">
+							<div class="segmented" style="margin-bottom: 10px" id="gift-state-segment">
+								<button class="active" data-gift-state="pending">有待领取礼品</button
+								><button data-gift-state="empty">无待领取礼品</button>
+							</div>
+							<div class="user-card-grid">
+								<section class="item-card">
+									<div class="tile-icon"><i data-lucide="scan-line"></i></div>
+									<div class="card-title" style="margin-top: 13px">兑换权益</div>
+									<div class="card-subtitle">输入订阅卡或额度充值卡兑换码。</div>
+									<div class="redeem-input" style="margin-top: 14px">
+										<input class="input" id="redeem-demo-input" placeholder="输入兑换码" /><button
+											class="button rect primary"
+											id="redeem-demo-button"
+										>
+											兑换
+										</button>
+									</div>
+									<div class="helper" id="redeem-demo-result" style="margin-top: 9px"></div>
+								</section>
+								<section class="item-card" data-pending-gift>
+									<div class="tile-icon"><i data-lucide="gift"></i></div>
+									<div class="card-title" style="margin-top: 13px">夏季特别礼品</div>
+									<div class="card-subtitle">Plus 订阅 · 30 天</div>
+									<div class="card-meta">
+										<span>由管理员发放</span><span>2026-08-28 前领取</span>
+									</div>
+									<div class="button-row" style="margin-top: 14px">
+										<button class="button rect primary claim-demo">
+											<i data-lucide="gift"></i>领取礼品
+										</button>
+									</div>
+								</section>
+							</div>
+						</div>
+					</section>
+
+					<section class="view" data-view-panel="payments">
+						<div class="page-head">
+							<div>
+								<h1>付款信息</h1>
+								<p>用于付款记录、账单抬头和发票联系信息。</p>
+							</div>
+						</div>
+						<div class="section-title">
+							<h2>账户账单</h2>
+							<span>3 项</span>
+						</div>
+						<div class="user-card-grid">
+							<section class="item-card" style="grid-column: 1 / -1">
+								<div class="card-head">
+									<div>
+										<div class="card-title">账单资料</div>
+										<div class="card-subtitle">付款记录和发票使用同一份联系资料。</div>
+									</div>
+									<button class="button secondary"><i data-lucide="pencil"></i>编辑</button>
+								</div>
+								<div class="form-grid" style="margin-top: 14px">
+									<div class="field span-2">
+										<label>姓名或公司名称</label><input class="input" value="Alex Li" />
+									</div>
+									<div class="field span-2">
+										<label>账单邮箱</label><input class="input" value="billing@example.com" />
+									</div>
+									<div class="field span-2">
+										<label>地址</label><input class="input" value="88 Queensway, Central" />
+									</div>
+									<div class="field">
+										<label>城市</label><input class="input" value="Hong Kong" />
+									</div>
+									<div class="field">
+										<label>邮政编码</label><input class="input" value="000000" />
+									</div>
+									<div class="field span-2">
+										<label>国家或地区</label
+										><select class="select">
+											<option>中国香港</option>
+										</select>
+									</div>
+									<div class="field span-2">
+										<label>联系电话</label><input class="input" value="+852 6123 4567" />
+									</div>
+								</div>
+							</section>
+							<section class="item-card payment-card">
+								<div class="card-head">
+									<span class="tile-icon"><i data-lucide="credit-card"></i></span
+									><button class="icon-button" aria-label="管理付款方式" title="管理">
+										<i data-lucide="settings-2"></i>
+									</button>
+								</div>
+								<div class="card-title" style="margin-top: 15px">付款方式</div>
+								<div class="card-subtitle">尚未添加付款方式</div>
+								<div class="button-row" style="margin-top: 14px">
+									<button class="button secondary"><i data-lucide="plus"></i>添加付款方式</button>
+								</div>
+							</section>
+							<section class="item-card payment-card">
+								<div class="card-head">
+									<span class="tile-icon"><i data-lucide="receipt-text"></i></span
+									><button class="icon-button" aria-label="编辑发票信息" title="编辑">
+										<i data-lucide="pencil"></i>
+									</button>
+								</div>
+								<div class="card-title" style="margin-top: 15px">发票信息</div>
+								<div class="card-subtitle">个人 · 不需要税务识别号</div>
+								<div class="card-meta"><span>默认语言：简体中文</span></div>
+							</section>
+						</div>
+					</section>
+
+					<section class="view" data-view-panel="entries">
+						<div class="page-head">
+							<div>
+								<h1>主页入口</h1>
+								<p>桌面与移动端入口状态。</p>
+							</div>
+						</div>
+						<div class="section-title">
+							<h2>入口状态</h2>
+							<span>桌面与手机</span>
+						</div>
+						<div class="entry-layout">
+							<div class="sidebar-specimen">
+								<div class="brand" style="padding: 0">
+									<img src="../../static/static/logo.png" alt="" /><span>ArtiChat</span>
+								</div>
+								<div class="chat-skeleton">
+									<div class="skeleton-line"></div>
+									<div class="skeleton-line" style="width: 82%"></div>
+									<div class="skeleton-line" style="width: 92%"></div>
+								</div>
+								<div class="entry-footer">
+									<button class="gift-entry"><i data-lucide="gift"></i>领取礼品</button>
+									<div class="identity-row">
+										<button class="identity">
+											<span class="avatar">AL</span><span>Alex Li</span></button
+										><button class="quota-trigger quota-specimen">
+											<span>Plus</span><span class="quota-ring"></span>
+										</button>
+									</div>
+								</div>
+							</div>
+							<div class="mobile-specimen">
+								<div class="card-head">
+									<span class="card-title">ArtiChat</span><i data-lucide="menu"></i>
+								</div>
+								<div style="margin-top: 80px; text-align: center">
+									<div class="muted">今天想聊些什么？</div>
+								</div>
+								<div class="mobile-bottom">
+									<button class="gift-entry"><i data-lucide="gift"></i>领取礼品</button
+									><button class="quota-trigger quota-specimen">
+										<span>Plus</span><span class="quota-ring"></span>
+									</button>
+								</div>
+							</div>
+						</div>
+					</section>
+				</div>
+			</main>
+		</div>
+
+		<div class="quota-popover" id="quota-popover" role="status">
+			<div class="card-head">
+				<div class="card-title">用量</div>
+				<span class="badge">Plus</span>
+			</div>
+			<div class="token-bars" style="padding-bottom: 0">
+				<div class="token-row">
+					<span>Plan</span>
+					<div class="bar cache-read"><span style="width: 68%"></span></div>
+					<span style="text-align: right">2,040 / 3,000</span>
+				</div>
+				<div class="token-row">
+					<span>充值</span>
+					<div class="bar output"><span style="width: 84%"></span></div>
+					<span style="text-align: right">420 / 500</span>
+				</div>
+			</div>
+			<div class="helper" style="margin-top: 9px">下次重置：2026-08-18</div>
+		</div>
+
+		<div
+			class="modal-backdrop"
+			id="gift-archive"
+			role="dialog"
+			aria-modal="true"
+			aria-labelledby="gift-archive-title"
+		>
+			<div class="modal">
+				<div class="modal-head">
+					<div>
+						<h2 id="gift-archive-title">礼品卡历史</h2>
+						<div class="helper">已领取与已撤销礼品从进行中批次移到这里。</div>
+					</div>
+					<button class="icon-button modal-close" aria-label="关闭" title="关闭">
+						<i data-lucide="x"></i>
+					</button>
+				</div>
+				<div class="modal-body">
+					<div class="card-head" style="margin-bottom: 12px">
+						<div class="segmented gift-archive-tabs">
+							<button class="active" data-gift-status="claimed">已领取 28</button
+							><button data-gift-status="revoked">已撤销 4</button
+							><button data-gift-status="expired">已过期 2</button>
+						</div>
+						<button class="button danger"><i data-lucide="trash-2"></i>清除当前列表</button>
+					</div>
+					<div class="gift-list gift-archive-list" data-status="claimed">
+						<article class="item-card">
+							<div class="item-head">
+								<div>
+									<div class="card-title">新用户充值礼</div>
+									<div class="card-subtitle">额度充值卡 · 500 Chatpoint</div>
+								</div>
+								<span class="badge green">已领取</span>
+							</div>
+							<div class="card-meta">
+								<span>rui@example.com</span><span>领取于 2026-07-29 21:20</span
+								><span>GIFT-0728-C</span>
+							</div>
+						</article>
+					</div>
+					<div class="gift-list gift-archive-list hidden" data-status="revoked">
+						<article class="item-card">
+							<div class="item-head">
+								<div>
+									<div class="card-title">内测订阅礼</div>
+									<div class="card-subtitle">订阅卡 · Plus 30 天</div>
+								</div>
+								<span class="badge">已撤销</span>
+							</div>
+							<div class="card-meta">
+								<span>test@example.com</span><span>撤销于 2026-07-27 08:40</span>
+							</div>
+						</article>
+					</div>
+					<div class="gift-list gift-archive-list hidden" data-status="expired">
+						<article class="item-card">
+							<div class="item-head">
+								<div>
+									<div class="card-title">春季活动礼品</div>
+									<div class="card-subtitle">额度充值卡 · 100 Chatpoint</div>
+								</div>
+								<span class="badge red">已过期</span>
+							</div>
+							<div class="card-meta"><span>未领取</span><span>过期于 2026-06-30</span></div>
+						</article>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<div
+			class="modal-backdrop"
+			id="code-archive"
+			role="dialog"
+			aria-modal="true"
+			aria-labelledby="archive-title"
+		>
+			<div class="modal">
+				<div class="modal-head">
+					<div>
+						<h2 id="archive-title">兑换码归档</h2>
+						<div class="helper">历史混合权益码仅保留查看，不允许复制新建。</div>
+					</div>
+					<button class="icon-button modal-close" aria-label="关闭" title="关闭">
+						<i data-lucide="x"></i>
+					</button>
+				</div>
+				<div class="modal-body">
+					<div class="card-head" style="margin-bottom: 12px">
+						<div class="segmented archive-tabs">
+							<button class="active" data-archive-status="disabled">已停用 6</button
+							><button data-archive-status="used">已使用 2</button
+							><button data-archive-status="expired">已过期 1</button>
+						</div>
+						<button class="button danger"><i data-lucide="trash-2"></i>清除当前列表</button>
+					</div>
+					<div class="code-list archive-list" data-status="disabled">
+						<article class="item-card">
+							<div class="code-main">
+								<div>
+									<div class="code-value">OLD-GIFT-4A7X</div>
+									<div class="code-meta">
+										<span class="badge amber">历史混合权益</span><span>已停用</span
+										><span>最后更新 2026-07-24</span>
+									</div>
+								</div>
+								<span class="badge">审计保留</span>
+							</div>
+						</article>
+						<article class="item-card">
+							<div class="code-main">
+								<div>
+									<div class="code-value">PLUS-TRIAL-2026</div>
+									<div class="code-meta">
+										<span class="badge blue">订阅卡</span><span>已停用</span><span>0 / 100 次</span>
+									</div>
+								</div>
+								<span class="badge">可清除</span>
+							</div>
+						</article>
+					</div>
+					<div class="code-list archive-list hidden" data-status="used">
+						<article class="item-card">
+							<div class="code-main">
+								<div>
+									<div class="code-value">CP500-SUMMER-X1A9</div>
+									<div class="code-meta">
+										<span class="badge green">额度充值卡</span><span>1 / 1 次</span
+										><span>由 rui@example.com 使用</span>
+									</div>
+								</div>
+								<span class="badge green">已使用</span>
+							</div>
+						</article>
+					</div>
+					<div class="code-list archive-list hidden" data-status="expired">
+						<article class="item-card">
+							<div class="code-main">
+								<div>
+									<div class="code-value">PLUS-SPRING-L8K2</div>
+									<div class="code-meta">
+										<span class="badge blue">订阅卡</span><span>Plus · 30 天</span
+										><span>2026-06-30 已过期</span>
+									</div>
+								</div>
+								<span class="badge red">已过期</span>
+							</div>
+						</article>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
+		<script>
+			const root = document.documentElement;
+			const sidebar = document.getElementById('sidebar');
+			const navScrim = document.getElementById('nav-scrim');
+			const quotaPopover = document.getElementById('quota-popover');
+			const quotaTrigger = document.getElementById('quota-trigger');
+
+			const renderIcons = () => {
+				if (window.lucide) window.lucide.createIcons({ attrs: { 'aria-hidden': 'true' } });
+			};
+
+			const closeNavigation = () => {
+				sidebar.classList.remove('open');
+				navScrim.classList.remove('open');
+			};
+
+			const activateView = (viewName) => {
+				document.querySelectorAll('[data-view-panel]').forEach((panel) => {
+					panel.classList.toggle('active', panel.dataset.viewPanel === viewName);
+				});
+				document.querySelectorAll('.sidebar .nav-item[data-view]').forEach((item) => {
+					item.classList.toggle('active', item.dataset.view === viewName);
+				});
+				if (history.replaceState) history.replaceState(null, '', `#${viewName}`);
+				window.scrollTo({ top: 0, behavior: 'instant' });
+				closeNavigation();
+				renderIcons();
+			};
+
+			document.querySelectorAll('[data-view]').forEach((control) => {
+				control.addEventListener('click', () => activateView(control.dataset.view));
+			});
+
+			document.getElementById('menu-button').addEventListener('click', () => {
+				sidebar.classList.add('open');
+				navScrim.classList.add('open');
+			});
+			navScrim.addEventListener('click', closeNavigation);
+
+			document.querySelectorAll('.theme-toggle').forEach((button) => {
+				button.addEventListener('click', () => {
+					root.dataset.theme = root.dataset.theme === 'dark' ? 'light' : 'dark';
+					renderIcons();
+				});
+			});
+
+			document.querySelectorAll('.switch').forEach((toggle) => {
+				toggle.addEventListener('click', () => {
+					toggle.setAttribute(
+						'aria-checked',
+						toggle.getAttribute('aria-checked') === 'true' ? 'false' : 'true'
+					);
+				});
+			});
+
+			document.querySelectorAll('.benefit-segment').forEach((segment) => {
+				segment.querySelectorAll('button').forEach((button) => {
+					button.addEventListener('click', () => {
+						segment
+							.querySelectorAll('button')
+							.forEach((item) => item.classList.toggle('active', item === button));
+						const scope = segment.closest('.surface');
+						const subscription = button.dataset.benefit === 'subscription';
+						scope
+							.querySelectorAll('.benefit-subscription')
+							.forEach((field) => field.classList.toggle('hidden', !subscription));
+						scope
+							.querySelectorAll('.benefit-recharge')
+							.forEach((field) => field.classList.toggle('hidden', subscription));
+					});
+				});
+			});
+
+			document.querySelectorAll('[data-open-modal]').forEach((button) => {
+				button.addEventListener('click', () =>
+					document.getElementById(button.dataset.openModal).classList.add('open')
+				);
+			});
+			document.querySelectorAll('.modal-close').forEach((button) => {
+				button.addEventListener('click', () =>
+					button.closest('.modal-backdrop').classList.remove('open')
+				);
+			});
+			document.querySelectorAll('.modal-backdrop').forEach((backdrop) => {
+				backdrop.addEventListener('click', (event) => {
+					if (event.target === backdrop) backdrop.classList.remove('open');
+				});
+			});
+
+			document.querySelectorAll('.archive-tabs button').forEach((tab) => {
+				tab.addEventListener('click', () => {
+					document
+						.querySelectorAll('.archive-tabs button')
+						.forEach((item) => item.classList.toggle('active', item === tab));
+					document
+						.querySelectorAll('.archive-list')
+						.forEach((list) =>
+							list.classList.toggle('hidden', list.dataset.status !== tab.dataset.archiveStatus)
+						);
+				});
+			});
+
+			document.querySelectorAll('.gift-archive-tabs button').forEach((tab) => {
+				tab.addEventListener('click', () => {
+					document
+						.querySelectorAll('.gift-archive-tabs button')
+						.forEach((item) => item.classList.toggle('active', item === tab));
+					document
+						.querySelectorAll('.gift-archive-list')
+						.forEach((list) =>
+							list.classList.toggle('hidden', list.dataset.status !== tab.dataset.giftStatus)
+						);
+				});
+			});
+
+			document.querySelectorAll('.ledger-tabs button').forEach((tab) => {
+				tab.addEventListener('click', () => {
+					document
+						.querySelectorAll('.ledger-tabs button')
+						.forEach((item) => item.classList.toggle('active', item === tab));
+					document
+						.querySelectorAll('[data-ledger-panel]')
+						.forEach((panel) =>
+							panel.classList.toggle('hidden', panel.dataset.ledgerPanel !== tab.dataset.ledger)
+						);
+				});
+			});
+
+			document.querySelectorAll('.announcement-input').forEach((input) => {
+				input.addEventListener('input', () => {
+					const target = document.getElementById(`preview-${input.dataset.preview}`);
+					if (target) target.textContent = input.value || '未填写';
+				});
+			});
+
+			const setQuotaOpen = (open) => {
+				quotaPopover.classList.toggle('show', open);
+				quotaTrigger.setAttribute('aria-expanded', String(open));
+			};
+
+			quotaTrigger.addEventListener('mouseenter', () => {
+				if (window.matchMedia('(hover: hover)').matches) setQuotaOpen(true);
+			});
+			quotaTrigger.addEventListener('mouseleave', () => {
+				if (window.matchMedia('(hover: hover)').matches) setQuotaOpen(false);
+			});
+			quotaTrigger.addEventListener('click', () => {
+				if (window.matchMedia('(hover: none)').matches) {
+					setQuotaOpen(!quotaPopover.classList.contains('show'));
+				} else {
+					activateView('ledger');
+				}
+			});
+
+			document.querySelectorAll('.quota-specimen').forEach((trigger) => {
+				trigger.addEventListener('click', () =>
+					setQuotaOpen(!quotaPopover.classList.contains('show'))
+				);
+			});
+
+			document.getElementById('redeem-demo-button').addEventListener('click', () => {
+				const value = document.getElementById('redeem-demo-input').value.trim();
+				document.getElementById('redeem-demo-result').textContent = value
+					? '兑换成功：已增加 500 Chatpoint。'
+					: '请输入兑换码。';
+			});
+
+			const generateFromTemplate = () => {
+				const template = document.getElementById('code-template-input').value.trim().toUpperCase();
+				const generated = template.replaceAll('0', () => String(Math.floor(Math.random() * 10)));
+				document.getElementById('code-template-preview').textContent = generated || '格式不能为空';
+			};
+
+			document
+				.getElementById('code-template-preview-button')
+				.addEventListener('click', generateFromTemplate);
+
+			document.querySelectorAll('[data-gift-state]').forEach((button) => {
+				button.addEventListener('click', () => {
+					document
+						.querySelectorAll('[data-gift-state]')
+						.forEach((item) => item.classList.toggle('active', item === button));
+					document
+						.querySelectorAll('[data-pending-gift]')
+						.forEach((card) =>
+							card.classList.toggle('hidden', button.dataset.giftState === 'empty')
+						);
+				});
+			});
+
+			document.querySelectorAll('.claim-demo').forEach((button) => {
+				button.addEventListener('click', () => {
+					button.textContent = '已领取';
+					button.classList.remove('primary');
+					button.classList.add('secondary');
+					button.disabled = true;
+				});
+			});
+
+			document.addEventListener('keydown', (event) => {
+				if (event.key !== 'Escape') return;
+				document
+					.querySelectorAll('.modal-backdrop.open')
+					.forEach((modal) => modal.classList.remove('open'));
+				setQuotaOpen(false);
+				closeNavigation();
+			});
+
+			const initialView = location.hash.slice(1);
+			if (document.querySelector(`[data-view-panel="${initialView}"]`)) activateView(initialView);
+			renderIcons();
+		</script>
+	</body>
+</html>

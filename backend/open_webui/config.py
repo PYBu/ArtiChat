@@ -178,15 +178,16 @@ CACHE_DIR.mkdir(parents=True, exist_ok=True)
 ####################################
 
 CUSTOM_NAME = os.getenv('CUSTOM_NAME', '')
+CUSTOM_BRANDING_API_BASE_URL = os.getenv('CUSTOM_BRANDING_API_BASE_URL', '').rstrip('/')
 
-if CUSTOM_NAME:
+if CUSTOM_NAME and CUSTOM_BRANDING_API_BASE_URL:
     try:
-        r = requests.get(f'https://api.openwebui.com/api/v1/custom/{CUSTOM_NAME}')
+        r = requests.get(f'{CUSTOM_BRANDING_API_BASE_URL}/api/v1/custom/{CUSTOM_NAME}')
         data = r.json()
         if r.ok:
             if 'logo' in data:
                 WEBUI_FAVICON_URL = url = (
-                    f'https://api.openwebui.com{data["logo"]}' if data['logo'][0] == '/' else data['logo']
+                    f'{CUSTOM_BRANDING_API_BASE_URL}{data["logo"]}' if data['logo'][0] == '/' else data['logo']
                 )
 
                 r = requests.get(url, stream=True)
@@ -196,7 +197,11 @@ if CUSTOM_NAME:
                         shutil.copyfileobj(r.raw, f)
 
             if 'splash' in data:
-                url = f'https://api.openwebui.com{data["splash"]}' if data['splash'][0] == '/' else data['splash']
+                url = (
+                    f'{CUSTOM_BRANDING_API_BASE_URL}{data["splash"]}'
+                    if data['splash'][0] == '/'
+                    else data['splash']
+                )
 
                 r = requests.get(url, stream=True)
                 if r.status_code == 200:
@@ -239,13 +244,13 @@ if OLLAMA_BASE_URL == '' and OLLAMA_API_BASE_URL != '':
 if ENV == 'prod':
     if OLLAMA_BASE_URL == '/ollama' and not K8S_FLAG:
         if USE_OLLAMA_DOCKER.lower() == 'true':
-            # if you use all-in-one docker container (Open WebUI + Ollama)
+            # If you use the all-in-one ArtiChat + Ollama container.
             # with the docker build arg USE_OLLAMA=true (--build-arg="USE_OLLAMA=true") this only works with http://localhost:11434
             OLLAMA_BASE_URL = 'http://localhost:11434'
         else:
             OLLAMA_BASE_URL = 'http://host.docker.internal:11434'
     elif K8S_FLAG:
-        OLLAMA_BASE_URL = 'http://ollama-service.open-webui.svc.cluster.local:11434'
+        OLLAMA_BASE_URL = 'http://ollama-service.artichat.svc.cluster.local:11434'
 
 
 def _resolve_ollama_base_url(url: str) -> str:
@@ -592,7 +597,7 @@ MILVUS_DISKANN_MAX_DEGREE = int(os.getenv('MILVUS_DISKANN_MAX_DEGREE', '56'))
 MILVUS_DISKANN_SEARCH_LIST_SIZE = int(os.getenv('MILVUS_DISKANN_SEARCH_LIST_SIZE', '100'))
 ENABLE_MILVUS_MULTITENANCY_MODE = os.getenv('ENABLE_MILVUS_MULTITENANCY_MODE', 'false').lower() == 'true'
 # Hyphens not allowed, need to use underscores in collection names
-MILVUS_COLLECTION_PREFIX = os.getenv('MILVUS_COLLECTION_PREFIX', 'open_webui')
+MILVUS_COLLECTION_PREFIX = os.getenv('MILVUS_COLLECTION_PREFIX', 'artichat')
 
 # Qdrant
 QDRANT_URI = os.getenv('QDRANT_URI', None)
@@ -603,7 +608,7 @@ QDRANT_GRPC_PORT = int(os.getenv('QDRANT_GRPC_PORT', '6334'))
 QDRANT_TIMEOUT = int(os.getenv('QDRANT_TIMEOUT', '5'))
 QDRANT_HNSW_M = int(os.getenv('QDRANT_HNSW_M', '16'))
 ENABLE_QDRANT_MULTITENANCY_MODE = os.getenv('ENABLE_QDRANT_MULTITENANCY_MODE', 'true').lower() == 'true'
-QDRANT_COLLECTION_PREFIX = os.getenv('QDRANT_COLLECTION_PREFIX', 'open-webui')
+QDRANT_COLLECTION_PREFIX = os.getenv('QDRANT_COLLECTION_PREFIX', 'artichat')
 
 WEAVIATE_HTTP_HOST = os.getenv('WEAVIATE_HTTP_HOST', '')
 WEAVIATE_GRPC_HOST = os.getenv('WEAVIATE_GRPC_HOST', '')
@@ -620,6 +625,7 @@ OPENSEARCH_SSL = os.getenv('OPENSEARCH_SSL', 'true').lower() == 'true'
 OPENSEARCH_CERT_VERIFY = os.getenv('OPENSEARCH_CERT_VERIFY', 'false').lower() == 'true'
 OPENSEARCH_USERNAME = os.getenv('OPENSEARCH_USERNAME', None)
 OPENSEARCH_PASSWORD = os.getenv('OPENSEARCH_PASSWORD', None)
+OPENSEARCH_INDEX_PREFIX = os.getenv('OPENSEARCH_INDEX_PREFIX', 'artichat')
 
 # ElasticSearch
 ELASTICSEARCH_URL = os.getenv('ELASTICSEARCH_URL', 'https://localhost:9200')
@@ -629,7 +635,7 @@ ELASTICSEARCH_USERNAME = os.getenv('ELASTICSEARCH_USERNAME', None)
 ELASTICSEARCH_PASSWORD = os.getenv('ELASTICSEARCH_PASSWORD', None)
 ELASTICSEARCH_CLOUD_ID = os.getenv('ELASTICSEARCH_CLOUD_ID', None)
 SSL_ASSERT_FINGERPRINT = os.getenv('SSL_ASSERT_FINGERPRINT', None)
-ELASTICSEARCH_INDEX_PREFIX = os.getenv('ELASTICSEARCH_INDEX_PREFIX', 'open_webui_collections')
+ELASTICSEARCH_INDEX_PREFIX = os.getenv('ELASTICSEARCH_INDEX_PREFIX', 'artichat_collections')
 # Pgvector
 PGVECTOR_DB_URL = os.getenv('PGVECTOR_DB_URL', DATABASE_URL)
 if VECTOR_DB == 'pgvector' and not PGVECTOR_DB_URL.startswith('postgres'):
@@ -773,7 +779,7 @@ else:
 # Pinecone
 PINECONE_API_KEY = os.getenv('PINECONE_API_KEY', None)
 PINECONE_ENVIRONMENT = os.getenv('PINECONE_ENVIRONMENT', None)
-PINECONE_INDEX_NAME = os.getenv('PINECONE_INDEX_NAME', 'open-webui-index')
+PINECONE_INDEX_NAME = os.getenv('PINECONE_INDEX_NAME', 'artichat-index')
 PINECONE_DIMENSION = int(os.getenv('PINECONE_DIMENSION', 1536))  # or 3072, 1024, 768
 PINECONE_METRIC = os.getenv('PINECONE_METRIC', 'cosine')
 PINECONE_CLOUD = os.getenv('PINECONE_CLOUD', 'aws')  # or "gcp" or "azure"
@@ -809,7 +815,7 @@ S3_VECTOR_REGION = os.getenv('S3_VECTOR_REGION', None)
 
 # Valkey Vector Store
 VALKEY_URL = os.getenv('VALKEY_URL', '')
-VALKEY_COLLECTION_PREFIX = os.getenv('VALKEY_COLLECTION_PREFIX', 'open_webui')
+VALKEY_COLLECTION_PREFIX = os.getenv('VALKEY_COLLECTION_PREFIX', 'artichat')
 VALKEY_INDEX_TYPE = os.getenv('VALKEY_INDEX_TYPE', 'HNSW').upper()
 VALKEY_DISTANCE_METRIC = os.getenv('VALKEY_DISTANCE_METRIC', 'COSINE').upper()
 VALKEY_HNSW_M = int(os.getenv('VALKEY_HNSW_M', '16'))
@@ -1477,6 +1483,10 @@ IMAGES_GEMINI_API_KEY = os.getenv('IMAGES_GEMINI_API_KEY', GEMINI_API_KEY)
 
 IMAGES_GEMINI_ENDPOINT_METHOD = os.getenv('IMAGES_GEMINI_ENDPOINT_METHOD', '')
 
+IMAGE_OUTPUT_URL_FORMAT = os.getenv('IMAGE_OUTPUT_URL_FORMAT', 'relative').lower()
+if IMAGE_OUTPUT_URL_FORMAT not in {'relative', 'absolute'}:
+    IMAGE_OUTPUT_URL_FORMAT = 'relative'
+
 ENABLE_IMAGE_EDIT = os.getenv('ENABLE_IMAGE_EDIT', '').lower() == 'true'
 
 IMAGE_EDIT_ENGINE = os.getenv('IMAGE_EDIT_ENGINE', 'openai')
@@ -2067,7 +2077,7 @@ ENABLE_ADMIN_CHAT_ACCESS = os.getenv('ENABLE_ADMIN_CHAT_ACCESS', 'True').lower()
 
 ENABLE_ADMIN_ANALYTICS = os.getenv('ENABLE_ADMIN_ANALYTICS', 'True').lower() == 'true'
 
-ENABLE_COMMUNITY_SHARING = os.getenv('ENABLE_COMMUNITY_SHARING', 'True').lower() == 'true'
+ENABLE_COMMUNITY_SHARING = os.getenv('ENABLE_COMMUNITY_SHARING', 'False').lower() == 'true'
 
 ENABLE_MESSAGE_RATING = os.getenv('ENABLE_MESSAGE_RATING', 'True').lower() == 'true'
 
@@ -2428,10 +2438,7 @@ API_KEYS_ALLOWED_ENDPOINTS = os.getenv('API_KEYS_ALLOWED_ENDPOINTS', os.getenv('
 JWT_EXPIRES_IN = os.getenv('JWT_EXPIRES_IN', '4w')
 
 if JWT_EXPIRES_IN == '-1':
-    log.warning(
-        "⚠️  SECURITY WARNING: JWT_EXPIRES_IN is set to '-1'\n"
-        '    See: https://docs.openwebui.com/reference/env-configuration\n'
-    )
+    log.warning("SECURITY WARNING: JWT_EXPIRES_IN is set to '-1'; tokens will not expire")
 
 ####################################
 # OAuth config
@@ -2992,6 +2999,7 @@ DEFAULT_CONFIG = {
     'image_generation.gemini.api_base_url': IMAGES_GEMINI_API_BASE_URL,
     'image_generation.gemini.api_key': IMAGES_GEMINI_API_KEY,
     'image_generation.gemini.endpoint_method': IMAGES_GEMINI_ENDPOINT_METHOD,
+    'images.output_url_format': IMAGE_OUTPUT_URL_FORMAT,
     'images.edit.enable': ENABLE_IMAGE_EDIT,
     'images.edit.engine': IMAGE_EDIT_ENGINE,
     'images.edit.model': IMAGE_EDIT_MODEL,
@@ -3036,6 +3044,22 @@ DEFAULT_CONFIG = {
     'audio.tts.mistral.api_key': AUDIO_TTS_MISTRAL_API_KEY,
     'audio.tts.mistral.api_base_url': AUDIO_TTS_MISTRAL_API_BASE_URL,
     'webui.url': WEBUI_URL,
+    'email.enabled': False,
+    'email.smtp.host': '',
+    'email.smtp.port': 587,
+    'email.smtp.username': '',
+    'email.smtp.password_encrypted': '',
+    'email.smtp.security': 'starttls',
+    'email.sender_email': '',
+    'email.sender_name': 'ArtiChat',
+    'email.reply_to': '',
+    'email.public_url': WEBUI_URL,
+    'email.subscription_notifications': True,
+    'registration.allowed_domains': [],
+    'registration.allow_subdomains': False,
+    'registration.verification_enabled': False,
+    'registration.email_code_login_enabled': False,
+    'registration.sensitive_action_verification_enabled': False,
     'ui.enable_signup': ENABLE_SIGNUP,
     'ui.enable_login_form': ENABLE_LOGIN_FORM,
     'ui.enable_password_change_form': ENABLE_PASSWORD_CHANGE_FORM,

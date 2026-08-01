@@ -1335,7 +1335,14 @@ async def get_sources_from_items(
     full_context=False,
     user: UserModel | None = None,
 ):
-    log.debug('items: %s %s %s %s %s', items, queries, embedding_function, reranking_function, full_context)
+    log.debug(
+        'Retrieval request: item_count=%d query_count=%d embedding=%s reranking=%s full_context=%s',
+        len(items),
+        len(queries),
+        embedding_function is not None,
+        reranking_function is not None,
+        full_context,
+    )
 
     bypass_embedding_and_retrieval = await Config.get('rag.bypass_embedding_and_retrieval')
     extracted_collections = []

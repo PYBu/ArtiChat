@@ -29,7 +29,7 @@ OPEN_WEBUI_DIR = ENV_FILE_PATH.parent
 # BACKEND_DIR is the parent of OPEN_WEBUI_DIR (backend/)
 BACKEND_DIR = OPEN_WEBUI_DIR.parent
 
-# BASE_DIR is the parent of BACKEND_DIR (open-webui-dev/)
+# BASE_DIR is the parent of BACKEND_DIR.
 BASE_DIR = BACKEND_DIR.parent
 
 try:
@@ -40,6 +40,7 @@ except ImportError:
     print('dotenv not installed, skipping...')
 
 DOCKER = os.getenv('DOCKER', 'False').lower() == 'true'
+TRUSTED_PROXY_IPS = os.getenv('TRUSTED_PROXY_IPS', '')
 
 USE_CUDA = os.getenv('USE_CUDA_DOCKER', 'false')
 DEVICE_TYPE = 'cpu'
@@ -135,7 +136,7 @@ ENV = os.getenv('ENV', 'dev')
 FROM_INIT_PY = os.getenv('FROM_INIT_PY', 'False').lower() == 'true'
 
 if FROM_INIT_PY:
-    PACKAGE_DATA = {'version': importlib.metadata.version('open-webui')}
+    PACKAGE_DATA = {'version': importlib.metadata.version('artichat')}
 else:
     try:
         PACKAGE_DATA = json.loads((BASE_DIR / 'package.json').read_text())
@@ -374,7 +375,7 @@ RAG_SYSTEM_CONTEXT = os.getenv('RAG_SYSTEM_CONTEXT', 'False').lower() == 'true'
 REDIS_URL = os.getenv('REDIS_URL', '')
 REDIS_CLUSTER = os.getenv('REDIS_CLUSTER', 'False').lower() == 'true'
 
-REDIS_KEY_PREFIX = os.getenv('REDIS_KEY_PREFIX', 'open-webui')
+REDIS_KEY_PREFIX = os.getenv('REDIS_KEY_PREFIX', 'artichat')
 
 REDIS_SENTINEL_HOSTS = os.getenv('REDIS_SENTINEL_HOSTS', '')
 REDIS_SENTINEL_PORT = os.getenv('REDIS_SENTINEL_PORT', '26379')
@@ -520,7 +521,7 @@ import ssl as _ssl
 # to a path directly) take precedence over this global fallback.
 #
 # This follows the industry convention of ``SSL_CERT_FILE`` / ``REQUESTS_CA_BUNDLE``
-# but is scoped to Open WebUI to avoid interfering with system-level settings.
+# but is scoped to ArtiChat to avoid interfering with system-level settings.
 AIOHTTP_CLIENT_SSL_CERT_FILE = os.getenv('AIOHTTP_CLIENT_SSL_CERT_FILE', '').strip()
 
 
@@ -552,7 +553,7 @@ def _parse_ssl_env(value: str) -> 'bool | _ssl.SSLContext':
     - ``"/path/to/ca-bundle.crt"`` → ``SSLContext`` loading that CA file
       (takes precedence over ``AIOHTTP_CLIENT_SSL_CERT_FILE``)
 
-    This allows users with corporate or internal CAs to point Open WebUI
+    This allows users with corporate or internal CAs to point ArtiChat
     at a custom CA bundle without disabling verification entirely.
     """
     lower = value.strip().lower()
@@ -735,10 +736,10 @@ if WEBUI_AUTH and WEBUI_SECRET_KEY == '':
     raise SystemExit(
         'WEBUI_SECRET_KEY is not set. It is a hard requirement when authentication is enabled.\n'
         'The supported start methods set or auto-generate it for you: use start.sh (Linux/macOS), '
-        'start_windows.bat (Windows), or `open-webui serve`.\n'
+        'start_windows.bat (Windows), or `artichat serve`.\n'
         'If you start the backend another way (e.g. invoking uvicorn directly, which is unsupported), '
         'you must set WEBUI_SECRET_KEY yourself to a long random value.\n'
-        'See https://docs.openwebui.com/reference/env-configuration#webui_secret_key'
+        'Set WEBUI_SECRET_KEY to a persistent random value before serving multiple workers.'
     )
 
 ENABLE_COMPRESSION_MIDDLEWARE = os.getenv('ENABLE_COMPRESSION_MIDDLEWARE', 'True').lower() == 'true'
@@ -759,9 +760,9 @@ WEBUI_AUTH_TRUSTED_GROUPS_HEADER = os.getenv('WEBUI_AUTH_TRUSTED_GROUPS_HEADER',
 WEBUI_AUTH_TRUSTED_ROLE_HEADER = os.getenv('WEBUI_AUTH_TRUSTED_ROLE_HEADER', None)
 
 # Custom header name for API key authentication.  Defaults to 'x-api-key'.
-# Useful when Open WebUI sits behind a reverse proxy / API gateway that
+# Useful when ArtiChat sits behind a reverse proxy / API gateway that
 # already uses the Authorization header for its own authentication — set
-# this to a unique header (e.g. 'X-OpenWebUI-Key') so the middleware
+# this to a unique header (e.g. 'X-ArtiChat-Key') so the middleware
 # checks the custom header instead and avoids the 401 short-circuit.
 CUSTOM_API_KEY_HEADER = os.getenv('CUSTOM_API_KEY_HEADER', 'x-api-key')
 
@@ -802,7 +803,7 @@ BYPASS_PYDUB_PREPROCESSING = os.getenv('BYPASS_PYDUB_PREPROCESSING', 'False').lo
 
 # When disabled (default), the OpenAI catch-all proxy endpoint (/{path:path})
 # is blocked. Enable only if you need direct passthrough to upstream OpenAI-
-# compatible APIs for endpoints not natively handled by Open WebUI.
+# compatible APIs for endpoints not natively handled by ArtiChat.
 ENABLE_OPENAI_API_PASSTHROUGH = os.getenv('ENABLE_OPENAI_API_PASSTHROUGH', 'False').lower() == 'true'
 
 WEBUI_AUTH_SIGNOUT_REDIRECT_URL = os.getenv('WEBUI_AUTH_SIGNOUT_REDIRECT_URL', None)
@@ -823,7 +824,7 @@ OAUTH_SESSION_TOKEN_ENCRYPTION_KEY = os.getenv('OAUTH_SESSION_TOKEN_ENCRYPTION_K
 OAUTH_MAX_SESSIONS_PER_USER = int(os.getenv('OAUTH_MAX_SESSIONS_PER_USER', '10'))
 
 # Token Exchange Configuration
-# Allows external apps to exchange OAuth tokens for OpenWebUI tokens
+# Allows external apps to exchange OAuth tokens for ArtiChat tokens
 ENABLE_OAUTH_TOKEN_EXCHANGE = os.getenv('ENABLE_OAUTH_TOKEN_EXCHANGE', 'False').lower() == 'true'
 _oauth_token_exchange_rate_limit = (os.getenv('OAUTH_TOKEN_EXCHANGE_RATE_LIMIT') or '').strip()
 OAUTH_TOKEN_EXCHANGE_RATE_LIMIT = (
@@ -852,11 +853,11 @@ ENABLE_SCIM = os.getenv('ENABLE_SCIM', os.getenv('SCIM_ENABLED', 'False')).lower
 SCIM_TOKEN = os.getenv('SCIM_TOKEN', '')
 SCIM_AUTH_PROVIDER = os.getenv('SCIM_AUTH_PROVIDER', '')
 
-if ENABLE_SCIM and not SCIM_AUTH_PROVIDER:
-    log.warning(
-        'SCIM is enabled but SCIM_AUTH_PROVIDER is not set. '
-        "Set SCIM_AUTH_PROVIDER to the OAuth provider name (e.g. 'microsoft', 'oidc') "
-        'to enable externalId storage.'
+if ENABLE_SCIM:
+    raise RuntimeError(
+        'SCIM is not supported by ArtiChat 0.2.1 because the experimental upstream implementation '
+        'does not preserve ArtiChat authentication, session-revocation, subscription, and billing lifecycle '
+        'invariants. Remove ENABLE_SCIM/SCIM_ENABLED or set it to false before starting this release.'
     )
 
 ####################################
@@ -888,11 +889,8 @@ if LICENSE_PUBLIC_KEY:
 # WEBUI Identity
 ####################################
 
-WEBUI_NAME = os.getenv('WEBUI_NAME', 'Open WebUI')
-if WEBUI_NAME != 'Open WebUI':
-    WEBUI_NAME += ' (Open WebUI)'
-
-WEBUI_FAVICON_URL = 'https://openwebui.com/favicon.png'
+WEBUI_NAME = os.getenv('WEBUI_NAME', 'ArtiChat')
+WEBUI_FAVICON_URL = os.getenv('WEBUI_FAVICON_URL', '/static/favicon.png')
 WEBUI_BUILD_HASH = os.getenv('WEBUI_BUILD_HASH', 'dev-build')
 TRUSTED_SIGNATURE_KEY = os.getenv('TRUSTED_SIGNATURE_KEY', '')
 
@@ -926,17 +924,17 @@ PROFILE_IMAGE_MAX_DATA_URI_SIZE = int(_profile_image_max_data_uri_size) if _prof
 
 ENABLE_FORWARD_USER_INFO_HEADERS = os.getenv('ENABLE_FORWARD_USER_INFO_HEADERS', 'False').lower() == 'true'
 
-FORWARD_USER_INFO_HEADER_USER_NAME = os.getenv('FORWARD_USER_INFO_HEADER_USER_NAME', 'X-OpenWebUI-User-Name')
-FORWARD_USER_INFO_HEADER_USER_ID = os.getenv('FORWARD_USER_INFO_HEADER_USER_ID', 'X-OpenWebUI-User-Id')
-FORWARD_USER_INFO_HEADER_USER_EMAIL = os.getenv('FORWARD_USER_INFO_HEADER_USER_EMAIL', 'X-OpenWebUI-User-Email')
-FORWARD_USER_INFO_HEADER_USER_ROLE = os.getenv('FORWARD_USER_INFO_HEADER_USER_ROLE', 'X-OpenWebUI-User-Role')
-FORWARD_SESSION_INFO_HEADER_MESSAGE_ID = os.getenv('FORWARD_SESSION_INFO_HEADER_MESSAGE_ID', 'X-OpenWebUI-Message-Id')
-FORWARD_SESSION_INFO_HEADER_CHAT_ID = os.getenv('FORWARD_SESSION_INFO_HEADER_CHAT_ID', 'X-OpenWebUI-Chat-Id')
+FORWARD_USER_INFO_HEADER_USER_NAME = os.getenv('FORWARD_USER_INFO_HEADER_USER_NAME', 'X-ArtiChat-User-Name')
+FORWARD_USER_INFO_HEADER_USER_ID = os.getenv('FORWARD_USER_INFO_HEADER_USER_ID', 'X-ArtiChat-User-Id')
+FORWARD_USER_INFO_HEADER_USER_EMAIL = os.getenv('FORWARD_USER_INFO_HEADER_USER_EMAIL', 'X-ArtiChat-User-Email')
+FORWARD_USER_INFO_HEADER_USER_ROLE = os.getenv('FORWARD_USER_INFO_HEADER_USER_ROLE', 'X-ArtiChat-User-Role')
+FORWARD_SESSION_INFO_HEADER_MESSAGE_ID = os.getenv('FORWARD_SESSION_INFO_HEADER_MESSAGE_ID', 'X-ArtiChat-Message-Id')
+FORWARD_SESSION_INFO_HEADER_CHAT_ID = os.getenv('FORWARD_SESSION_INFO_HEADER_CHAT_ID', 'X-ArtiChat-Chat-Id')
 
 # If set while ENABLE_FORWARD_USER_INFO_HEADERS is True, send one signed HS256 JWT
-# (FORWARD_USER_INFO_HEADER_JWT) instead of separate X-OpenWebUI-User-* headers.
+# (FORWARD_USER_INFO_HEADER_JWT) instead of separate forwarded user headers.
 FORWARD_USER_INFO_HEADER_JWT_SECRET = (os.environ.get('FORWARD_USER_INFO_HEADER_JWT_SECRET') or '').strip() or None
-FORWARD_USER_INFO_HEADER_JWT = os.environ.get('FORWARD_USER_INFO_HEADER_JWT', 'X-OpenWebUI-User-Jwt')
+FORWARD_USER_INFO_HEADER_JWT = os.environ.get('FORWARD_USER_INFO_HEADER_JWT', 'X-ArtiChat-User-Jwt')
 try:
     FORWARD_USER_INFO_HEADER_JWT_EXPIRES_SECONDS = int(
         os.environ.get('FORWARD_USER_INFO_HEADER_JWT_EXPIRES_SECONDS', '300')
@@ -1124,11 +1122,25 @@ PIP_PACKAGE_INDEX_OPTIONS = os.getenv('PIP_PACKAGE_INDEX_OPTIONS', '').split()
 ####################################
 
 ENABLE_VERSION_UPDATE_CHECK = os.getenv('ENABLE_VERSION_UPDATE_CHECK', 'true').lower() == 'true'
+ARTICHAT_UPDATE_REPOSITORY = os.getenv('ARTICHAT_UPDATE_REPOSITORY', '').strip()
+ARTICHAT_UPDATE_WORKFLOW = os.getenv('ARTICHAT_UPDATE_WORKFLOW', 'artichat-deploy.yml').strip()
+ARTICHAT_UPDATE_REF = os.getenv('ARTICHAT_UPDATE_REF', 'main').strip()
+ARTICHAT_UPDATE_GITHUB_TOKEN = os.getenv('ARTICHAT_UPDATE_GITHUB_TOKEN', '').strip()
+ARTICHAT_UPDATE_STATE_PATH = Path(
+    os.getenv('ARTICHAT_UPDATE_STATE_PATH', str(DATA_DIR / 'update-state' / 'status.json'))
+).resolve()
+ARTICHAT_UPDATE_CACHE_TTL_SECONDS = int(os.getenv('ARTICHAT_UPDATE_CACHE_TTL_SECONDS', '300'))
+ARTICHAT_UPDATE_STALE_AFTER_SECONDS = int(os.getenv('ARTICHAT_UPDATE_STALE_AFTER_SECONDS', '1800'))
+# The official announcement source is intentionally fixed for every deployment.
+ARTICHAT_ANNOUNCEMENT_URL = 'https://artichatupdate.artivis.cc/index.json'
+ARTICHAT_ANNOUNCEMENT_CACHE_TTL_SECONDS = int(os.getenv('ARTICHAT_ANNOUNCEMENT_CACHE_TTL_SECONDS', '600'))
+ARTICHAT_ANNOUNCEMENT_TIMEOUT_SECONDS = float(os.getenv('ARTICHAT_ANNOUNCEMENT_TIMEOUT_SECONDS', '4'))
 OFFLINE_MODE = os.getenv('OFFLINE_MODE', 'false').lower() == 'true'
 
 if OFFLINE_MODE:
     os.environ['HF_HUB_OFFLINE'] = '1'
     ENABLE_VERSION_UPDATE_CHECK = False
+    ARTICHAT_ANNOUNCEMENT_URL = ''
 
 ####################################
 # Pyodide file persistence
@@ -1201,7 +1213,7 @@ OTEL_METRICS_EXPORTER_OTLP_INSECURE = (
 OTEL_LOGS_EXPORTER_OTLP_INSECURE = (
     os.getenv('OTEL_LOGS_EXPORTER_OTLP_INSECURE', str(OTEL_EXPORTER_OTLP_INSECURE)).lower() == 'true'
 )
-OTEL_SERVICE_NAME = os.getenv('OTEL_SERVICE_NAME', 'open-webui')
+OTEL_SERVICE_NAME = os.getenv('OTEL_SERVICE_NAME', 'artichat')
 OTEL_RESOURCE_ATTRIBUTES = os.getenv('OTEL_RESOURCE_ATTRIBUTES', '')  # e.g. key1=val1,key2=val2
 OTEL_TRACES_SAMPLER = os.getenv('OTEL_TRACES_SAMPLER', 'parentbased_always_on').lower()
 OTEL_BASIC_AUTH_USERNAME = os.getenv('OTEL_BASIC_AUTH_USERNAME', '')

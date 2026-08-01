@@ -9,8 +9,7 @@
 	import PinSlash from '$lib/components/icons/PinSlash.svelte';
 	import Link from '$lib/components/icons/Link.svelte';
 	import Pencil from '$lib/components/icons/Pencil.svelte';
-	import { config, settings, showSettings, user } from '$lib/stores';
-	import GlobeAlt from '$lib/components/icons/GlobeAlt.svelte';
+	import { config, settings, user } from '$lib/stores';
 
 	const i18n = getContext('i18n');
 
@@ -56,7 +55,7 @@
 						if (model?.preset || model?.info?.base_model_id) {
 							goto(`/workspace/models/edit?id=${encodeURIComponent(model?.id ?? '')}`);
 						} else {
-							showSettings.set({ tab: 'admin:models', state: { id: model?.id ?? null } });
+							goto(`/admin/settings/models?model=${encodeURIComponent(model?.id ?? '')}`);
 						}
 						show = false;
 					}}
@@ -142,29 +141,6 @@
 
 				<div class="flex items-center">{$i18n.t('Copy Link')}</div>
 			</button>
-
-			{#if $config?.features.enable_community_sharing}
-				<hr class="border-gray-50 dark:border-gray-800/30 mx-1 my-0.5" />
-
-				<button
-					type="button"
-					class="select-none flex h-[1.6875rem] w-full items-center gap-2 rounded-xl px-2 text-[13px] hover:bg-gray-50/40 dark:hover:bg-gray-800/40 transition"
-					on:click={(e) => {
-						e.stopPropagation();
-						e.preventDefault();
-
-						window.open(
-							`https://openwebui.com/models?q=${encodeURIComponent(model?.id ?? '')}`,
-							'_blank'
-						);
-						show = false;
-					}}
-				>
-					<GlobeAlt className="size-3.5" />
-
-					<div class="flex items-center">{$i18n.t('Community Reviews')}</div>
-				</button>
-			{/if}
 		</DropdownMenu>
 	</div>
 </Dropdown>

@@ -755,7 +755,7 @@
 
 								<div class="text-xs text-gray-500 mt-1">
 									{$i18n.t(
-										'External vectors must be generated with the same embedding model configured in Open WebUI.'
+										'External vectors must be generated with the same embedding model configured in ArtiChat.'
 									)}
 								</div>
 							</div>

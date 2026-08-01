@@ -247,6 +247,8 @@
 							{/if}
 						</button>
 					</th>
+					<th scope="col" class="px-2.5 py-1.5 font-normal">{$i18n.t('Subscription')}</th>
+					<th scope="col" class="px-2.5 py-1.5 font-normal">{$i18n.t('Expires at')}</th>
 					<th scope="col" class="font-normal select-none" aria-sort={sortState('role')}>
 						<button
 							type="button"
@@ -374,6 +376,14 @@
 								{/if}
 							</div>
 						</td>
+						<td class="px-3 py-1 max-w-32 truncate">
+							{user.subscription?.display_name ?? '-'}
+						</td>
+						<td class="px-3 py-1 whitespace-nowrap">
+							{user.subscription?.expires_at
+								? dayjs(user.subscription.expires_at * 1000).format('LL')
+								: '-'}
+						</td>
 						<td class="px-3 py-1 min-w-[5rem] w-20">
 							<button
 								class="text-xs font-normal leading-4 capitalize transition {roleClass(user.role)}"
@@ -469,54 +479,6 @@
 
 	{#if total > 30}
 		<Pagination bind:page count={total} perPage={30} />
-	{/if}
-{/if}
-
-{#if !$config?.license_metadata}
-	{#if total > 50}
-		<div class="mt-3 mb-3 pb-1 text-gray-700 dark:text-gray-300">
-			<div class="max-w-3xl text-xs leading-5">
-				<div class="text-gray-900 dark:text-gray-100">
-					{$i18n.t('Running Open WebUI for a team?')}
-				</div>
-				<div class="mt-2 space-y-2">
-					<p>
-						{$i18n.t(
-							'You have more than 50 users, which often means this workspace is supporting organizational use. Open WebUI is free to use as-is, with no restrictions or hidden limits, and we want to keep it that way.'
-						)}
-					</p>
-					<p class="text-gray-500 dark:text-gray-400">
-						{$i18n.t(
-							'By supporting the project through sponsorship or an enterprise license, you help us stay independent, ship new features faster, improve stability, and grow Open WebUI for the long haul.'
-						)}
-					</p>
-					<p class="text-gray-500 dark:text-gray-400">
-						{$i18n.t(
-							'Enterprise licenses also include dedicated support, customization options, and more, at a fraction of the cost of building and maintaining this stack internally.'
-						)}
-					</p>
-				</div>
-
-				<div class="mt-2 flex items-center gap-3">
-					<a
-						class="text-xs text-gray-700 underline transition hover:text-gray-900 dark:text-gray-300 dark:hover:text-gray-100"
-						href="https://docs.openwebui.com/enterprise"
-						target="_blank"
-						rel="noreferrer"
-					>
-						{$i18n.t('Enterprise licensing')}
-					</a>
-					<a
-						class="text-xs text-gray-500 underline transition hover:text-gray-900 dark:text-gray-500 dark:hover:text-gray-100"
-						href="https://github.com/sponsors/open-webui"
-						target="_blank"
-						rel="noreferrer"
-					>
-						{$i18n.t('Sponsor on GitHub')}
-					</a>
-				</div>
-			</div>
-		</div>
 	{/if}
 {/if}
 

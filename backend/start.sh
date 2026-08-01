@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # ---------------------------------------------------------------------------
-# Container entry point for Open WebUI.
+# Container entry point for ArtiChat.
 # Handles secret key generation, optional Ollama/CUDA/Playwright setup,
 # HuggingFace Space deployment, and launches the uvicorn server.
 # ---------------------------------------------------------------------------
@@ -29,7 +29,9 @@ fi
 
 # ── Secret key setup ─────────────────────────────────────────────────────────
 
-KEY_FILE="${WEBUI_SECRET_KEY_FILE:-.webui_secret_key}"
+LEGACY_KEY_FILE=".webui_secret_key"
+DEFAULT_KEY_FILE="${DATA_DIR:-./data}/.webui_secret_key"
+KEY_FILE="${WEBUI_SECRET_KEY_FILE:-$DEFAULT_KEY_FILE}"
 WEBUI_SECRET_KEY_LENGTH="${WEBUI_SECRET_KEY_LENGTH:-24}"
 PORT="${PORT:-8080}"
 HOST="${HOST:-0.0.0.0}"
@@ -37,13 +39,22 @@ HOST="${HOST:-0.0.0.0}"
 if [[ -z "${WEBUI_SECRET_KEY:-}" && -z "${WEBUI_JWT_SECRET_KEY:-}" ]]; then
   echo "No WEBUI_SECRET_KEY environment variable set, loading from file."
 
+  if [[ ! -f "$KEY_FILE" && -f "$LEGACY_KEY_FILE" ]]; then
+    mkdir -p "$(dirname "$KEY_FILE")"
+    cp "$LEGACY_KEY_FILE" "$KEY_FILE"
+    chmod 600 "$KEY_FILE"
+    echo "Migrated the legacy WEBUI_SECRET_KEY file into the persistent data directory."
+  fi
+
   if [[ ! -f "$KEY_FILE" ]]; then
     echo "Generating new WEBUI_SECRET_KEY..."
     if ! [[ "$WEBUI_SECRET_KEY_LENGTH" =~ ^[1-9][0-9]*$ ]]; then
       echo "WEBUI_SECRET_KEY_LENGTH must be a positive integer." >&2
       exit 1
     fi
+    mkdir -p "$(dirname "$KEY_FILE")"
     head -c "$WEBUI_SECRET_KEY_LENGTH" /dev/random | base64 > "$KEY_FILE"
+    chmod 600 "$KEY_FILE"
   fi
 
   echo "Loading WEBUI_SECRET_KEY from ${KEY_FILE}"

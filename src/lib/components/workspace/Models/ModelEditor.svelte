@@ -31,6 +31,9 @@
 	import PromptSuggestions from './PromptSuggestions.svelte';
 	import TerminalSelector from './TerminalSelector.svelte';
 	import TTSVoiceInput from './TTSVoiceInput.svelte';
+	import ReasoningControlSettings from './ReasoningControlSettings.svelte';
+	import SubscriptionPolicy from './SubscriptionPolicy.svelte';
+	import Switch from '$lib/components/common/Switch.svelte';
 	import AccessControlModal from '../common/AccessControlModal.svelte';
 	import AccessButton from '$lib/components/common/AccessButton.svelte';
 	import { extractInputVariables } from '$lib/utils';
@@ -44,6 +47,16 @@
 	export let edit = false;
 
 	export let preset = true;
+
+	const DEFAULT_SUBSCRIPTION_POLICY = {
+		allowed_tiers: ['free', 'plus', 'chatpower'],
+		quota_mode: 'metered',
+		usage_multiplier: '1',
+		input_chatpoint_per_million: '100',
+		output_chatpoint_per_million: '100',
+		cache_creation_chatpoint_per_million: '0',
+		cache_read_chatpoint_per_million: '0'
+	};
 
 	let loading = false;
 	let success = false;
@@ -84,6 +97,9 @@
 			profile_image_url: `${WEBUI_BASE_URL}/static/favicon.png`,
 			description: '',
 			suggestion_prompts: null,
+			subscription: { ...DEFAULT_SUBSCRIPTION_POLICY },
+			marketplace: { visible: false, long_description: '' },
+			reasoning_control: { enabled: false, profile: null },
 			tags: []
 		},
 		params: {
@@ -259,6 +275,10 @@
 		}
 
 		info.params = { ...info.params, ...params };
+		if (info.meta.reasoning_control?.enabled) {
+			delete (params as Record<string, unknown>).reasoning_effort;
+			delete (info.params as Record<string, unknown>).reasoning_effort;
+		}
 
 		info.access_grants = accessGrants;
 		info.meta.capabilities = capabilities;
@@ -483,6 +503,19 @@
 
 			console.log(model);
 		}
+
+		info.meta.subscription = {
+			...DEFAULT_SUBSCRIPTION_POLICY,
+			...(info.meta.subscription ?? {})
+		};
+		info.meta.marketplace = Object.assign(
+			{ visible: false, long_description: '' },
+			info.meta.marketplace ?? {}
+		);
+		info.meta.reasoning_control = Object.assign(
+			{ enabled: false, profile: null },
+			info.meta.reasoning_control ?? {}
+		);
 
 		loaded = true;
 	});
@@ -947,6 +980,41 @@
 
 						<div class="my-3">
 							<Capabilities bind:capabilities />
+						</div>
+
+						<ReasoningControlSettings
+							bind:control={info.meta.reasoning_control}
+							modelId={info.base_model_id ?? id}
+						/>
+
+						<div class="my-4">
+							<SubscriptionPolicy bind:policy={info.meta.subscription} />
+						</div>
+
+						<div
+							class="my-4 flex flex-col gap-3 border-y border-gray-100 py-4 dark:border-gray-850"
+						>
+							<div class="flex items-center justify-between gap-4">
+								<div>
+									<div class="text-xs font-medium text-gray-500">展示在模型广场</div>
+									<div class="mt-1 text-xs text-gray-400">
+										允许用户在模型广场查看此模型及其订阅价格。
+									</div>
+								</div>
+								<Switch bind:state={info.meta.marketplace.visible} ariaLabel="展示在模型广场" />
+							</div>
+
+							{#if info.meta.marketplace.visible}
+								<label class="flex flex-col gap-1">
+									<span class="text-xs text-gray-500">模型广场介绍</span>
+									<Textarea
+										rows={6}
+										className="text-sm w-full bg-transparent outline-hidden resize-y"
+										placeholder="介绍模型能力、适用场景和使用建议"
+										bind:value={info.meta.marketplace.long_description}
+									/>
+								</label>
+							{/if}
 						</div>
 
 						{#if Object.keys(capabilities).filter((key) => capabilities[key]).length > 0}

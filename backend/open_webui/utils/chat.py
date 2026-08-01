@@ -169,10 +169,47 @@ async def generate_chat_completion(
         if 'metadata' not in form_data:
             form_data['metadata'] = request.state.metadata
         else:
-            form_data['metadata'] = {
-                **form_data['metadata'],
-                **request.state.metadata,
+            form_metadata = form_data['metadata']
+            if not isinstance(form_metadata, dict):
+                form_metadata = {}
+            state_metadata = request.state.metadata
+            if not isinstance(state_metadata, dict):
+                state_metadata = {}
+            merged_metadata = {
+                **form_metadata,
+                **state_metadata,
             }
+            for key in ('request_id', 'parent_request_id', 'message_id', 'task_id'):
+                if key in form_metadata:
+                    merged_metadata[key] = form_metadata[key]
+            if form_metadata.get('_artichat_internal_billing') is True:
+                for key in (
+                    '_artichat_internal_billing',
+                    '_artichat_hosted_policy_model_id',
+                    '_artichat_chatpoint_reservation_id',
+                    '_artichat_reservation_input_tokens',
+                    '_artichat_reservation_output_tokens',
+                    'request_id',
+                    'parent_request_id',
+                    'subscription_policy',
+                ):
+                    if key in form_metadata:
+                        merged_metadata[key] = form_metadata[key]
+                # New derived requests intentionally omit the parent's hold;
+                # remove any copy reintroduced from request.state metadata.
+                for key in (
+                    '_artichat_chatpoint_reservation_id',
+                    '_artichat_reservation_input_tokens',
+                    '_artichat_reservation_output_tokens',
+                ):
+                    if key not in form_metadata:
+                        merged_metadata.pop(key, None)
+
+            # Keep the caller's metadata object authoritative. The main chat
+            # lifecycle holds this same object for settlement and rollback.
+            form_metadata.clear()
+            form_metadata.update(merged_metadata)
+            form_data['metadata'] = form_metadata
 
     if getattr(request.state, 'direct', False) and hasattr(request.state, 'model'):
         # Merge the direct connection model into server models so that
@@ -218,32 +255,15 @@ async def generate_chat_completion(
         # from a path that did NOT go through process_chat_payload (e.g.,
         # background tasks for title/follow-up/tags generation), resolve now.
         if not selected_model_id and model.get('owned_by') == 'arena':
-            model_ids = model.get('info', {}).get('meta', {}).get('model_ids')
-            filter_mode = model.get('info', {}).get('meta', {}).get('filter_mode')
-            if model_ids and filter_mode == 'exclude':
-                model_ids = [
-                    available_model['id']
-                    for available_model in list(request.app.state.MODELS.values())
-                    if available_model.get('owned_by') != 'arena' and available_model['id'] not in model_ids
-                ]
+            from open_webui.utils.arena import resolve_arena_model
 
-            if isinstance(model_ids, list) and model_ids:
-                selected_model_id = random.choice(model_ids)
-            else:
-                model_ids = [
-                    available_model['id']
-                    for available_model in list(request.app.state.MODELS.values())
-                    if available_model.get('owned_by') != 'arena'
-                ]
-                selected_model_id = random.choice(model_ids)
-
-            form_data['model'] = selected_model_id
-
-            # bypass_filter recursion below skips the line-200 check; gate the resolved model here.
-            if not bypass_filter and user.role == 'user':
-                selected_model = request.app.state.MODELS.get(selected_model_id)
-                if selected_model:
-                    await check_model_access(user, selected_model)
+            _selected_model, selected_model_id = await resolve_arena_model(
+                request,
+                form_data,
+                user,
+                metadata,
+                model,
+            )
 
         if selected_model_id:
             if form_data.get('stream') == True:
@@ -278,6 +298,16 @@ async def generate_chat_completion(
                     ),
                     'selected_model_id': selected_model_id,
                 }
+
+        from open_webui.utils.hosted_inference import prepare_hosted_inference
+
+        await prepare_hosted_inference(
+            request,
+            form_data,
+            user,
+            model=model,
+            new_child_request=False,
+        )
 
         if model.get('pipe'):
             # Below does not require bypass_filter because this is the only route the uses this function and it is already bypassing the filter

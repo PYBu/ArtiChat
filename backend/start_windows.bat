@@ -17,7 +17,8 @@ IF /I "%WEB_LOADER_ENGINE%" == "playwright" (
     python -c "import nltk; nltk.download('punkt_tab')"
 )
 
-SET "KEY_FILE=.webui_secret_key"
+SET "LEGACY_KEY_FILE=.webui_secret_key"
+SET "KEY_FILE=data\.webui_secret_key"
 IF NOT "%WEBUI_SECRET_KEY_FILE%" == "" (
     SET "KEY_FILE=%WEBUI_SECRET_KEY_FILE%"
 )
@@ -35,8 +36,15 @@ IF "%WEBUI_SECRET_KEY_LENGTH%" == "" (
 IF "%WEBUI_SECRET_KEY% %WEBUI_JWT_SECRET_KEY%" == " " (
     echo Loading WEBUI_SECRET_KEY from file, not provided as an environment variable.
 
+    IF NOT EXIST "%KEY_FILE%" IF EXIST "%LEGACY_KEY_FILE%" (
+        IF NOT EXIST "data" mkdir "data"
+        copy /Y "%LEGACY_KEY_FILE%" "%KEY_FILE%" >nul
+        echo Migrated the legacy WEBUI_SECRET_KEY file into the persistent data directory.
+    )
+
     IF NOT EXIST "%KEY_FILE%" (
         echo Generating WEBUI_SECRET_KEY
+        FOR %%F IN ("%KEY_FILE%") DO IF NOT EXIST "%%~dpF" mkdir "%%~dpF"
         :: Generate a random value to use as a WEBUI_SECRET_KEY in case the user didn't provide one
         SET /p WEBUI_SECRET_KEY=<nul
         FOR /L %%i IN (1,1,%WEBUI_SECRET_KEY_LENGTH%) DO SET /p WEBUI_SECRET_KEY=<!random!>>%KEY_FILE%

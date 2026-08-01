@@ -362,7 +362,7 @@ async def _generate_summary(
     previous_summary: str | None,
     summary_prompt_template: str,
 ) -> str:
-    from open_webui.utils.chat import generate_chat_completion
+    from open_webui.utils.hosted_inference import generate_billed_chat_completion
 
     task_config = await Config.get_many(
         'task.model.default',
@@ -410,7 +410,7 @@ async def _generate_summary(
         },
     }
 
-    response = await generate_chat_completion(request, form_data=payload, user=user)
+    response = await generate_billed_chat_completion(request, form_data=payload, user=user)
     summary = _response_text(response).strip()
     if summary:
         return summary

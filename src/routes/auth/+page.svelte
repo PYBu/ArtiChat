@@ -5,6 +5,7 @@
 	import { toast } from 'svelte-sonner';
 
 	import { onMount, getContext } from 'svelte';
+	import type { Writable } from 'svelte/store';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 
@@ -16,42 +17,65 @@
 		userSignUp,
 		updateUserTimezone
 	} from '$lib/apis/auths';
+	import { userEmailCodeSignIn, userSignUpWithVerification } from '$lib/apis/account-security';
+	import {
+		getPublicRegistrationSettings,
+		requestEmailChallenge,
+		verifyEmailChallenge
+	} from '$lib/apis/emails';
 
 	import { WEBUI_API_BASE_URL, WEBUI_BASE_URL } from '$lib/constants';
 	import { WEBUI_NAME, config, user, socket } from '$lib/stores';
 
 	import { generateInitialsImage, canvasPixelTest, getUserTimezone } from '$lib/utils';
+	import { emailErrorMessage } from '$lib/utils/email-errors';
 
 	import Spinner from '$lib/components/common/Spinner.svelte';
 	import OnBoarding from '$lib/components/OnBoarding.svelte';
 	import SensitiveInput from '$lib/components/common/SensitiveInput.svelte';
+	import ThemeLogo from '$lib/components/common/ThemeLogo.svelte';
+	import EmailCodeModal from '$lib/components/common/EmailCodeModal.svelte';
 	import { redirect } from '@sveltejs/kit';
 
-	const i18n = getContext('i18n');
+	const i18n: Writable<any> = getContext('i18n');
 
 	let loaded = false;
 
 	let mode = $config?.features.enable_ldap ? 'ldap' : 'signin';
 
-	let form = null;
+	let form: string | null = null;
 
 	let name = '';
 	let email = '';
 	let password = '';
 	let confirmPassword = '';
+	let verificationBusy = false;
+	let verificationModalOpen = false;
+	let verificationPurpose: 'registration' | 'login' = 'registration';
+	let verificationEmail = '';
+	let verificationChallengeStartedAt = 0;
+	let verificationExpiresAt = 0;
+	let registrationFeatures = { verification_enabled: false, email_code_login_enabled: false };
 
 	let ldapUsername = '';
 
 	let submitting = false;
 
-	const setSessionUser = async (sessionUser, redirectPath: string | null = null) => {
+	const resetEmailVerification = () => {
+		verificationModalOpen = false;
+		verificationEmail = '';
+		verificationChallengeStartedAt = 0;
+		verificationExpiresAt = 0;
+	};
+
+	const setSessionUser = async (sessionUser: any, redirectPath: string | null = null) => {
 		if (sessionUser) {
 			console.log(sessionUser);
 			toast.success($i18n.t(`You're now logged in.`));
 			if (sessionUser.token) {
 				localStorage.token = sessionUser.token;
 			}
-			$socket.emit('user-join', { auth: { token: sessionUser.token } });
+			$socket?.emit('user-join', { auth: { token: sessionUser.token } });
 			await user.set(sessionUser);
 			await config.set(await getBackendConfig());
 
@@ -72,11 +96,66 @@
 
 	const signInHandler = async () => {
 		const sessionUser = await userSignIn(email, password).catch((error) => {
-			toast.error(`${error}`);
+			toast.error(emailErrorMessage(error));
 			return null;
 		});
 
 		await setSessionUser(sessionUser);
+	};
+
+	const sendCode = async (purpose: 'registration' | 'login') => {
+		const targetEmail = email.trim().toLowerCase();
+		const result = await requestEmailChallenge(targetEmail, purpose).catch((error) => {
+			toast.error(emailErrorMessage(error));
+			return null;
+		});
+		if (result?.status) {
+			verificationPurpose = purpose;
+			verificationEmail = targetEmail;
+			verificationChallengeStartedAt = Date.now();
+			verificationExpiresAt = verificationChallengeStartedAt + 10 * 60 * 1000;
+			verificationModalOpen = true;
+			toast.success($i18n.t('A verification code was sent to your email.'));
+		}
+		return result;
+	};
+
+	const beginEmailVerification = async (purpose: 'registration' | 'login') => {
+		const targetEmail = email.trim().toLowerCase();
+		if (
+			verificationEmail === targetEmail &&
+			verificationPurpose === purpose &&
+			verificationExpiresAt > Date.now()
+		) {
+			verificationModalOpen = true;
+			return;
+		}
+		await sendCode(purpose);
+	};
+
+	const createAccount = async (verificationToken: string | null) => {
+		const normalizedEmail = email.trim().toLowerCase();
+		const sessionUser =
+			verificationToken === null && ($config?.onboarding ?? false)
+				? await userSignUp(name, normalizedEmail, password, generateInitialsImage(name)).catch(
+						(error) => {
+							toast.error(emailErrorMessage(error));
+							return null;
+						}
+					)
+				: await userSignUpWithVerification(
+						name,
+						normalizedEmail,
+						password,
+						generateInitialsImage(name),
+						verificationToken
+					).catch((error) => {
+						toast.error(emailErrorMessage(error));
+						return null;
+					});
+
+		await setSessionUser(sessionUser);
+		return sessionUser;
 	};
 
 	const signUpHandler = async () => {
@@ -87,14 +166,54 @@
 			}
 		}
 
-		const sessionUser = await userSignUp(name, email, password, generateInitialsImage(name)).catch(
-			(error) => {
-				toast.error(`${error}`);
-				return null;
-			}
-		);
+		if (registrationFeatures.verification_enabled && !($config?.onboarding ?? false)) {
+			await beginEmailVerification('registration');
+			return;
+		}
 
-		await setSessionUser(sessionUser);
+		await createAccount(null);
+	};
+
+	const emailCodeSignInHandler = async () => {
+		await beginEmailVerification('login');
+	};
+
+	const completeEmailVerification = async (event: CustomEvent<{ code: string }>) => {
+		verificationBusy = true;
+		const result = await verifyEmailChallenge(
+			verificationEmail,
+			verificationPurpose,
+			event.detail.code
+		).catch((error) => {
+			toast.error(emailErrorMessage(error));
+			return null;
+		});
+
+		if (result?.verification_token) {
+			if (verificationPurpose === 'registration') {
+				const sessionUser = await createAccount(result.verification_token);
+				if (sessionUser) resetEmailVerification();
+			} else {
+				const sessionUser = await userEmailCodeSignIn(
+					verificationEmail,
+					result.verification_token
+				).catch((error) => {
+					toast.error(emailErrorMessage(error));
+					return null;
+				});
+				if (sessionUser) {
+					resetEmailVerification();
+					await setSessionUser(sessionUser);
+				}
+			}
+		}
+		verificationBusy = false;
+	};
+
+	const resendEmailVerification = async () => {
+		verificationBusy = true;
+		await sendCode(verificationPurpose);
+		verificationBusy = false;
 	};
 
 	const ldapSignInHandler = async () => {
@@ -114,6 +233,8 @@
 		try {
 			if (mode === 'ldap') {
 				await ldapSignInHandler();
+			} else if (mode === 'email-code') {
+				await emailCodeSignInHandler();
 			} else if (mode === 'signin') {
 				await signInHandler();
 			} else {
@@ -126,7 +247,7 @@
 
 	const oauthCallbackHandler = async () => {
 		// Get the value of the 'token' cookie
-		function getCookie(name) {
+		function getCookie(name: string) {
 			const match = document.cookie.match(
 				new RegExp('(?:^|; )' + name.replace(/([.$?*|{}()[\]\\/+^])/g, '\\$1') + '=([^;]*)')
 			);
@@ -169,6 +290,10 @@
 		}
 
 		await oauthCallbackHandler();
+		registrationFeatures = await getPublicRegistrationSettings().catch(() => registrationFeatures);
+		if (!$config?.features.enable_login_form && registrationFeatures.email_code_login_enabled) {
+			mode = 'email-code';
+		}
 		form = $page.url.searchParams.get('form');
 
 		// Auto-redirect to SSO when OAUTH_AUTO_REDIRECT is enabled and the
@@ -181,6 +306,7 @@
 				providers.length === 1 &&
 				$config?.features?.auth !== false &&
 				$config?.features?.enable_login_form === false &&
+				!registrationFeatures.email_code_login_enabled &&
 				!$config?.features?.enable_ldap &&
 				!$config?.features?.auth_trusted_header &&
 				!$config?.onboarding &&
@@ -246,11 +372,9 @@
 						<div id="auth-login-card" class=" sm:max-w-md my-auto pb-10 w-full dark:text-gray-100">
 							{#if $config?.metadata?.auth_logo_position === 'center'}
 								<div class="flex justify-center mb-6">
-									<img
-										id="logo"
-										crossorigin="anonymous"
-										src="{WEBUI_BASE_URL}/static/favicon.png"
-										class="size-24 rounded-full"
+									<ThemeLogo
+										kind="mark"
+										className="size-24 rounded-full"
 										alt="{$WEBUI_NAME} logo"
 									/>
 								</div>
@@ -268,7 +392,7 @@
 											{$i18n.t(`Get started with {{WEBUI_NAME}}`, { WEBUI_NAME: $WEBUI_NAME })}
 										{:else if mode === 'ldap'}
 											{$i18n.t(`Sign in to {{WEBUI_NAME}} with LDAP`, { WEBUI_NAME: $WEBUI_NAME })}
-										{:else if mode === 'signin'}
+										{:else if mode === 'signin' || mode === 'email-code'}
 											{$i18n.t(`Sign in to {{WEBUI_NAME}}`, { WEBUI_NAME: $WEBUI_NAME })}
 										{:else}
 											{$i18n.t(`Sign up to {{WEBUI_NAME}}`, { WEBUI_NAME: $WEBUI_NAME })}
@@ -285,7 +409,7 @@
 									{/if}
 								</div>
 
-								{#if $config?.features.enable_login_form || $config?.features.enable_ldap || form}
+								{#if $config?.features.enable_login_form || $config?.features.enable_ldap || registrationFeatures.email_code_login_enabled || form}
 									<div class="flex flex-col mt-4">
 										{#if mode === 'signup'}
 											<div class="mb-2">
@@ -338,23 +462,36 @@
 											</div>
 										{/if}
 
-										<div>
-											<label for="password" class="text-sm font-normal text-left mb-1 block"
-												>{$i18n.t('Password')}</label
-											>
-											<SensitiveInput
-												bind:value={password}
-												type="password"
-												id="password"
-												class="my-0.5 w-full text-sm outline-hidden bg-transparent placeholder:text-gray-300 dark:placeholder:text-gray-600"
-												placeholder={$i18n.t('Enter Your Password')}
-												autocomplete={mode === 'signup' ? 'new-password' : 'current-password'}
-												name="password"
-												screenReader={true}
-												required
-												aria-required="true"
-											/>
-										</div>
+										{#if mode !== 'email-code'}
+											<div>
+												<label for="password" class="text-sm font-normal text-left mb-1 block"
+													>{$i18n.t('Password')}</label
+												>
+												<SensitiveInput
+													bind:value={password}
+													type="password"
+													id="password"
+													class="my-0.5 w-full text-sm outline-hidden bg-transparent placeholder:text-gray-300 dark:placeholder:text-gray-600"
+													placeholder={$i18n.t('Enter Your Password')}
+													autocomplete={mode === 'signup' ? 'new-password' : 'current-password'}
+													name="password"
+													screenReader={true}
+													required
+													aria-required="true"
+												/>
+												{#if mode === 'signin'}
+													<div class="mt-1 text-right">
+														<button
+															type="button"
+															class="text-xs text-gray-500 hover:text-gray-800 dark:hover:text-gray-200"
+															on:click={() => goto('/auth/forgot-password')}
+														>
+															{$i18n.t('Forgot password?')}
+														</button>
+													</div>
+												{/if}
+											</div>
+										{/if}
 
 										{#if mode === 'signup' && $config?.features?.enable_signup_password_confirmation}
 											<div class="mt-2">
@@ -378,7 +515,7 @@
 									</div>
 								{/if}
 								<div class="mt-5">
-									{#if $config?.features.enable_login_form || $config?.features.enable_ldap || form}
+									{#if $config?.features.enable_login_form || $config?.features.enable_ldap || registrationFeatures.email_code_login_enabled || form}
 										{#if mode === 'ldap'}
 											<button
 												class="bg-gray-700/5 hover:bg-gray-700/10 dark:bg-gray-100/5 dark:hover:bg-gray-100/10 dark:text-gray-300 dark:hover:text-white transition w-full rounded-full font-normal text-sm py-2.5 disabled:opacity-50 flex justify-center"
@@ -402,9 +539,11 @@
 												<div class="self-center">
 													{mode === 'signin'
 														? $i18n.t('Sign in')
-														: ($config?.onboarding ?? false)
-															? $i18n.t('Create Admin Account')
-															: $i18n.t('Create Account')}
+														: mode === 'email-code'
+															? $i18n.t('Sign in with email code')
+															: ($config?.onboarding ?? false)
+																? $i18n.t('Create Admin Account')
+																: $i18n.t('Create Account')}
 												</div>
 
 												{#if submitting}
@@ -435,6 +574,23 @@
 													</button>
 												</div>
 											{/if}
+
+											{#if registrationFeatures.email_code_login_enabled && (mode === 'signin' || mode === 'email-code')}
+												<div class="mt-3 text-sm text-center">
+													<button
+														class="font-normal underline"
+														type="button"
+														on:click={() => {
+															mode = mode === 'signin' ? 'email-code' : 'signin';
+															resetEmailVerification();
+														}}
+													>
+														{mode === 'signin'
+															? $i18n.t('Use an email verification code')
+															: $i18n.t('Use your password')}
+													</button>
+												</div>
+											{/if}
 										{/if}
 									{/if}
 								</div>
@@ -443,7 +599,7 @@
 							{#if Object.keys($config?.oauth?.providers ?? {}).length > 0}
 								<div class="inline-flex items-center justify-center w-full">
 									<hr class="w-32 h-px my-4 border-0 dark:bg-gray-100/10 bg-gray-700/10" />
-									{#if $config?.features.enable_login_form || $config?.features.enable_ldap || form}
+									{#if $config?.features.enable_login_form || $config?.features.enable_ldap || registrationFeatures.email_code_login_enabled || form}
 										<span
 											class="px-3 text-sm font-normal text-gray-900 dark:text-white bg-transparent"
 											>{$i18n.t('or')}</span
@@ -614,16 +770,26 @@
 			<div class="fixed m-10 z-50">
 				<div class="flex space-x-2">
 					<div class=" self-center">
-						<img
-							id="logo"
-							crossorigin="anonymous"
-							src="{WEBUI_BASE_URL}/static/favicon.png"
-							class=" w-6 rounded-full"
-							alt=""
-						/>
+						<ThemeLogo kind="mark" className="w-6 rounded-full" />
 					</div>
 				</div>
 			</div>
 		{/if}
 	{/if}
 </div>
+
+<EmailCodeModal
+	bind:show={verificationModalOpen}
+	title={verificationPurpose === 'registration'
+		? $i18n.t('Verify your email')
+		: $i18n.t('Sign in with email code')}
+	description={$i18n.t('Enter the six-digit code sent to your email.')}
+	email={verificationEmail}
+	confirmLabel={verificationPurpose === 'registration'
+		? $i18n.t('Verify and create account')
+		: $i18n.t('Verify and sign in')}
+	busy={verificationBusy}
+	challengeStartedAt={verificationChallengeStartedAt}
+	on:confirm={completeEmailVerification}
+	on:resend={resendEmailVerification}
+/>

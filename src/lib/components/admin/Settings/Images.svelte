@@ -311,6 +311,36 @@
 					>
 						<Switch bind:state={config.ENABLE_IMAGE_GENERATION} ariaLabelledbyId={labelId} />
 					</AdminSettingRow>
+
+					<AdminSettingRow
+						label={$i18n.t('Image output URLs')}
+						description={$i18n.t('Choose how protected generated-image links are formatted.')}
+					>
+						<div class="grid w-44 grid-cols-2 rounded-md bg-gray-100 p-0.5 dark:bg-gray-850">
+							<button
+								type="button"
+								class="h-7 rounded px-2 text-xs transition {config.IMAGE_OUTPUT_URL_FORMAT ===
+								'relative'
+									? 'bg-white shadow-sm dark:bg-gray-700'
+									: 'text-gray-500 dark:text-gray-400'}"
+								aria-pressed={config.IMAGE_OUTPUT_URL_FORMAT === 'relative'}
+								on:click={() => (config.IMAGE_OUTPUT_URL_FORMAT = 'relative')}
+							>
+								{$i18n.t('Relative')}
+							</button>
+							<button
+								type="button"
+								class="h-7 rounded px-2 text-xs transition {config.IMAGE_OUTPUT_URL_FORMAT ===
+								'absolute'
+									? 'bg-white shadow-sm dark:bg-gray-700'
+									: 'text-gray-500 dark:text-gray-400'}"
+								aria-pressed={config.IMAGE_OUTPUT_URL_FORMAT === 'absolute'}
+								on:click={() => (config.IMAGE_OUTPUT_URL_FORMAT = 'absolute')}
+							>
+								{$i18n.t('Absolute')}
+							</button>
+						</div>
+					</AdminSettingRow>
 				</AdminSettingSection>
 
 				<AdminSettingSection title={$i18n.t('Create Image')}>

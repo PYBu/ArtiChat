@@ -63,10 +63,13 @@
 	import { WEBUI_API_BASE_URL, WEBUI_BASE_URL } from '$lib/constants';
 
 	import UserMenu from './Sidebar/UserMenu.svelte';
+	import PendingGiftEntry from './Sidebar/PendingGiftEntry.svelte';
+	import SubscriptionQuotaRing from './Sidebar/SubscriptionQuotaRing.svelte';
 	import ChatItem from './Sidebar/ChatItem.svelte';
 	import Spinner from '../common/Spinner.svelte';
 	import Loader from '../common/Loader.svelte';
 	import Folder from '../common/Folder.svelte';
+	import ThemeLogo from '../common/ThemeLogo.svelte';
 	import SidebarSection from './Sidebar/Section.svelte';
 	import Tooltip from '../common/Tooltip.svelte';
 	import Folders from './Sidebar/Folders.svelte';
@@ -92,6 +95,8 @@
 	import DropdownMenu from '../common/DropdownMenu.svelte';
 	import CheckIcon from '../icons/Check.svelte';
 	import MoreHorizontalIcon from './Sidebar/icons/MoreHorizontal.svelte';
+	import Grid from '../icons/Grid.svelte';
+	import SidebarLinkIcon from './Sidebar/SidebarLinkIcon.svelte';
 
 	const BREAKPOINT = 768;
 	const DEFAULT_PINNED_ITEMS = ['notes', 'workspace'];
@@ -146,6 +151,11 @@
 	let sharedFolders: any[] = [];
 
 	$: pinnedItems = $settings?.pinnedMenuItems ?? DEFAULT_PINNED_ITEMS;
+	$: customSidebarButtons = (($config as any)?.branding?.sidebar_buttons ?? []) as Array<{
+		name: string;
+		url: string;
+		icon?: string;
+	}>;
 
 	const isMenuItemVisible = (id) => {
 		switch (id) {
@@ -935,12 +945,7 @@
 		role="navigation"
 		aria-label={$i18n.t('Chat history')}
 	>
-		<button
-			class="flex flex-col flex-1 {isWindows ? 'cursor-pointer' : 'cursor-[e-resize]'}"
-			on:click={async () => {
-				showSidebar.set(!$showSidebar);
-			}}
-		>
+		<div class="flex flex-col flex-1">
 			<div class="pb-1">
 				<Tooltip
 					content={$showSidebar ? $i18n.t('Close Sidebar') : $i18n.t('Open Sidebar')}
@@ -951,14 +956,16 @@
 							? 'cursor-pointer'
 							: 'cursor-[e-resize]'}"
 						aria-label={$showSidebar ? $i18n.t('Close Sidebar') : $i18n.t('Open Sidebar')}
+						on:click={() => {
+							showSidebar.set(!$showSidebar);
+						}}
 					>
 						<div
 							class=" self-center flex size-[30px] items-center justify-center rounded-lg transition group-hover:bg-gray-50 dark:group-hover:bg-gray-900"
 						>
-							<img
-								src="{WEBUI_BASE_URL}/static/favicon.png"
-								class="sidebar-new-chat-icon size-5 rounded-full group-hover:hidden"
-								alt=""
+							<ThemeLogo
+								kind="mark"
+								className="sidebar-new-chat-icon size-5 rounded-full group-hover:hidden"
 							/>
 
 							<Sidebar className="size-4 hidden group-hover:flex" />
@@ -1056,8 +1063,48 @@
 						</div>
 					{/if}
 				{/each}
+
+				<div>
+					<Tooltip content="模型广场" placement="right">
+						<a
+							class="cursor-pointer flex size-8 items-center justify-center transition group"
+							href="/model-marketplace"
+							on:click={itemClickHandler}
+							draggable="false"
+							aria-label="模型广场"
+						>
+							<div
+								class="self-center flex size-[30px] items-center justify-center rounded-lg transition group-hover:bg-gray-50 dark:group-hover:bg-gray-900"
+							>
+								<Grid className="size-4" />
+							</div>
+						</a>
+					</Tooltip>
+				</div>
+
+				{#each customSidebarButtons as button}
+					<div>
+						<Tooltip content={button.name} placement="right">
+							<a
+								class="cursor-pointer flex size-8 items-center justify-center transition group"
+								href={button.url}
+								target={button.url.startsWith('http') ? '_blank' : undefined}
+								rel={button.url.startsWith('http') ? 'noopener noreferrer' : undefined}
+								on:click={() => button.url.startsWith('/') && itemClickHandler()}
+								draggable="false"
+								aria-label={button.name}
+							>
+								<div
+									class="self-center flex size-[30px] items-center justify-center rounded-lg transition group-hover:bg-gray-50 dark:group-hover:bg-gray-900"
+								>
+									<SidebarLinkIcon icon={button.icon} />
+								</div>
+							</a>
+						</Tooltip>
+					</div>
+				{/each}
 			</div>
-		</button>
+		</div>
 
 		<div>
 			<div>
@@ -1132,12 +1179,7 @@
 					draggable="false"
 					on:click={newChatHandler}
 				>
-					<img
-						crossorigin="anonymous"
-						src="{WEBUI_BASE_URL}/static/favicon.png"
-						class="sidebar-new-chat-icon size-5 rounded-full"
-						alt=""
-					/>
+					<ThemeLogo kind="mark" className="sidebar-new-chat-icon size-5 rounded-full" />
 				</a>
 
 				<a href="/" class="flex flex-1 px-0.5" on:click={newChatHandler}>
@@ -1270,6 +1312,44 @@
 							{/if}
 						{/each}
 					</div>
+
+					<div class="px-1 flex justify-center text-gray-700 dark:text-gray-300">
+						<a
+							class="grow flex items-center space-x-2 rounded-xl px-2 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-900 transition outline-none"
+							href="/model-marketplace"
+							on:click={itemClickHandler}
+							draggable="false"
+							aria-label="模型广场"
+						>
+							<div class="self-center flex size-4 shrink-0 items-center justify-center">
+								<Grid className="size-4" />
+							</div>
+							<div class="flex min-w-0 flex-1 self-center translate-y-[0.5px]">
+								<div class="truncate self-center text-[13px] leading-5">模型广场</div>
+							</div>
+						</a>
+					</div>
+
+					{#each customSidebarButtons as button}
+						<div class="px-1 flex justify-center text-gray-700 dark:text-gray-300">
+							<a
+								class="grow flex items-center space-x-2 rounded-xl px-2 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-900 transition outline-none"
+								href={button.url}
+								target={button.url.startsWith('http') ? '_blank' : undefined}
+								rel={button.url.startsWith('http') ? 'noopener noreferrer' : undefined}
+								on:click={() => button.url.startsWith('/') && itemClickHandler()}
+								draggable="false"
+								aria-label={button.name}
+							>
+								<div class="self-center flex size-4 shrink-0 items-center justify-center">
+									<SidebarLinkIcon icon={button.icon} />
+								</div>
+								<div class="flex min-w-0 flex-1 self-center translate-y-[0.5px]">
+									<div class="truncate self-center text-[13px] leading-5">{button.name}</div>
+								</div>
+							</a>
+						</div>
+					{/each}
 				</div>
 
 				{#if ($models ?? []).length > 0 && (($settings?.pinnedModels ?? []).length > 0 || $config?.default_pinned_models)}
@@ -1678,39 +1758,62 @@
 				></div>
 				<div class="flex flex-col">
 					{#if $user !== undefined && $user !== null}
-						<UserMenu
-							role={$user?.role}
-							profile={$config?.features?.enable_user_status ?? true}
-							className="w-[calc(var(--sidebar-width)-1rem)]"
-						>
-							<button
-								type="button"
-								class=" flex items-center rounded-xl py-1.5 px-1.5 w-full hover:bg-gray-50 dark:hover:bg-gray-900 transition"
-								aria-label={$i18n.t('User menu')}
+						<PendingGiftEntry
+							on:redeem={async () => {
+								await showSettings.set('redeem_code');
+								if ($mobile) {
+									await tick();
+									showSidebar.set(false);
+								}
+							}}
+						/>
+						<div class="flex min-w-0 items-center gap-1">
+							<UserMenu
+								role={$user?.role}
+								profile={$config?.features?.enable_user_status ?? true}
+								showQuota={false}
+								className="w-[calc(var(--sidebar-width)-1rem)]"
 							>
-								<div class=" self-center mr-3 relative flex-shrink-0">
-									<img
-										src={`${WEBUI_API_BASE_URL}/users/${$user?.id}/profile/image`}
-										class="size-5.5 object-cover rounded-full"
-										alt={$i18n.t('Open User Profile Menu')}
-										aria-label={$i18n.t('Open User Profile Menu')}
-									/>
+								<button
+									type="button"
+									class="flex min-w-0 flex-1 items-center rounded-xl py-1.5 px-1.5 hover:bg-gray-50 dark:hover:bg-gray-900 transition"
+									aria-label={$i18n.t('User menu')}
+								>
+									<div class=" self-center mr-3 relative flex-shrink-0">
+										<img
+											src={`${WEBUI_API_BASE_URL}/users/${$user?.id}/profile/image`}
+											class="size-5.5 object-cover rounded-full"
+											alt={$i18n.t('Open User Profile Menu')}
+											aria-label={$i18n.t('Open User Profile Menu')}
+										/>
 
-									{#if $config?.features?.enable_user_status}
-										<div class="absolute -bottom-0.5 -right-0.5">
-											<span class="relative flex size-2.5">
-												<span
-													class="relative inline-flex size-2.5 rounded-full {true
-														? 'bg-green-500'
-														: 'bg-gray-300 dark:bg-gray-700'} border-2 border-white dark:border-gray-900"
-												></span>
-											</span>
-										</div>
-									{/if}
-								</div>
-								<div class=" self-center font-normal truncate">{$user?.name}</div>
-							</button>
-						</UserMenu>
+										{#if $config?.features?.enable_user_status}
+											<div class="absolute -bottom-0.5 -right-0.5">
+												<span class="relative flex size-2.5">
+													<span
+														class="relative inline-flex size-2.5 rounded-full {true
+															? 'bg-green-500'
+															: 'bg-gray-300 dark:bg-gray-700'} border-2 border-white dark:border-gray-900"
+													></span>
+												</span>
+											</div>
+										{/if}
+									</div>
+									<div class=" self-center font-normal truncate">{$user?.name}</div>
+								</button>
+							</UserMenu>
+							<div class="shrink-0">
+								<SubscriptionQuotaRing
+									on:openUsage={async () => {
+										await showSettings.set('usage');
+										if ($mobile) {
+											await tick();
+											showSidebar.set(false);
+										}
+									}}
+								/>
+							</div>
+						</div>
 					{/if}
 				</div>
 			</div>

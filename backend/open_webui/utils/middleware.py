@@ -12,6 +12,7 @@ import sys
 import textwrap
 import time
 from concurrent.futures import ThreadPoolExecutor
+from html import escape
 from typing import Any, Optional
 from uuid import uuid4
 
@@ -79,6 +80,7 @@ from open_webui.utils.access_control import has_connection_access, has_permissio
 from open_webui.models.access_grants import AccessGrants
 from open_webui.utils.access_control.files import get_owner_accessible_folder_files
 from open_webui.utils.access_control.folders import has_folder_access
+from open_webui.utils.arena import resolve_arena_model
 from open_webui.utils.chat import generate_chat_completion
 from open_webui.utils.chat_id import is_saved_chat_id
 from open_webui.utils.code_interpreter import execute_code_jupyter
@@ -89,6 +91,7 @@ from open_webui.utils.files import (
     get_image_base64_from_url,
     get_image_url_from_base64,
 )
+from open_webui.utils.image_refs import extract_internal_file_id
 from open_webui.utils.filter import (
     FilterContext,
     get_filter_functions,
@@ -123,6 +126,7 @@ from open_webui.utils.payload import apply_system_prompt_to_body, resolve_system
 from open_webui.utils.plugin import load_function_module_by_id
 from open_webui.utils.response import merge_usage, normalize_usage
 from open_webui.utils.sanitize import sanitize_code
+from open_webui.utils.subscriptions import bill_model_usage, get_request_client_ip, stream_event_has_content
 from open_webui.utils.task import (
     get_task_model_id,
     rag_template,
@@ -1210,7 +1214,9 @@ async def chat_completion_tools_handler(
     payload = get_tools_function_calling_payload(body['messages'], task_model_id, tools_function_calling_prompt)
 
     try:
-        response = await generate_chat_completion(request, form_data=payload, user=user)
+        from open_webui.utils.hosted_inference import generate_billed_chat_completion
+
+        response = await generate_billed_chat_completion(request, form_data=payload, user=user)
         log.debug(f'{response=}')
         content = await get_content_from_response(response)
         log.debug(f'{content=}')
@@ -1582,43 +1588,42 @@ async def add_file_context(messages: list, chat_id: str, user) -> list:
     stored_messages = get_message_list(history.get('messages', {}), history.get('currentId'))
 
     def format_file_tag(file):
-        file_id = file.get('id') or file.get('url')
-        attrs = f'type="{file.get("type", "file")}"'
+        url = file.get('url')
+        file_id = file.get('id') or (extract_internal_file_id(url) if url else None)
+        attrs = f'type="{escape(str(file.get("type", "file")), quote=True)}"'
         if file_id:
-            attrs += f' id="{file_id}"'
-        attrs += f' url="{file["url"]}"'
+            attrs += f' id="{escape(str(file_id), quote=True)}"'
+        if url:
+            attrs += f' url="{escape(str(url), quote=True)}"'
         if file.get('content_type'):
-            attrs += f' content_type="{file["content_type"]}"'
+            attrs += f' content_type="{escape(str(file["content_type"]), quote=True)}"'
         if file.get('name'):
-            attrs += f' name="{file["name"]}"'
+            attrs += f' name="{escape(str(file["name"]), quote=True)}"'
         return f'<file {attrs}/>'
 
-    # Pair only user-role messages from both lists to avoid misalignment.
-    # After process_messages_with_output(), assistant messages with tool calls
-    # are expanded into multiple messages (assistant + tool results), making
-    # the payload message list longer than the stored message list. A naive
-    # positional zip() would pair user messages with wrong stored messages,
-    # causing later images to lose their file context (see #21878).
-    user_messages = [m for m in messages if m.get('role') == 'user']
-    stored_user_messages = [m for m in stored_messages if m.get('role') == 'user']
+    # Pair by role occurrence so tool-result expansion cannot shift attachments.
+    # Assistant files include generated images that may be edited in a later turn.
+    for role in ('user', 'assistant'):
+        role_messages = [message for message in messages if message.get('role') == role]
+        stored_role_messages = [message for message in stored_messages if message.get('role') == role]
 
-    for message, stored_message in zip(user_messages, stored_user_messages):
-        files_with_urls = [
-            file
-            for file in stored_message.get('files', [])
-            if file.get('url') and not file.get('url').startswith('data:')
-        ]
-        if not files_with_urls:
-            continue
+        for message, stored_message in zip(role_messages, stored_role_messages):
+            files_with_references = [
+                file
+                for file in stored_message.get('files', [])
+                if file.get('id') or (file.get('url') and not file.get('url').startswith('data:'))
+            ]
+            if not files_with_references:
+                continue
 
-        file_tags = [format_file_tag(file) for file in files_with_urls]
-        file_context = '<attached_files>\n' + '\n'.join(file_tags) + '\n</attached_files>\n\n'
+            file_tags = [format_file_tag(file) for file in files_with_references]
+            file_context = '<attached_files>\n' + '\n'.join(file_tags) + '\n</attached_files>\n\n'
 
-        content = message.get('content', '')
-        if isinstance(content, list):
-            message['content'] = [{'type': 'text', 'text': file_context}] + content
-        else:
-            message['content'] = file_context + content
+            content = message.get('content', '')
+            if isinstance(content, list):
+                message['content'] = [{'type': 'text', 'text': file_context}] + content
+            else:
+                message['content'] = file_context + (content or '')
 
     return messages
 
@@ -2013,24 +2018,22 @@ async def convert_url_images_to_base64(form_data, user=None):
                 continue
 
             image_url = item.get('image_url', {}).get('url', '')
-            if image_url.startswith('data:image/'):
-                new_content.append(item)
-                continue
 
             try:
                 base64_data = await get_image_base64_from_url(image_url, user=user)
-                if base64_data:
-                    new_content.append(
-                        {
-                            'type': 'image_url',
-                            'image_url': {'url': base64_data},
-                        }
-                    )
-                else:
-                    new_content.append(item)
+                if not base64_data:
+                    raise HTTPException(status_code=400, detail='Image reference could not be safely loaded')
+                new_content.append(
+                    {
+                        'type': 'image_url',
+                        'image_url': {'url': base64_data},
+                    }
+                )
+            except HTTPException:
+                raise
             except Exception as e:
                 log.debug(f'Error converting image URL to base64: {e}')
-                new_content.append(item)
+                raise HTTPException(status_code=400, detail='Image reference could not be safely loaded') from e
 
         message['content'] = new_content
 
@@ -2229,20 +2232,27 @@ async def connect_mcp_server(
     )
 
     client = MCPClient()
-    await client.connect(
-        url=mcp_server_connection.get('url', ''),
-        headers=headers if headers else None,
-    )
+    try:
+        await client.connect(
+            url=mcp_server_connection.get('url', ''),
+            headers=headers if headers else None,
+        )
 
-    function_name_filter_list = mcp_server_connection.get('config', {}).get('function_name_filter_list', '')
-    if isinstance(function_name_filter_list, str):
-        function_name_filter_list = function_name_filter_list.split(',')
+        function_name_filter_list = mcp_server_connection.get('config', {}).get('function_name_filter_list', '')
+        if isinstance(function_name_filter_list, str):
+            function_name_filter_list = function_name_filter_list.split(',')
 
-    tool_specs = await client.list_tool_specs()
-    if function_name_filter_list:
-        tool_specs = [spec for spec in tool_specs if is_string_allowed(spec['name'], function_name_filter_list)]
+        tool_specs = await client.list_tool_specs()
+        if function_name_filter_list:
+            tool_specs = [spec for spec in tool_specs if is_string_allowed(spec['name'], function_name_filter_list)]
 
-    return client, tool_specs
+        return client, tool_specs
+    except BaseException:
+        try:
+            await client.disconnect()
+        except BaseException as cleanup_error:
+            log.debug(f'Error disconnecting failed MCP client: {cleanup_error}')
+        raise
 
 
 async def process_chat_payload(request, form_data, user, metadata, model):
@@ -2257,31 +2267,7 @@ async def process_chat_payload(request, form_data, user, metadata, model):
     # Arena model resolution — pick the sub-model now so all downstream
     # processing (knowledge, capabilities, tools, params) uses its settings
     # instead of the empty arena wrapper.
-    if model.get('owned_by') == 'arena':
-        arena_model_ids = model.get('info', {}).get('meta', {}).get('model_ids')
-        arena_filter_mode = model.get('info', {}).get('meta', {}).get('filter_mode')
-        if arena_model_ids and arena_filter_mode == 'exclude':
-            arena_model_ids = [
-                available_model['id']
-                for available_model in request.app.state.MODELS.values()
-                if available_model.get('owned_by') != 'arena' and available_model['id'] not in arena_model_ids
-            ]
-
-        if isinstance(arena_model_ids, list) and arena_model_ids:
-            selected_model_id = random.choice(arena_model_ids)
-        else:
-            arena_model_ids = [
-                available_model['id']
-                for available_model in request.app.state.MODELS.values()
-                if available_model.get('owned_by') != 'arena'
-            ]
-            selected_model_id = random.choice(arena_model_ids)
-
-        selected_model = request.app.state.MODELS.get(selected_model_id)
-        if selected_model:
-            model = selected_model
-            form_data['model'] = selected_model_id
-            metadata['selected_model_id'] = selected_model_id
+    model, _ = await resolve_arena_model(request, form_data, user, metadata, model)
 
     # Captured before apply_params_to_form_data pops 'params'; feeds metadata['system_prompt'] below
     model_system_prompt = (form_data.get('params') or {}).get('system')
@@ -2753,6 +2739,7 @@ async def process_chat_payload(request, form_data, user, metadata, model):
 
                         client, tool_specs = result
                         mcp_clients[server_id] = client
+                        metadata['mcp_clients'] = mcp_clients
 
                         for tool_spec in tool_specs:
 
@@ -2852,9 +2839,6 @@ async def process_chat_payload(request, form_data, user, metadata, model):
                         'direct': True,
                         'server': tool_server,
                     }
-
-        if mcp_clients:
-            metadata['mcp_clients'] = mcp_clients
 
         # Inject builtin tools for native function calling based on enabled features and model capability.
         # Only inject when the request originates from the UI (identified by session_id).
@@ -3005,7 +2989,17 @@ async def get_event_emitter_and_caller(metadata):
     return event_emitter, event_caller
 
 
-async def build_chat_response_context(request, form_data, user, model, metadata, tasks, events):
+async def build_chat_response_context(
+    request,
+    form_data,
+    user,
+    model,
+    metadata,
+    tasks,
+    events,
+    *,
+    request_started_at: float | None = None,
+):
     event_emitter, event_caller = await get_event_emitter_and_caller(metadata)
     return {
         'request': request,
@@ -3017,6 +3011,8 @@ async def build_chat_response_context(request, form_data, user, model, metadata,
         'events': events,
         'event_emitter': event_emitter,
         'event_caller': event_caller,
+        'request_started_at': request_started_at if request_started_at is not None else time.perf_counter(),
+        'first_content_at': None,
     }
 
 
@@ -3039,6 +3035,24 @@ def get_response_data(response):
         response_data = None
 
     return response, response_data
+
+
+def non_streaming_response_is_billable(response_data: dict) -> bool:
+    if not isinstance(response_data, dict) or response_data.get('error') is not None:
+        return False
+
+    if response_data.get('status') in {'cancelled', 'failed'}:
+        return False
+
+    usage = response_data.get('usage')
+    if isinstance(usage, dict) and usage:
+        return True
+
+    if response_data.get('status') == 'completed' or response_data.get('output'):
+        return True
+
+    choices = response_data.get('choices')
+    return isinstance(choices, list) and bool(choices)
 
 
 def merge_events_into_response(response_data, events):
@@ -3563,6 +3577,117 @@ async def outlet_filter_handler(ctx):
         log.debug(f'Error running outlet filters: {e}')
 
 
+async def bill_subscription_usage_once(
+    ctx,
+    usage: dict | None,
+    *,
+    completion_status: str = 'completed',
+):
+    if ctx.get('subscription_usage_billed'):
+        return
+
+    metadata = ctx.get('metadata') or {}
+    policy_data = metadata.get('subscription_policy')
+    user = ctx.get('user')
+    if not policy_data or not user:
+        return
+
+    form_data = ctx.get('form_data') or {}
+    model = ctx.get('model') or {}
+    model_id = form_data.get('model') or model.get('id', '')
+    request_started_at = ctx.get('request_started_at')
+    first_content_at = ctx.get('first_content_at')
+    total_duration_ms = (
+        max(int((time.perf_counter() - request_started_at) * 1000), 0) if request_started_at is not None else None
+    )
+    first_token_latency_ms = (
+        max(int((first_content_at - request_started_at) * 1000), 0)
+        if request_started_at is not None and first_content_at is not None
+        else None
+    )
+    billing_metadata = {
+        key: metadata[key]
+        for key in (
+            'request_id',
+            'parent_request_id',
+            'chat_id',
+            'message_id',
+            'task',
+            'task_id',
+            'model_id',
+            'selected_model_id',
+            'reasoning_effort',
+            'reasoning_profile',
+            'provider_profile',
+            'billing_scope',
+        )
+        if key in metadata
+    }
+    billing_metadata.update(
+        {
+            'billing_completion_status': completion_status,
+            'billing_usage_observed': bool(usage),
+        }
+    )
+    reservation_id = metadata.get('_artichat_chatpoint_reservation_id')
+    try:
+        await bill_model_usage(
+            user_id=user.id,
+            model_id=model_id,
+            quota_mode=policy_data.get('quota_mode', 'metered'),
+            usage_multiplier=policy_data.get('usage_multiplier', '1'),
+            pricing=policy_data,
+            usage=usage,
+            metadata=billing_metadata,
+            is_admin=(getattr(user, 'role', None) == 'admin'),
+            request_id=metadata.get('request_id'),
+            client_ip=get_request_client_ip(ctx.get('request')),
+            first_token_latency_ms=first_token_latency_ms,
+            total_duration_ms=total_duration_ms,
+            reservation_id=reservation_id,
+            allow_partial_reservation=True,
+            charge_reserved_on_missing_usage=True,
+        )
+    finally:
+        from open_webui.utils.hosted_inference import stop_hosted_inference_reservation_heartbeat
+
+        await stop_hosted_inference_reservation_heartbeat(reservation_id)
+    ctx['subscription_usage_billed'] = True
+    from open_webui.utils.hosted_inference import clear_hosted_inference_reservation_metadata
+
+    clear_hosted_inference_reservation_metadata(metadata)
+
+
+async def release_subscription_reservation_once(ctx, reason: str):
+    if ctx.get('subscription_reservation_released') or ctx.get('subscription_usage_billed'):
+        return
+    from open_webui.utils.hosted_inference import release_hosted_inference_reservation
+
+    metadata = ctx.get('metadata')
+    await release_hosted_inference_reservation(metadata, reason)
+    if not isinstance(metadata, dict) or '_artichat_chatpoint_reservation_id' not in metadata:
+        ctx['subscription_reservation_released'] = True
+
+
+async def audit_interrupted_subscription_usage(ctx, usage: dict | None):
+    billing_task = asyncio.create_task(
+        bill_subscription_usage_once(
+            ctx,
+            usage,
+            completion_status='stream_interrupted',
+        )
+    )
+    try:
+        await asyncio.shield(billing_task)
+    except asyncio.CancelledError:
+        try:
+            await billing_task
+        except Exception:
+            log.exception('Failed to record interrupted subscription usage')
+    except Exception:
+        log.exception('Failed to record interrupted subscription usage')
+
+
 async def non_streaming_chat_response_handler(response, ctx):
     request = ctx['request']
 
@@ -3574,7 +3699,21 @@ async def non_streaming_chat_response_handler(response, ctx):
 
     response, response_data = get_response_data(response)
     if response_data is None:
+        if getattr(response, 'status_code', 200) >= 400:
+            await release_subscription_reservation_once(ctx, 'provider returned a non-billable response')
+        else:
+            await bill_subscription_usage_once(
+                ctx,
+                None,
+                completion_status='missing_response_data',
+            )
         return response
+
+    usage = normalize_usage(response_data.get('usage', {}) or {})
+    if non_streaming_response_is_billable(response_data):
+        await bill_subscription_usage_once(ctx, usage)
+    else:
+        await release_subscription_reservation_once(ctx, 'provider returned a non-billable response')
 
     chat_id = metadata.get('chat_id') or ''
     save_to_chat = is_saved_chat_id(chat_id)
@@ -3679,8 +3818,6 @@ async def non_streaming_chat_response_handler(response, ctx):
                     )
 
                     # Save message in the database
-                    usage = normalize_usage(response_data.get('usage', {}) or {})
-
                     if save_to_chat:
                         await Chats.upsert_message_to_chat_by_id_and_message_id(
                             metadata['chat_id'],
@@ -3733,7 +3870,6 @@ async def non_streaming_chat_response_handler(response, ctx):
     output = response_data.get('output')
     content = choices[0].get('message', {}).get('content') if choices else ''
     if ENABLE_API_OUTLET_FILTERS and (content or output):
-        usage = normalize_usage(response_data.get('usage', {}) or {})
         ctx['assistant_message'] = {
             **({'content': content} if content else {}),
             **({'output': output} if output else {}),
@@ -4267,6 +4403,8 @@ async def streaming_chat_response_handler(response, ctx):
                                 )
 
                             if data:
+                                if ctx.get('first_content_at') is None and stream_event_has_content(data):
+                                    ctx['first_content_at'] = time.perf_counter()
                                 if 'event' in data and not getattr(request.state, 'direct', False):
                                     await event_emitter(data.get('event', {}))
 
@@ -5502,6 +5640,10 @@ async def streaming_chat_response_handler(response, ctx):
                     if item.get('status') == 'in_progress':
                         item['status'] = 'completed'
 
+                # Provider usage is final at this point. Settle before chat
+                # persistence, notifications, filters, or other optional I/O.
+                await bill_subscription_usage_once(ctx, usage)
+
                 title = await Chats.get_chat_title_by_id(metadata['chat_id']) if save_to_chat else ''
                 data = {
                     'done': True,
@@ -5564,6 +5706,8 @@ async def streaming_chat_response_handler(response, ctx):
                     except (asyncio.CancelledError, Exception):
                         pass
 
+                await audit_interrupted_subscription_usage(ctx, usage)
+
                 async def save_cancelled_state():
                     await event_emitter({'type': 'chat:tasks:cancel'})
                     if save_to_chat:
@@ -5574,6 +5718,7 @@ async def streaming_chat_response_handler(response, ctx):
                                 {
                                     'done': True,
                                     'output': output,
+                                    **({'usage': usage} if usage else {}),
                                 },
                             )
                         else:
@@ -5589,6 +5734,14 @@ async def streaming_chat_response_handler(response, ctx):
                 except (asyncio.CancelledError, Exception):
                     pass
                 raise  # re-raise CancelledError for proper propagation
+            except Exception:
+                if hasattr(response, 'body_iterator') and hasattr(response.body_iterator, 'aclose'):
+                    try:
+                        await response.body_iterator.aclose()
+                    except Exception:
+                        pass
+                await audit_interrupted_subscription_usage(ctx, usage)
+                raise
 
             if response.background is not None:
                 await response.background()
@@ -5601,6 +5754,7 @@ async def streaming_chat_response_handler(response, ctx):
             def wrap_item(item):
                 return f'data: {item}\n\n'
 
+            billing_message = {}
             assistant_message = {}
             filter_context = FilterContext()
             has_api_outlet_filters = ENABLE_API_OUTLET_FILTERS and bool(filter_functions)
@@ -5614,33 +5768,45 @@ async def streaming_chat_response_handler(response, ctx):
                 except Exception:
                     has_api_outlet_filters = True
 
-            for event in events:
-                event, _ = await process_filter_functions(
-                    request=request,
-                    filter_context=filter_context,
-                    filter_functions=filter_functions,
-                    filter_type='stream',
-                    form_data=event,
-                    extra_params=extra_params,
-                )
+            stream_completed = False
+            try:
+                for event in events:
+                    event, _ = await process_filter_functions(
+                        request=request,
+                        filter_context=filter_context,
+                        filter_functions=filter_functions,
+                        filter_type='stream',
+                        form_data=event,
+                        extra_params=extra_params,
+                    )
 
-                if event:
-                    yield wrap_item(JSONCodec.dumps(event))
+                    if event:
+                        yield wrap_item(JSONCodec.dumps(event))
 
-            async for data in original_generator:
-                data, _ = await process_filter_functions(
-                    request=request,
-                    filter_context=filter_context,
-                    filter_functions=filter_functions,
-                    filter_type='stream',
-                    form_data=data,
-                    extra_params=extra_params,
-                )
+                async for raw_data in original_generator:
+                    update_assistant_message_from_stream(billing_message, raw_data)
+                    data, _ = await process_filter_functions(
+                        request=request,
+                        filter_context=filter_context,
+                        filter_functions=filter_functions,
+                        filter_type='stream',
+                        form_data=raw_data,
+                        extra_params=extra_params,
+                    )
 
-                if data:
-                    if has_api_outlet_filters:
-                        update_assistant_message_from_stream(assistant_message, data)
-                    yield data
+                    if data:
+                        if ctx.get('first_content_at') is None and stream_event_has_content(data):
+                            ctx['first_content_at'] = time.perf_counter()
+                        if has_api_outlet_filters:
+                            update_assistant_message_from_stream(assistant_message, data)
+                        yield data
+                stream_completed = True
+            finally:
+                billing_usage = billing_message.get('usage')
+                if stream_completed:
+                    await bill_subscription_usage_once(ctx, billing_usage)
+                else:
+                    await audit_interrupted_subscription_usage(ctx, billing_usage)
 
             if has_api_outlet_filters and assistant_message:
                 ctx['assistant_message'] = assistant_message
@@ -5658,11 +5824,23 @@ async def process_chat_response(response, ctx):
     if not isinstance(response, StreamingResponse):
         return await non_streaming_chat_response_handler(response, ctx)
 
+    if response.status_code >= 400:
+        await release_subscription_reservation_once(ctx, 'provider returned a streaming error response')
+        return response
+
     # Non standard response
     if not any(
         content_type in response.headers['Content-Type']
         for content_type in ['text/event-stream', 'application/x-ndjson']
     ):
+        if response.status_code >= 400:
+            await release_subscription_reservation_once(ctx, 'provider returned a non-billable response')
+        else:
+            await bill_subscription_usage_once(
+                ctx,
+                None,
+                completion_status='nonstandard_response',
+            )
         return response
 
     # Streaming response

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import json
 import logging
 import mimetypes
@@ -138,6 +139,7 @@ from open_webui.models.messages import Messages
 from open_webui.models.models import Models
 from open_webui.models.users import Users
 from open_webui.routers import (
+    announcements,
     analytics,
     audio,
     auths,
@@ -146,6 +148,7 @@ from open_webui.routers import (
     channels,
     chats,
     configs,
+    emails,
     evaluations,
     files,
     folders,
@@ -164,9 +167,11 @@ from open_webui.routers import (
     retrieval,
     scim,
     skills,
+    subscriptions,
     tasks,
     terminals,
     tools,
+    updates,
     users,
     utils,
 )
@@ -230,6 +235,7 @@ from open_webui.utils.chat_variables import (
     normalize_chat_variables,
 )
 from open_webui.utils.embeddings import generate_embeddings
+from open_webui.utils.inference_access import assert_direct_connection_targets
 from open_webui.utils.json_response import apply_orjson_http_json
 from open_webui.utils.logger import start_logger
 from open_webui.utils.middleware import (
@@ -257,10 +263,19 @@ from open_webui.utils.oauth import (
     recover_static_oauth_client_metadata,
     resolve_oauth_client_info,
 )
+from open_webui.utils.platform import platform_about_defaults
 from open_webui.utils.plugin import install_tool_and_function_dependencies
 from open_webui.utils.redis import get_redis_client
+from open_webui.utils.reasoning import move_reasoning_effort_to_anthropic, resolve_reasoning_selection
 from open_webui.utils.security_headers import SecurityHeadersMiddleware
 from open_webui.utils.session_pool import cleanup_response, get_session, stream_wrapper
+from open_webui.utils.subscriptions import (
+    assert_chatpoint_available,
+    assert_model_subscription_access,
+    ensure_subscription_current,
+    filter_models_for_subscription,
+    release_expired_chatpoint_reservations,
+)
 from open_webui.utils.tools import set_terminal_servers, set_tool_servers
 
 if SAFE_MODE:
@@ -304,24 +319,33 @@ class CORSStaticFiles(StaticFiles):
 
 
 if LOG_FORMAT != 'json':
-    banner = rf"""
- ██████╗ ██████╗ ███████╗███╗   ██╗    ██╗    ██╗███████╗██████╗ ██╗   ██╗██╗
-██╔═══██╗██╔══██╗██╔════╝████╗  ██║    ██║    ██║██╔════╝██╔══██╗██║   ██║██║
-██║   ██║██████╔╝█████╗  ██╔██╗ ██║    ██║ █╗ ██║█████╗  ██████╔╝██║   ██║██║
-██║   ██║██╔═══╝ ██╔══╝  ██║╚██╗██║    ██║███╗██║██╔══╝  ██╔══██╗██║   ██║██║
-╚██████╔╝██║     ███████╗██║ ╚████║    ╚███╔███╔╝███████╗██████╔╝╚██████╔╝██║
- ╚═════╝ ╚═╝     ╚══════╝╚═╝  ╚═══╝     ╚══╝╚══╝ ╚══════╝╚═════╝  ╚═════╝ ╚═╝
-
-
-v{VERSION} - building the best AI user interface.
+    banner = f"""
+ArtiChat v{VERSION} (Artivis Alpha)
 {f'Commit: {WEBUI_BUILD_HASH}' if WEBUI_BUILD_HASH != 'dev-build' else ''}
-https://github.com/open-webui/open-webui
+https://github.com/PYBu/ArtiChat
 """
     try:
         print(banner)
     except UnicodeEncodeError:
-        # Stdout can't encode the box-drawing banner (Windows cp1252, redirected/headless stdout); fall back to ASCII.
-        print(f'Open WebUI v{VERSION} - building the best AI user interface.\nhttps://github.com/open-webui/open-webui')
+        print(f'ArtiChat v{VERSION} (Artivis Alpha)\nhttps://github.com/PYBu/ArtiChat')
+
+
+async def reservation_cleanup_loop() -> None:
+    while True:
+        try:
+            released_count = 0
+            while True:
+                released = await release_expired_chatpoint_reservations(limit=100)
+                released_count += len(released)
+                if len(released) < 100:
+                    break
+            if released_count:
+                log.info('Released %s expired Chatpoint reservations', released_count)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            log.exception('Failed to release expired Chatpoint reservations')
+        await asyncio.sleep(60)
 
 
 @asynccontextmanager
@@ -371,6 +395,7 @@ async def lifespan(app: FastAPI):
 
     asyncio.create_task(periodic_usage_pool_cleanup())
     asyncio.create_task(periodic_session_pool_cleanup())
+    reservation_cleanup_task = asyncio.create_task(reservation_cleanup_loop())
 
     from open_webui.utils.automations import scheduler_worker_loop
 
@@ -455,6 +480,12 @@ async def lifespan(app: FastAPI):
     if hasattr(app.state, 'redis_task_command_listener'):
         app.state.redis_task_command_listener.cancel()
 
+    reservation_cleanup_task.cancel()
+    try:
+        await reservation_cleanup_task
+    except asyncio.CancelledError:
+        pass
+
     await publish_event(app, EVENTS.SYSTEM_SHUTDOWN_COMPLETED, source='system')
 
 
@@ -463,7 +494,7 @@ async def lifespan(app: FastAPI):
 apply_orjson_http_json()
 
 app = FastAPI(
-    title='Open WebUI',
+    title='ArtiChat',
     docs_url='/docs' if ENV == 'dev' else None,
     openapi_url='/openapi.json' if ENV == 'dev' else None,
     redoc_url=None,
@@ -473,7 +504,7 @@ app = FastAPI(
 # Used by readiness checks to gate traffic until startup work is done.
 app.state.startup_complete = False
 
-# For Open WebUI OIDC/OAuth2
+# For ArtiChat OIDC/OAuth2
 oauth_manager = OAuthManager(app)
 app.state.oauth_manager = oauth_manager
 
@@ -795,6 +826,7 @@ app.include_router(audio.router, prefix='/api/v1/audio', tags=['audio'])
 app.include_router(retrieval.router, prefix='/api/v1/retrieval', tags=['retrieval'])
 
 app.include_router(configs.router, prefix='/api/v1/configs', tags=['configs'])
+app.include_router(emails.router, prefix='/api/v1/emails', tags=['emails'])
 
 app.include_router(auths.router, prefix='/api/v1/auths', tags=['auths'])
 app.include_router(users.router, prefix='/api/v1/users', tags=['users'])
@@ -807,6 +839,9 @@ app.include_router(notes.router, prefix='/api/v1/notes', tags=['notes'])
 
 app.include_router(models.router, prefix='/api/v1/models', tags=['models'])
 app.include_router(notifications.router, prefix='/api/v1/notifications', tags=['notifications'])
+app.include_router(subscriptions.router, prefix='/api/v1/subscriptions', tags=['subscriptions'])
+app.include_router(announcements.router, prefix='/api/v1/announcements', tags=['announcements'])
+app.include_router(updates.router, prefix='/api/v1/updates', tags=['updates'])
 app.include_router(knowledge.router, prefix='/api/v1/knowledge', tags=['knowledge'])
 app.include_router(prompts.router, prefix='/api/v1/prompts', tags=['prompts'])
 app.include_router(tools.router, prefix='/api/v1/tools', tags=['tools'])
@@ -854,6 +889,12 @@ async def get_models(request: Request, refresh: bool = False, user=Depends(get_v
     # Access-filter first so the per-model payload work below only runs for
     # models the caller can actually see.
     models = await get_filtered_models(models, user)
+    subscription = await ensure_subscription_current(user.id)
+    models = filter_models_for_subscription(
+        models,
+        tier=subscription.tier,
+        is_admin=(user.role == 'admin'),
+    )
 
     for model in models:
         # Remove profile image URL to reduce payload size
@@ -1061,13 +1102,16 @@ async def chat_completion(
         await get_all_models(request, user=user)
 
     model_id = form_data.get('model', None)
+    requested_reasoning_level = form_data.pop('reasoning_level', None)
     model_item = form_data.pop('model_item', {})
     tasks = form_data.pop('background_tasks', None)
 
     metadata = {}
+    deferred_title_generation = None
     try:
         model_info = None
-        if not model_item.get('direct', False):
+        is_direct_connection = bool(model_item.get('direct', False))
+        if not is_direct_connection:
             if model_id not in request.app.state.MODELS:
                 raise Exception('Model not found')
 
@@ -1081,6 +1125,11 @@ async def chat_completion(
                 except Exception as e:
                     raise e
         else:
+            if not await Config.get('direct.enable'):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
+                )
             model = model_item
             await _set_direct_model(request, model, user)
 
@@ -1155,7 +1204,28 @@ async def chat_completion(
             # Single-model fallback
             message_ids = [{'model_id': model_id, 'message_id': form_data.pop('id', None)}]
 
+        if len(message_ids) > 8:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail='A chat request may target at most 8 models.',
+            )
+
+        if is_direct_connection:
+            assert_direct_connection_targets(model_id, model_item, message_ids)
+
+        if requested_reasoning_level is not None and len(message_ids) != 1:
+            raise ValueError('Reasoning control is unavailable for multi-model requests.')
+        reasoning_selection = resolve_reasoning_selection(model_info, requested_reasoning_level)
+        if reasoning_selection:
+            form_data.setdefault('params', {})['reasoning_effort'] = reasoning_selection.effort
+
         user_message = form_data.pop('user_message', None) or form_data.pop('parent_message', None)
+        if isinstance(user_message, dict):
+            user_message.pop('reasoning_level', None)
+            user_message.pop('reasoning_profile', None)
+            if reasoning_selection:
+                user_message['reasoning_level'] = reasoning_selection.level
+                user_message['reasoning_profile'] = reasoning_selection.profile
         chat_id = form_data.get('chat_id') or ''
         chat_variables = form_data.pop('chat_variables', None)
         if chat_variables is None:
@@ -1179,6 +1249,7 @@ async def chat_completion(
             tool_servers = None
 
         metadata = {
+            'request_id': str(uuid4()),
             'user_id': user.id,
             'user_agent': request.headers.get('user-agent', '') or '',
             'internal': getattr(request.state, 'internal', False) is True,
@@ -1196,7 +1267,9 @@ async def chat_completion(
             'variables': form_data.get('variables', {}),
             'chat_variables': chat_variables,
             'model': model,
-            'direct': model_item.get('direct', False),
+            'direct': is_direct_connection,
+            'reasoning_level': reasoning_selection.level if reasoning_selection else None,
+            'reasoning_profile': reasoning_selection.profile if reasoning_selection else None,
             'params': {
                 'stream_delta_chunk_size': stream_delta_chunk_size,
                 'reasoning_tags': reasoning_tags,
@@ -1211,6 +1284,33 @@ async def chat_completion(
 
         if is_new_chat:
             metadata['chat_id'] = str(uuid4())
+
+        if is_direct_connection:
+            # Direct Connections are BYOK: the browser calls the user's provider
+            # with the user's key, so ArtiChat must not debit hosted Chatpoints.
+            metadata['billing_mode'] = 'byok'
+        else:
+            subscription = await ensure_subscription_current(user.id)
+            subscription_policies = {}
+            for entry in message_ids:
+                target_model_id = entry.get('model_id') or model_id
+                target_model = request.app.state.MODELS.get(target_model_id, model)
+                policy = assert_model_subscription_access(
+                    target_model,
+                    tier=subscription.tier,
+                    is_admin=(user.role == 'admin'),
+                )
+                await assert_chatpoint_available(
+                    user.id,
+                    quota_mode=policy.quota_mode,
+                    is_admin=(user.role == 'admin'),
+                )
+                subscription_policies[target_model_id] = policy.model_dump()
+
+            metadata['subscription_policies'] = subscription_policies
+            if len(message_ids) == 1:
+                target_model_id = message_ids[0].get('model_id') or model_id
+                metadata['subscription_policy'] = subscription_policies.get(target_model_id)
 
         initial_title_generation = None
         if is_new_chat and tasks and TASKS.TITLE_GENERATION in tasks:
@@ -1283,6 +1383,14 @@ async def chat_completion(
                                 'content': '',
                                 'done': False,
                                 'model': target_model_id,
+                                **(
+                                    {
+                                        'reasoning_level': metadata['reasoning_level'],
+                                        'reasoning_profile': metadata['reasoning_profile'],
+                                    }
+                                    if metadata.get('reasoning_level')
+                                    else {}
+                                ),
                                 'timestamp': int(time.time()),
                             }
                             # Preserve the side-by-side column index so duplicate
@@ -1390,7 +1498,7 @@ async def chat_completion(
                             except Exception as e:
                                 log.debug(f'Error generating initial chat title: {e}')
 
-                        asyncio.create_task(run_initial_title_generation())
+                        deferred_title_generation = run_initial_title_generation
                 else:
                     # Existing chat — verify ownership
                     if not await Chats.is_chat_owner(chat_id, user.id) and user.role != 'admin':
@@ -1510,6 +1618,14 @@ async def chat_completion(
                                 'content': '',
                                 'done': False,
                                 'model': target_model_id,
+                                **(
+                                    {
+                                        'reasoning_level': metadata['reasoning_level'],
+                                        'reasoning_profile': metadata['reasoning_profile'],
+                                    }
+                                    if metadata.get('reasoning_level')
+                                    else {}
+                                ),
                                 'timestamp': int(time.time()),
                             }
                             # Preserve the side-by-side column index so duplicate
@@ -1545,11 +1661,50 @@ async def chat_completion(
             detail=str(e),
         )
 
-    async def process_chat(request, form_data, user, metadata, model, tasks=None):
+    async def process_chat(
+        request,
+        form_data,
+        user,
+        metadata,
+        model,
+        tasks=None,
+        *,
+        prepared_payload=None,
+        preparation_gate=None,
+        prepared_future=None,
+        dispatch_gate=None,
+    ):
+        request_started_at = time.perf_counter()
+        provider_response_received = False
         try:
-            form_data, metadata, events = await process_chat_payload(request, form_data, user, metadata, model)
+            if prepared_payload is None:
+                if preparation_gate is not None:
+                    await preparation_gate.wait()
+                try:
+                    prepared_payload = await process_chat_payload(request, form_data, user, metadata, model)
+                except asyncio.CancelledError:
+                    if prepared_future is not None and not prepared_future.done():
+                        prepared_future.cancel()
+                    raise
+                except BaseException as e:
+                    if prepared_future is not None and not prepared_future.done():
+                        prepared_future.set_exception(e)
+                    raise
+                else:
+                    if prepared_future is not None and not prepared_future.done():
+                        prepared_future.set_result(prepared_payload)
+
+                form_data, metadata, events = prepared_payload
+            else:
+                form_data, metadata, events = prepared_payload
+
+            if dispatch_gate is not None:
+                await dispatch_gate.wait()
 
             response = await chat_completion_handler(request, form_data, user)
+            if isinstance(form_data.get('metadata'), dict):
+                metadata = form_data['metadata']
+            provider_response_received = True
 
             # When the upstream provider returns an error (e.g. HTTP 400
             # content-filter, quota exceeded), generate_chat_completion
@@ -1557,6 +1712,12 @@ async def chat_completion(
             # raise so the except-block below emits chat:message:error +
             # chat:tasks:cancel, unblocking the frontend.
             if isinstance(response, JSONResponse) and response.status_code >= 400:
+                from open_webui.utils.hosted_inference import release_hosted_inference_reservation
+
+                await release_hosted_inference_reservation(
+                    metadata,
+                    'provider returned an error response',
+                )
                 try:
                     error_body = json.loads(response.body.decode('utf-8', 'replace'))
                     detail = error_body.get('error', error_body) if isinstance(error_body, dict) else error_body
@@ -1566,11 +1727,29 @@ async def chat_completion(
                     detail = f'Provider returned HTTP {response.status_code}'
                 raise Exception(detail)
 
-            ctx = await build_chat_response_context(request, form_data, user, model, metadata, tasks, events)
+            ctx = await build_chat_response_context(
+                request,
+                form_data,
+                user,
+                model,
+                metadata,
+                tasks,
+                events,
+                request_started_at=request_started_at,
+            )
 
             return await process_chat_response(response, ctx)
         except asyncio.CancelledError:
             log.info('Chat processing was cancelled')
+            if isinstance(form_data.get('metadata'), dict):
+                metadata = form_data['metadata']
+            if not provider_response_received:
+                from open_webui.utils.hosted_inference import release_hosted_inference_reservation_shielded
+
+                await release_hosted_inference_reservation_shielded(
+                    metadata,
+                    'chat cancelled before provider response',
+                )
             try:
 
                 async def emit_cancel_event():
@@ -1583,6 +1762,15 @@ async def chat_completion(
                 pass
             raise  # re-raise to ensure proper task cancellation handling
         except Exception as e:
+            if isinstance(form_data.get('metadata'), dict):
+                metadata = form_data['metadata']
+            if not provider_response_received:
+                from open_webui.utils.hosted_inference import release_hosted_inference_reservation
+
+                await release_hosted_inference_reservation(
+                    metadata,
+                    'chat failed before provider response',
+                )
             error_detail = e.detail if isinstance(e, HTTPException) else str(e)
             log.error('Error processing chat payload: %s', error_detail)
             if metadata.get('chat_id') and metadata.get('message_id'):
@@ -1637,7 +1825,7 @@ async def chat_completion(
             # MCPClient.disconnect() suppresses known transport teardown errors
             # while still propagating real task cancellation.
             try:
-                if mcp_clients := metadata.get('mcp_clients'):
+                if mcp_clients := metadata.pop('mcp_clients', None):
                     for client in reversed(list(mcp_clients.values())):
                         try:
                             await client.disconnect()
@@ -1700,64 +1888,166 @@ async def chat_completion(
             except Exception:
                 log.exception('Failed to process pending internal messages for chat %s', metadata.get('chat_id'))
 
-    # Fan out: one task per model
+    # Fan out: reserve every target first, then prepare each payload inside the
+    # task that owns its MCP clients. Provider dispatch opens only after the
+    # final payloads have been reconciled as one atomic reservation batch.
     if metadata.get('session_id') and metadata.get('chat_id'):
         task_ids = []
+        attempted_task_ids = []
+        local_tasks = []
         subagent_results = []
         is_internal = getattr(request.state, 'internal', False) is True
         chat_id = metadata['chat_id']
+        prepared_items = []
 
-        for idx, entry in enumerate(message_ids):
-            target_model_id = entry['model_id']
-            assistant_message_id = entry['message_id']
-            if not assistant_message_id:
-                continue
+        async def cleanup_prepared_items(reason, *, disconnect_mcp=False):
+            from open_webui.utils.hosted_inference import release_hosted_inference_reservation
 
-            # Per-model metadata: own message_id + model
-            per_model_metadata = {
-                **metadata,
-                'message_id': assistant_message_id,
-                'task_id': str(uuid4()),
-            }
+            for item in prepared_items:
+                prepared_metadata = item['metadata']
+                try:
+                    await release_hosted_inference_reservation(prepared_metadata, reason)
+                except Exception:
+                    log.exception('Failed to release a fanout reservation during cleanup')
+                if disconnect_mcp and (mcp_clients := prepared_metadata.pop('mcp_clients', None)):
+                    for client in reversed(list(mcp_clients.values())):
+                        try:
+                            await client.disconnect()
+                        except BaseException as e:
+                            log.debug(f'Error disconnecting prepared MCP client: {e}')
 
-            # Per-model form_data: own model
-            model_form_data = {
-                **form_data,
-                'model': target_model_id,
-                'metadata': per_model_metadata,
-            }
+        async def cancel_local_fanout_tasks():
+            for item in prepared_items:
+                future = item.get('prepared_future')
+                if future is not None and not future.done():
+                    future.cancel()
+            for task in local_tasks:
+                if not task.done():
+                    task.cancel()
+            if local_tasks:
+                await asyncio.gather(*local_tasks, return_exceptions=True)
+            for task_id in attempted_task_ids:
+                try:
+                    await stop_task(request.app.state.redis, task_id)
+                except BaseException:
+                    pass
 
-            # Resolve the model object for this specific model
-            resolved_model = request.app.state.MODELS.get(target_model_id, model)
+        try:
+            from open_webui.utils.arena import resolve_arena_model
 
-            # Only the first model runs chat-level background tasks;
-            # subsequent models only run follow-ups.
-            process = process_chat(
-                request,
-                model_form_data,
-                user,
-                per_model_metadata,
-                resolved_model,
-                tasks
-                if idx == 0
-                else {
-                    k: v for k, v in (tasks or {}).items() if k not in (TASKS.TITLE_GENERATION, TASKS.TAGS_GENERATION)
+            for idx, entry in enumerate(message_ids):
+                target_model_id = entry['model_id']
+                assistant_message_id = entry['message_id']
+                if not assistant_message_id:
+                    continue
+
+                per_model_metadata = {
+                    **metadata,
+                    'request_id': str(uuid4()),
+                    'message_id': assistant_message_id,
+                    'task_id': str(uuid4()),
+                    'subscription_policy': metadata.get('subscription_policies', {}).get(target_model_id),
                 }
-                or None,
-            )
-            if is_internal:
-                subagent_results.append(await process)
-                continue
+                model_form_data = copy.deepcopy(form_data)
+                model_form_data['model'] = target_model_id
+                model_form_data['metadata'] = per_model_metadata
 
-            task_id, _ = await create_task(
-                request.app.state.redis,
-                process,
-                id=chat_id,
-                task_id=per_model_metadata['task_id'],
+                resolved_model = request.app.state.MODELS.get(target_model_id)
+                if resolved_model is None:
+                    if not metadata.get('direct'):
+                        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Model not found')
+                    resolved_model = model
+                resolved_model, _ = await resolve_arena_model(
+                    request,
+                    model_form_data,
+                    user,
+                    per_model_metadata,
+                    resolved_model,
+                )
+                prepared_items.append(
+                    {
+                        'index': idx,
+                        'form_data': model_form_data,
+                        'metadata': per_model_metadata,
+                        'model': resolved_model,
+                        'payload': None,
+                    }
+                )
+
+            from open_webui.utils.hosted_inference import prepare_hosted_inference_batch
+
+            await prepare_hosted_inference_batch(
+                request,
+                [item['form_data'] for item in prepared_items],
+                user,
             )
-            task_ids.append(task_id)
+        except BaseException as e:
+            await cleanup_prepared_items('fanout reservation failed')
+            if isinstance(e, HTTPException) or not isinstance(e, Exception):
+                raise
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
 
         if is_internal:
+            try:
+                for item in prepared_items:
+                    prepared_payload = await process_chat_payload(
+                        request,
+                        item['form_data'],
+                        user,
+                        item['metadata'],
+                        item['model'],
+                    )
+                    prepared_form_data, prepared_metadata, _events = prepared_payload
+                    item['form_data'] = prepared_form_data
+                    item['metadata'] = prepared_metadata
+                    item['model'] = request.app.state.MODELS.get(prepared_form_data.get('model'), item['model'])
+                    item['payload'] = prepared_payload
+
+                from open_webui.utils.hosted_inference import reconcile_hosted_inference_batch
+
+                await reconcile_hosted_inference_batch(
+                    request,
+                    [item['form_data'] for item in prepared_items],
+                    user,
+                )
+            except BaseException as e:
+                await cleanup_prepared_items(
+                    'internal fanout preparation failed',
+                    disconnect_mcp=True,
+                )
+                if isinstance(e, HTTPException) or not isinstance(e, Exception):
+                    raise
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+
+            if deferred_title_generation is not None:
+                asyncio.create_task(deferred_title_generation())
+            try:
+                for item in prepared_items:
+                    idx = item['index']
+                    subagent_results.append(
+                        await process_chat(
+                            request,
+                            item['form_data'],
+                            user,
+                            item['metadata'],
+                            item['model'],
+                            tasks
+                            if idx == 0
+                            else {
+                                key: value
+                                for key, value in (tasks or {}).items()
+                                if key not in (TASKS.TITLE_GENERATION, TASKS.TAGS_GENERATION)
+                            }
+                            or None,
+                            prepared_payload=item['payload'],
+                        )
+                    )
+            except BaseException:
+                await cleanup_prepared_items(
+                    'internal fanout interrupted',
+                    disconnect_mcp=True,
+                )
+                raise
             return {
                 'status': True,
                 'task_ids': [],
@@ -1765,15 +2055,79 @@ async def chat_completion(
                 'results': subagent_results,
             }
 
-        # Emit chat:active=true
-        if task_ids:
-            event_emitter = await get_event_emitter(
-                {**metadata, 'message_id': message_ids[0]['message_id']},
-                update_db=False,
+        dispatch_gate = asyncio.Event()
+        preparation_gate = asyncio.Event()
+        loop = asyncio.get_running_loop()
+        try:
+            for item in prepared_items:
+                idx = item['index']
+                item['prepared_future'] = loop.create_future()
+                process = process_chat(
+                    request,
+                    item['form_data'],
+                    user,
+                    item['metadata'],
+                    item['model'],
+                    tasks
+                    if idx == 0
+                    else {
+                        key: value
+                        for key, value in (tasks or {}).items()
+                        if key not in (TASKS.TITLE_GENERATION, TASKS.TAGS_GENERATION)
+                    }
+                    or None,
+                    preparation_gate=preparation_gate,
+                    prepared_future=item['prepared_future'],
+                    dispatch_gate=dispatch_gate,
+                )
+                attempted_task_ids.append(item['metadata']['task_id'])
+                task_id, local_task = await create_task(
+                    request.app.state.redis,
+                    process,
+                    id=chat_id,
+                    task_id=item['metadata']['task_id'],
+                )
+                task_ids.append(task_id)
+                local_tasks.append(local_task)
+
+            preparation_gate.set()
+            prepared_payloads = await asyncio.gather(*(item['prepared_future'] for item in prepared_items))
+            for item, prepared_payload in zip(prepared_items, prepared_payloads):
+                prepared_form_data, prepared_metadata, _events = prepared_payload
+                item['form_data'] = prepared_form_data
+                item['metadata'] = prepared_metadata
+                item['model'] = request.app.state.MODELS.get(prepared_form_data.get('model'), item['model'])
+                item['payload'] = prepared_payload
+
+            from open_webui.utils.hosted_inference import reconcile_hosted_inference_batch
+
+            await reconcile_hosted_inference_batch(
+                request,
+                [item['form_data'] for item in prepared_items],
+                user,
             )
-            if event_emitter:
-                folder_id = metadata.get('folder_id') or await Chats.get_chat_folder_id(chat_id, user.id)
-                await event_emitter({'type': 'chat:active', 'data': {'active': True, 'folder_id': folder_id}})
+
+            if task_ids:
+                try:
+                    event_emitter = await get_event_emitter(
+                        {**metadata, 'message_id': prepared_items[0]['metadata']['message_id']},
+                        update_db=False,
+                    )
+                    if event_emitter:
+                        folder_id = metadata.get('folder_id') or await Chats.get_chat_folder_id(chat_id, user.id)
+                        await event_emitter({'type': 'chat:active', 'data': {'active': True, 'folder_id': folder_id}})
+                except Exception:
+                    log.exception('Failed to emit active state for fanout chat %s', chat_id)
+        except BaseException as e:
+            await cancel_local_fanout_tasks()
+            await cleanup_prepared_items('fanout preparation failed')
+            if isinstance(e, HTTPException) or not isinstance(e, Exception):
+                raise
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+
+        dispatch_gate.set()
+        if deferred_title_generation is not None:
+            asyncio.create_task(deferred_title_generation())
 
         return {
             'status': True,
@@ -1783,7 +2137,10 @@ async def chat_completion(
     else:
         # Legacy/direct: single model, synchronous
         metadata['message_id'] = message_ids[0]['message_id']
-        return await process_chat(request, form_data, user, metadata, model, tasks)
+        response = await process_chat(request, form_data, user, metadata, model, tasks)
+        if deferred_title_generation is not None:
+            asyncio.create_task(deferred_title_generation())
+        return response
 
 
 # Alias for chat_completion (Legacy)
@@ -1824,6 +2181,7 @@ async def passthrough_anthropic_messages(request: Request, form_data: dict, user
     requested_model, payload, url, key, headers, cookies = await openai.get_anthropic_token_count_target(
         request, form_data, user
     )
+    payload = move_reasoning_effort_to_anthropic(payload)
     request_url = f'{url.rstrip("/")}/messages'
     response = None
     streaming = False
@@ -1894,7 +2252,7 @@ async def generate_messages(
     pipeline, then converts the response back to Anthropic Messages format.
 
     Supports both streaming and non-streaming requests.
-    All models configured in Open WebUI are accessible via this endpoint.
+    All models configured in ArtiChat are accessible via this endpoint.
 
     Authentication: Supports both standard Authorization header and
     Anthropic's x-api-key header (via middleware translation).
@@ -1920,7 +2278,7 @@ async def generate_messages(
     model = models.get(model_id)
     if model:
         url, _, api_config = await openai.get_openai_connection(model['urlIdx'])
-        if is_anthropic_messages_passthrough(url, api_config):
+        if user.role == 'admin' and is_anthropic_messages_passthrough(url, api_config):
             return await passthrough_anthropic_messages(request, form_data, user)
         passthrough_params = api_config.get('passthrough_params') or []
 
@@ -2145,13 +2503,29 @@ async def get_app_config(request: Request):
         'ui.pending_user_overlay_title',
         'ui.pending_user_overlay_content',
         'ui.watermark',
+        'platform.name',
+        'platform.about_title',
+        'platform.about_content',
+        'platform.logo_light',
+        'platform.logo_dark',
+        'platform.sidebar_buttons',
     )
 
+    platform_name = config.get('platform.name') or app.state.WEBUI_NAME
+    app.state.WEBUI_NAME = platform_name
+    about_defaults = platform_about_defaults(VERSION)
     return {
         **({'onboarding': True} if onboarding else {}),
         'status': True,
-        'name': app.state.WEBUI_NAME,
+        'name': platform_name,
         'version': VERSION,
+        'branding': {
+            'about_title': config.get('platform.about_title') or about_defaults['about_title'],
+            'about_content': config.get('platform.about_content') or about_defaults['about_content'],
+            'logo_light': config.get('platform.logo_light') or '/static/favicon.png',
+            'logo_dark': config.get('platform.logo_dark') or '/static/favicon-dark.png',
+            'sidebar_buttons': config.get('platform.sidebar_buttons') or [],
+        },
         'default_locale': str(DEFAULT_LOCALE),
         'oauth': {
             # Hide providers (and thus the login buttons / auto-redirect) when OAuth
@@ -2416,6 +2790,8 @@ async def delete_event_webhook_api(webhook_id: str, user=Depends(get_admin_user)
 async def get_app_version():
     return {
         'version': VERSION,
+        'display_version': f'{VERSION} (Artivis Alpha)',
+        'build_hash': WEBUI_BUILD_HASH,
         'deployment_id': DEPLOYMENT_ID,
     }
 
@@ -2426,17 +2802,11 @@ async def get_app_latest_release_version(user=Depends(get_verified_user)):
         log.debug(f'Version update check is disabled, returning current version as latest version')
         return {'current': VERSION, 'latest': VERSION}
     try:
-        timeout = aiohttp.ClientTimeout(total=1)
-        async with aiohttp.ClientSession(timeout=timeout, trust_env=True) as session:
-            async with session.get(
-                'https://api.github.com/repos/open-webui/open-webui/releases/latest',
-                ssl=AIOHTTP_CLIENT_SESSION_SSL,
-            ) as response:
-                response.raise_for_status()
-                data = await response.json()
-                latest_version = data['tag_name']
-
-                return {'current': VERSION, 'latest': latest_version[1:]}
+        result = await updates.get_update_service().check()
+        return {
+            'current': result.get('current', VERSION),
+            'latest': result.get('latest', VERSION),
+        }
     except Exception as e:
         log.debug(e)
         return {'current': VERSION, 'latest': VERSION}
@@ -2444,13 +2814,32 @@ async def get_app_latest_release_version(user=Depends(get_verified_user)):
 
 @app.get('/api/changelog')
 async def get_app_changelog():
-    return {key: CHANGELOG[key] for idx, key in enumerate(CHANGELOG) if idx < 5}
+    DISPLAY_VERSION = f'{VERSION} (Artivis Alpha)'
+    return {
+        DISPLAY_VERSION: {
+            'date': 'ArtiChat NEWS',
+            'changed': [
+                {
+                    'title': '0.11 foundation',
+                    'content': (
+                        'ArtiChat now uses the 0.11 foundation while preserving existing users, '
+                        'subscriptions, Chatpoint balances, usage records, chats, and knowledge data.'
+                    ),
+                    'raw': (
+                        '<li><strong>0.11 foundation:</strong> ArtiChat now uses the 0.11 '
+                        'foundation while preserving existing users, subscriptions, Chatpoint balances, usage '
+                        'records, chats, and knowledge data.</li>'
+                    ),
+                }
+            ],
+        }
+    }
 
 
 @app.get('/api/usage')
 async def get_current_usage(user=Depends(get_verified_user)):
     """
-    Get current usage statistics for Open WebUI.
+    Get current ArtiChat activity statistics.
     This is an experimental endpoint and subject to change.
     """
     try:

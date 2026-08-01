@@ -33,6 +33,7 @@
 	import XMarkIcon from './icons/XMark.svelte';
 	import { updateUserStatus, updateUserSettings } from '$lib/apis/users';
 	import { toast } from 'svelte-sonner';
+	import SubscriptionQuotaRing from './SubscriptionQuotaRing.svelte';
 
 	const i18n = getContext('i18n');
 
@@ -46,6 +47,7 @@
 	export let align = 'end';
 
 	export let showActiveUsers = true;
+	export let showQuota = true;
 
 	let showUserStatusModal = false;
 	let shiftKey = false;
@@ -160,6 +162,20 @@
 						{/if}
 					</button>
 				</div>
+				{#if showQuota}
+					<div class="mt-1 flex justify-end px-1">
+						<SubscriptionQuotaRing
+							on:openUsage={async () => {
+								show = false;
+								await showSettings.set('usage');
+								if ($mobile) {
+									await tick();
+									showSidebar.set(false);
+								}
+							}}
+						/>
+					</div>
+				{/if}
 			{/if}
 
 			{#if profile}
@@ -465,7 +481,7 @@
 
 				{#if $user?.role === 'admin'}
 					<a
-						href="https://docs.openwebui.com"
+						href="https://github.com/PYBu/ArtiChat"
 						target="_blank"
 						draggable="false"
 						class="flex h-[1.6875rem] items-center gap-2 rounded-xl px-2 text-[13px] w-full hover:bg-gray-50/40 dark:hover:bg-gray-800/40 transition cursor-pointer select-none"
@@ -482,7 +498,7 @@
 
 					<!-- Releases -->
 					<a
-						href="https://github.com/open-webui/open-webui/releases"
+						href="https://github.com/PYBu/ArtiChat/releases"
 						target="_blank"
 						draggable="false"
 						class="flex h-[1.6875rem] items-center gap-2 rounded-xl px-2 text-[13px] w-full hover:bg-gray-50/40 dark:hover:bg-gray-800/40 transition cursor-pointer select-none"

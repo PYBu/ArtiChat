@@ -4,10 +4,10 @@ import json
 import logging
 import time
 from copy import deepcopy
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 from open_webui.internal.db import Base, JSONField, get_async_db_context
-from open_webui.models.access_grants import AccessGrantModel, AccessGrants
+from open_webui.models.access_grants import AccessGrant, AccessGrantModel, AccessGrants
 from open_webui.models.groups import Groups
 from open_webui.models.users import User, UserModel, UserResponse, Users
 from open_webui.utils.validate import validate_profile_image_url
@@ -64,6 +64,17 @@ class ModelParams(BaseModel):
     model_config = ConfigDict(extra='allow')
 
 
+class ReasoningControlConfig(BaseModel):
+    enabled: bool = False
+    profile: Literal['gpt', 'claude'] | None = None
+
+    @model_validator(mode='after')
+    def require_profile_when_enabled(self):
+        if self.enabled and self.profile is None:
+            raise ValueError('A reasoning profile is required when reasoning control is enabled.')
+        return self
+
+
 class ModelMeta(BaseModel):
     """Metadata for a workspace model entry (profile, description, tags, capabilities)."""
 
@@ -71,6 +82,9 @@ class ModelMeta(BaseModel):
     description: str | None = Field(default=None, description='User-facing description of the model.')
     capabilities: dict | None = None
     knowledge: list[Any] | None = None
+    subscription: dict | None = None
+    marketplace: dict | None = None
+    reasoning_control: ReasoningControlConfig | None = None
 
     model_config = ConfigDict(extra='allow')
 
@@ -533,6 +547,56 @@ class ModelsTable:
                 return await self._to_model_model(model, db=db)
             except Exception:
                 return None
+
+    async def update_model_subscription_policies(
+        self,
+        policies: dict[str, dict],
+        db: AsyncSession | None = None,
+    ) -> list[ModelModel]:
+        async def update_in_session(session: AsyncSession) -> list[ModelModel]:
+            ids = list(policies)
+            try:
+                result = await session.execute(select(Model).filter(Model.id.in_(ids)))
+                rows = {row.id: row for row in result.scalars().all()}
+                missing = [model_id for model_id in ids if model_id not in rows]
+                if missing:
+                    raise ValueError(f'MODEL_NOT_FOUND: {missing[0]}')
+
+                updated_at = int(time.time())
+                for model_id, policy in policies.items():
+                    row = rows[model_id]
+                    meta = dict(row.meta or {})
+                    meta['subscription'] = policy
+                    row.meta = meta
+                    row.updated_at = updated_at
+
+                await session.commit()
+            except Exception:
+                await session.rollback()
+                raise
+
+            grants_result = await session.execute(
+                select(AccessGrant).filter(
+                    AccessGrant.resource_type == 'model',
+                    AccessGrant.resource_id.in_(ids),
+                )
+            )
+            grants_map: dict[str, list[AccessGrantModel]] = {model_id: [] for model_id in ids}
+            for grant in grants_result.scalars().all():
+                grants_map[grant.resource_id].append(AccessGrantModel.model_validate(grant))
+            return [
+                await self._to_model_model(
+                    rows[model_id],
+                    access_grants=grants_map[model_id],
+                    db=session,
+                )
+                for model_id in ids
+            ]
+
+        if db is not None:
+            return await update_in_session(db)
+        async with get_async_db_context() as session:
+            return await update_in_session(session)
 
     async def update_model_by_id(self, id: str, model: ModelForm, db: AsyncSession | None = None) -> ModelModel | None:
         try:

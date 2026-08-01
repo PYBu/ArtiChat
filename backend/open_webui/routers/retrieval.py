@@ -248,6 +248,18 @@ def get_rf(
 
 
 router = APIRouter()
+WEB_SEARCH_BILLING_MODE = 'feature_permission_only_no_text_chatpoint'
+
+
+async def _require_file_upload_permission(user) -> None:
+    if user.role == 'admin':
+        return
+    if not await has_permission(user.id, 'chat.file_upload', await Config.get('user.permissions')):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
+        )
+
 
 RETRIEVAL_CONFIG_KEYS = {
     'ALLOWED_FILE_EXTENSIONS': 'rag.file.allowed_extensions',
@@ -1846,6 +1858,7 @@ async def process_file(
     Note: granular session management is used to prevent connection pool exhaustion.
     The session is committed before external API calls, and updates use a fresh session.
     """
+    await _require_file_upload_permission(user)
     config = await get_retrieval_config()
     if user.role == 'admin':
         file = await Files.get_file_by_id(form_data.file_id, db=db)
@@ -2090,6 +2103,7 @@ async def process_text(
     form_data: ProcessTextForm,
     user=Depends(get_verified_user),
 ):
+    await _require_file_upload_permission(user)
     collection_name = form_data.collection_name
     if collection_name is None:
         collection_name = calculate_sha256_string(form_data.content)
@@ -2137,6 +2151,7 @@ async def process_web(
     overwrite: bool = Query(True, description='Whether to overwrite existing collection'),
     user=Depends(get_verified_user),
 ):
+    await _require_file_upload_permission(user)
     config = await get_retrieval_config()
     try:
         content, docs = await get_content_from_url(request, form_data.url)
@@ -2564,11 +2579,24 @@ async def process_web_search(request: Request, form_data: SearchForm, user=Depen
             detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
         )
 
+    # Search providers and optional retrieval embeddings are a separately
+    # permissioned resource in 0.2.1; they never debit text-generation Chatpoints.
+    log.info(
+        'Web search authorized: user_id=%s engine=%s billing_mode=%s',
+        user.id,
+        config.WEB_SEARCH_ENGINE,
+        WEB_SEARCH_BILLING_MODE,
+    )
+
     urls = []
     result_items = []
 
     try:
-        logging.debug(f'trying to web search with {config.WEB_SEARCH_ENGINE, form_data.queries}')
+        log.debug(
+            'Starting web search: engine=%s query_count=%d',
+            config.WEB_SEARCH_ENGINE,
+            len(form_data.queries),
+        )
 
         # Use semaphore to limit concurrent requests based on WEB_SEARCH_CONCURRENT_REQUESTS
         # 0 or None = unlimited (previous behavior), positive number = limited concurrency
@@ -2987,7 +3015,11 @@ async def reset_upload_dir(request: Request, user=Depends(get_admin_user)) -> bo
 if ENV == 'dev':
 
     @router.get('/ef/{text}')
-    async def get_embeddings(request: Request, text: str | None = 'Hello World!'):
+    async def get_embeddings(
+        request: Request,
+        text: str | None = 'Hello World!',
+        user=Depends(get_admin_user),
+    ):
         return {'result': await request.app.state.EMBEDDING_FUNCTION(text, prefix=RAG_EMBEDDING_QUERY_PREFIX)}
 
 
@@ -3023,6 +3055,7 @@ async def process_files_batch(
     embedding (Files.update_file_by_id) manage their own short-lived sessions.
     """
 
+    await _require_file_upload_permission(user)
     config = await get_retrieval_config()
     collection_name = form_data.collection_name
 

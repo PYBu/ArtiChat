@@ -11,6 +11,7 @@
 	import { flyAndScale } from '$lib/utils/transitions';
 
 	import { createEventDispatcher, onMount, getContext, tick } from 'svelte';
+	import { goto } from '$app/navigation';
 
 	import { deleteModel, getOllamaVersion, pullModel } from '$lib/apis/ollama';
 	import { deleteModelById } from '$lib/apis/models';
@@ -22,8 +23,7 @@
 		models,
 		temporaryChatEnabled,
 		settings,
-		config,
-		showSettings
+		config
 	} from '$lib/stores';
 	import { toast } from 'svelte-sonner';
 	import { capitalizeFirstLetter, sanitizeResponseContent, splitStream } from '$lib/utils';
@@ -861,7 +861,7 @@
 										class="mt-3 rounded-lg px-0 py-1 text-[11px] font-normal leading-none text-gray-600 underline-offset-2 transition-colors duration-100 hover:text-gray-800 hover:underline focus:outline-hidden focus:underline dark:text-gray-300 dark:hover:text-gray-100"
 										on:click={() => {
 											show = false;
-											showSettings.set('admin:connections');
+											goto('/admin/settings/connections');
 										}}
 									>
 										{$i18n.t('Manage Connections')}

@@ -1,5 +1,6 @@
 <script>
 	import { getContext } from 'svelte';
+	import ThemeLogo from './common/ThemeLogo.svelte';
 	const i18n = getContext('i18n');
 
 	export let show = true;
@@ -40,13 +41,7 @@
 {#if show}
 	<div class="relative h-screen max-h-[100dvh] w-full overflow-hidden text-white">
 		<div class="fixed top-6 left-6 z-50 sm:top-10 sm:left-10">
-			<img
-				id="logo"
-				crossorigin="anonymous"
-				src="/static/favicon.png"
-				class="size-6 rounded-full"
-				alt="logo"
-			/>
+			<ThemeLogo kind="mark" className="size-6 rounded-full" alt="logo" />
 		</div>
 
 		<video
@@ -69,7 +64,7 @@
 			<div class="flex w-full flex-col justify-end px-6 pb-8 sm:px-10 sm:pb-10 lg:px-16 lg:pb-14">
 				<div class="max-w-3xl">
 					<div class="mb-4 text-[11px] font-medium tracking-[0.18em] uppercase opacity-35">
-						Open WebUI
+						ArtiChat
 					</div>
 
 					<h1 class="m-0 max-w-3xl text-2xl leading-[1.15] font-light tracking-tight lg:text-4xl">
@@ -105,11 +100,11 @@
 
 						<a
 							class="inline-flex items-center text-sm text-white/60 transition hover:text-white"
-							href="https://docs.openwebui.com/"
+							href="https://github.com/PYBu/ArtiChat"
 							target="_blank"
 							rel="noopener noreferrer"
 						>
-							{$i18n.t('Read the docs')}
+							{$i18n.t('View project')}
 						</a>
 					</div>
 				</div>

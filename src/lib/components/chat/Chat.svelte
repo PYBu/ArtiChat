@@ -49,6 +49,7 @@
 		desktopEvent
 	} from '$lib/stores';
 	import { refreshChatList, refreshFolderChatLists } from '$lib/stores/chatList';
+	import { notifySubscriptionChanged } from '$lib/stores/subscriptions';
 
 	import { WEBUI_API_BASE_URL } from '$lib/constants';
 
@@ -90,8 +91,14 @@
 		generateMoACompletion,
 		stopTask,
 		stopTasksByChatId,
-		getTaskIdsByChatId
+		getTaskIdsByChatId,
+		type ReasoningLevel
 	} from '$lib/apis';
+	import {
+		DEFAULT_REASONING_LEVEL,
+		getReasoningControl,
+		isReasoningLevel
+	} from '$lib/utils/reasoning';
 	import { getTools } from '$lib/apis/tools';
 	import { getSkills } from '$lib/apis/skills';
 	import { uploadFile } from '$lib/apis/files';
@@ -387,10 +394,30 @@
 	let chatFiles = [];
 	let files = [];
 	let params = {};
+	let reasoningLevel: ReasoningLevel = DEFAULT_REASONING_LEVEL;
 	let chatVariables = {};
 	let showChatVariablesModal = false;
 	let loadedChatIdProp = '';
 	let currentDraftKey = '';
+
+	const getReasoningSelection = (
+		modelIds: string[],
+		requestedLevel: ReasoningLevel = reasoningLevel
+	) => {
+		if (modelIds.length !== 1) return null;
+		const control = getReasoningControl($models.find((model) => model.id === modelIds[0]));
+		return control ? { level: requestedLevel, profile: control.profile } : null;
+	};
+
+	const restoreReasoningLevel = (chatHistory: typeof history): ReasoningLevel => {
+		const messages = createMessagesList(chatHistory, chatHistory?.currentId);
+		return (
+			[...messages]
+				.reverse()
+				.map((message) => message?.reasoning_level)
+				.find(isReasoningLevel) ?? DEFAULT_REASONING_LEVEL
+		);
+	};
 
 	const mergeChatVariableSchemas = (modelIds = [], availableModels = []) => {
 		const byKey: Record<string, any> = {};
@@ -635,6 +662,7 @@
 			currentId: null
 		};
 		params = {};
+		reasoningLevel = DEFAULT_REASONING_LEVEL;
 		chatVariables = {};
 		chatFiles = [];
 		files = [];
@@ -975,6 +1003,7 @@
 				} else if (type === 'chat:active') {
 					if (!data?.active) {
 						taskIds = null;
+						void notifySubscriptionChanged();
 						if ($chatId && !$temporaryChatEnabled && hasPendingAssistantLeaf()) {
 							await loadChat();
 						}
@@ -1828,6 +1857,7 @@
 
 		chatFiles = [];
 		params = {};
+		reasoningLevel = DEFAULT_REASONING_LEVEL;
 		chatVariables = {};
 		taskIds = null;
 		chatTasks = [];
@@ -2018,6 +2048,7 @@
 				// Sanitize history: repair orphaned references and structurally-malformed
 				// nodes from failed regenerations (#24424, #24157, #20474)
 				sanitizeHistory(history);
+				reasoningLevel = restoreReasoningLevel(history);
 
 				chatTitle.set(chatContent.title);
 
@@ -2162,15 +2193,20 @@
 
 		processingQueueChats.add(targetChatId);
 		try {
-			const combinedPrompt = queue.map((m) => m.prompt).join('\n\n');
-			const combinedFiles = queue.flatMap((m) => m.files);
-
+			const item = queue[0];
+			const remaining = queue.slice(1);
 			chatRequestQueues.update((q) => {
-				const { [targetChatId]: _, ...rest } = q;
-				return rest;
+				if (remaining.length === 0) {
+					const { [targetChatId]: _, ...rest } = q;
+					return rest;
+				}
+				return { ...q, [targetChatId]: remaining };
 			});
 
-			await submitPrompt(combinedPrompt, combinedFiles);
+			await submitPrompt(item.prompt, item.files, {
+				modelIds: item.models,
+				reasoningLevelOverride: item.reasoningLevel
+			});
 		} finally {
 			processingQueueChats.delete(targetChatId);
 		}
@@ -2458,6 +2494,7 @@
 					}
 				})
 			);
+			void notifySubscriptionChanged();
 
 			history.messages[message.id] = message;
 
@@ -2490,8 +2527,28 @@
 	// Chat functions
 	//////////////////////////
 
-	const submitPrompt = async (inputContent, inputFiles) => {
+	const submitPrompt = async (
+		inputContent: string,
+		inputFiles: any[],
+		{
+			modelIds = null,
+			reasoningLevelOverride = null
+		}: {
+			modelIds?: string[] | null;
+			reasoningLevelOverride?: ReasoningLevel | null;
+		} = {}
+	) => {
 		const _files = structuredClone(inputFiles);
+		const targetModelIds =
+			Array.isArray(modelIds) && modelIds.length > 0
+				? [...modelIds]
+				: atSelectedModel?.id
+					? [atSelectedModel.id]
+					: [...selectedModels];
+		const reasoningSelection = getReasoningSelection(
+			targetModelIds,
+			reasoningLevelOverride ?? reasoningLevel
+		);
 
 		chatFiles.push(
 			..._files.filter(
@@ -2515,7 +2572,13 @@
 			content: inputContent,
 			files: _files.length > 0 ? _files : undefined,
 			timestamp: Math.floor(Date.now() / 1000), // Unix epoch
-			models: selectedModels
+			models: targetModelIds,
+			...(reasoningSelection
+				? {
+						reasoning_level: reasoningSelection.level,
+						reasoning_profile: reasoningSelection.profile
+					}
+				: {})
 		};
 
 		// Add message to history and Set currentId to messageId
@@ -2536,7 +2599,10 @@
 
 		saveSessionSelectedModels();
 
-		await sendMessage(history, userMessageId);
+		await sendMessage(history, userMessageId, {
+			modelIds: targetModelIds,
+			reasoningLevelOverride: reasoningSelection?.level
+		});
 	};
 
 	const handleManualCompact = async () => {
@@ -2734,9 +2800,20 @@
 			if ($settings?.enableMessageQueue ?? true) {
 				// Enqueue the request
 				const _files = structuredClone(files);
+				const queuedModels = atSelectedModel?.id ? [atSelectedModel.id] : [...selectedModels];
+				const queuedReasoning = getReasoningSelection(queuedModels, reasoningLevel);
 				chatRequestQueues.update((q) => ({
 					...q,
-					[$chatId]: [...(q[$chatId] ?? []), { id: uuidv4(), prompt: userPrompt, files: _files }]
+					[$chatId]: [
+						...(q[$chatId] ?? []),
+						{
+							id: uuidv4(),
+							prompt: userPrompt,
+							files: _files,
+							models: queuedModels,
+							reasoningLevel: queuedReasoning?.level
+						}
+					]
 				}));
 				// Clear input
 				messageInput?.setText('');
@@ -2776,13 +2853,17 @@
 		{
 			messages = null,
 			modelId = null,
+			modelIds = null,
 			modelIdx = null,
-			regenerationPrompt = null
+			regenerationPrompt = null,
+			reasoningLevelOverride = null
 		}: {
 			messages?: any[] | null;
 			modelId?: string | null;
+			modelIds?: string[] | null;
 			modelIdx?: number | null;
 			regenerationPrompt?: string | null;
+			reasoningLevelOverride?: ReasoningLevel | null;
 		} = {}
 	) => {
 		if (autoScroll) {
@@ -2796,9 +2877,15 @@
 		// If modelId is provided, use it, else use selected model
 		let selectedModelIds = modelId
 			? [modelId]
-			: atSelectedModel !== undefined
-				? [atSelectedModel.id]
-				: selectedModels;
+			: modelIds?.length
+				? [...modelIds]
+				: atSelectedModel !== undefined
+					? [atSelectedModel.id]
+					: selectedModels;
+		const reasoningSelection = getReasoningSelection(
+			selectedModelIds,
+			reasoningLevelOverride ?? reasoningLevel
+		);
 
 		// Create response messages for each selected model
 		// Build message_ids list: [{model_id, message_id, modelIdx}, ...]
@@ -2821,6 +2908,12 @@
 					model: model.id,
 					modelName: model.name ?? model.id,
 					modelIdx: modelIdx ? modelIdx : _modelIdx,
+					...(reasoningSelection
+						? {
+								reasoning_level: reasoningSelection.level,
+								reasoning_profile: reasoningSelection.profile
+							}
+						: {}),
 					timestamp: Math.floor(Date.now() / 1000) // Unix epoch
 				};
 
@@ -2925,7 +3018,8 @@
 						// regenerations in a duplicate-model chat, which would otherwise lose their
 						// column identity and collapse on reload.
 						messageIdsList: messageIdsList.length > 0 ? messageIdsList : undefined,
-						regenerationPrompt
+						regenerationPrompt,
+						reasoningLevelOverride: reasoningSelection?.level
 					}
 				);
 			} finally {
@@ -2980,15 +3074,29 @@
 		{
 			messageIdsList,
 			regenerationPrompt,
-			continueResponse = false
+			continueResponse = false,
+			reasoningLevelOverride = null
 		}: {
 			messageIdsList?: Array<{ model_id: string; message_id: string }>;
 			regenerationPrompt?: string | null;
 			continueResponse?: boolean;
+			reasoningLevelOverride?: ReasoningLevel | null;
 		} = {}
 	) => {
 		const responseMessage = _history.messages[responseMessageId];
 		const userMessage = _history.messages[responseMessage.parentId];
+		const modelReasoningControl = getReasoningControl(model);
+		const effectiveReasoningLevel = modelReasoningControl
+			? isReasoningLevel(reasoningLevelOverride)
+				? reasoningLevelOverride
+				: isReasoningLevel(userMessage?.reasoning_level)
+					? userMessage.reasoning_level
+					: null
+			: null;
+		if (modelReasoningControl && effectiveReasoningLevel) {
+			responseMessage.reasoning_level = effectiveReasoningLevel;
+			responseMessage.reasoning_profile = modelReasoningControl.profile;
+		}
 
 		const chatMessageFiles = _messages
 			.filter((message) => message.files)
@@ -3126,6 +3234,7 @@
 			{
 				stream: stream,
 				model: model.id,
+				...(effectiveReasoningLevel ? { reasoning_level: effectiveReasoningLevel } : {}),
 				...(messages.length > 0 ? { messages } : {}),
 				params: {
 					...$settings?.params,
@@ -3347,6 +3456,8 @@
 	const submitMessage = async (parentId, prompt) => {
 		let userPrompt = prompt;
 		let userMessageId = uuidv4();
+		const targetModelIds = atSelectedModel?.id ? [atSelectedModel.id] : [...selectedModels];
+		const reasoningSelection = getReasoningSelection(targetModelIds, reasoningLevel);
 
 		let userMessage = {
 			id: userMessageId,
@@ -3354,7 +3465,13 @@
 			childrenIds: [],
 			role: 'user',
 			content: userPrompt,
-			models: selectedModels,
+			models: targetModelIds,
+			...(reasoningSelection
+				? {
+						reasoning_level: reasoningSelection.level,
+						reasoning_profile: reasoningSelection.profile
+					}
+				: {}),
 			timestamp: Math.floor(Date.now() / 1000) // Unix epoch
 		};
 
@@ -3374,7 +3491,10 @@
 			scrollToBottom();
 		}
 
-		await sendMessage(history, userMessageId);
+		await sendMessage(history, userMessageId, {
+			modelIds: targetModelIds,
+			reasoningLevelOverride: reasoningSelection?.level
+		});
 	};
 
 	const regenerateResponse = async (message, suggestionPrompt = null) => {
@@ -3416,6 +3536,8 @@
 
 		if (history.currentId && history.messages[history.currentId].done == true) {
 			const responseMessage = history.messages[history.currentId];
+			const responseReasoningLevel = (responseMessage as { reasoning_level?: unknown })
+				.reasoning_level;
 			responseMessage.done = false;
 			await tick();
 
@@ -3430,7 +3552,12 @@
 					history,
 					responseMessage.id,
 					_chatId,
-					{ continueResponse: true }
+					{
+						continueResponse: true,
+						reasoningLevelOverride: isReasoningLevel(responseReasoningLevel)
+							? responseReasoningLevel
+							: null
+					}
 				);
 			}
 		}
@@ -3961,6 +4088,7 @@
 										bind:selectedToolIds
 										bind:selectedSkillIds
 										bind:selectedFilterIds
+										bind:reasoningLevel
 										bind:imageGenerationEnabled
 										bind:codeInterpreterEnabled
 										{pendingOAuthTools}
@@ -3993,7 +4121,10 @@
 												}));
 												await stopResponse(false);
 												await tick();
-												await submitPrompt(item.prompt, item.files);
+												await submitPrompt(item.prompt, item.files, {
+													modelIds: item.models,
+													reasoningLevelOverride: item.reasoningLevel
+												});
 											}
 										}}
 										onQueueEdit={(id) => {
@@ -4007,6 +4138,13 @@
 												}));
 												// Set files and restore prompt to input
 												files = item.files;
+												if (item.models?.length) {
+													selectedModels = [...item.models];
+													atSelectedModel = undefined;
+												}
+												if (isReasoningLevel(item.reasoningLevel)) {
+													reasoningLevel = item.reasoningLevel;
+												}
 												messageInput?.setText(item.prompt);
 											}
 										}}
@@ -4080,6 +4218,7 @@
 										bind:selectedToolIds
 										bind:selectedSkillIds
 										bind:selectedFilterIds
+										bind:reasoningLevel
 										bind:imageGenerationEnabled
 										bind:codeInterpreterEnabled
 										{pendingOAuthTools}
@@ -4127,6 +4266,7 @@
 									bind:selectedToolIds
 									bind:selectedSkillIds
 									bind:selectedFilterIds
+									bind:reasoningLevel
 									bind:imageGenerationEnabled
 									bind:codeInterpreterEnabled
 									bind:webSearchEnabled

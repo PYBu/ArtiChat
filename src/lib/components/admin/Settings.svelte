@@ -1,5 +1,5 @@
 <script>
-	import { getContext, tick, onMount } from 'svelte';
+	import { createEventDispatcher, getContext, tick, onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { toast } from 'svelte-sonner';
@@ -10,6 +10,7 @@
 
 	import Authentication from './Settings/Authentication.svelte';
 	import General from './Settings/General.svelte';
+	import Update from './Settings/Update.svelte';
 	import Pipelines from './Settings/Pipelines.svelte';
 	import Audio from './Settings/Audio.svelte';
 	import Images from './Settings/Images.svelte';
@@ -24,38 +25,59 @@
 	import CodeExecution from './Settings/CodeExecution.svelte';
 	import Integrations from './Settings/Integrations.svelte';
 	import Subagents from './Settings/Subagents.svelte';
+	import Platform from './Settings/Platform.svelte';
+	import Email from './Settings/Email.svelte';
 
 	import Search from '../icons/Search.svelte';
+	import ChevronLeft from '../icons/ChevronLeft.svelte';
 	import AdminTabIcon from './Settings/AdminTabIcon.svelte';
 
 	const i18n = getContext('i18n');
+	const dispatch = createEventDispatcher();
 
-	let selectedTab = 'general';
+	export let modal = false;
+	export let selectedTab = 'general';
+	/** @type {Record<string, unknown> | null} */
+	export let tabState = null;
+
+	const validTabs = [
+		'platform',
+		'general',
+		'update',
+		'authentication',
+		'connections',
+		'models',
+		'subagents',
+		'evaluations',
+		'analytics',
+		'integrations',
+		'documents',
+		'web',
+		'code-execution',
+		'interface',
+		'audio',
+		'images',
+		'pipelines',
+		'db',
+		'email'
+	];
 
 	// Get current tab from URL pathname, default to 'general'
-	$: {
+	$: if (!modal) {
 		const pathParts = $page.url.pathname.split('/');
 		const tabFromPath = pathParts[pathParts.length - 1];
-		selectedTab = [
-			'general',
-			'authentication',
-			'connections',
-			'models',
-			'subagents',
-			'evaluations',
-			'analytics',
-			'integrations',
-			'documents',
-			'web',
-			'code-execution',
-			'interface',
-			'audio',
-			'images',
-			'pipelines',
-			'db'
-		].includes(tabFromPath)
-			? tabFromPath
-			: 'general';
+		selectedTab = validTabs.includes(tabFromPath) ? tabFromPath : 'general';
+		const modelId = $page.url.searchParams.get('model');
+		tabState = selectedTab === 'models' && modelId ? { id: modelId } : null;
+	}
+
+	$: if (modal && !validTabs.includes(selectedTab)) selectedTab = 'general';
+	$: analyticsEnabled = $config?.features.enable_admin_analytics ?? true;
+	$: if (!analyticsEnabled && selectedTab === 'analytics') {
+		selectedTab = 'general';
+		if (!modal && typeof window !== 'undefined') {
+			goto('/admin/settings/general', { replaceState: true });
+		}
 	}
 
 	$: if (selectedTab) {
@@ -76,6 +98,12 @@
 
 	const allSettings = [
 		{
+			id: 'platform',
+			title: 'Platform',
+			route: '/admin/settings/platform',
+			keywords: ['platform', 'branding', 'name', 'logo', 'about', 'sidebar', 'customization']
+		},
+		{
 			id: 'general',
 			title: 'General',
 			route: '/admin/settings/general',
@@ -83,8 +111,6 @@
 				'general',
 				'admin',
 				'settings',
-				'version',
-				'update',
 				'language',
 				'theme',
 				'data',
@@ -291,13 +317,25 @@
 			title: 'Database',
 			route: '/admin/settings/db',
 			keywords: ['database', 'export', 'import', 'backup', 'chats', 'users']
+		},
+		{
+			id: 'email',
+			title: 'Email',
+			route: '/admin/settings/email',
+			keywords: ['email', 'registration', 'verification', 'smtp', 'templates', 'deliveries']
+		},
+		{
+			id: 'update',
+			title: 'Update',
+			route: '/admin/settings/update',
+			keywords: ['update', 'version', 'release', 'announcement', 'deployment']
 		}
 	];
 
 	const setFilteredSettings = () => {
 		filteredSettings = allSettings.filter((tab) => {
 			const searchTerm = search.toLowerCase().trim();
-			if (tab.id === 'analytics' && !($config?.features.enable_admin_analytics ?? true)) {
+			if (tab.id === 'analytics' && !analyticsEnabled) {
 				return false;
 			}
 
@@ -320,7 +358,7 @@
 	};
 
 	const tabButtonClass = (active) =>
-		`flex items-center gap-1.5 h-7 px-2 lg:w-full shrink-0 rounded-lg text-xs text-left transition-colors duration-75 select-none ${
+		`flex items-center gap-1.5 h-7 px-2 md:w-full shrink-0 rounded-lg text-xs text-left transition-colors duration-75 select-none ${
 			active
 				? 'font-medium text-gray-900 dark:text-white bg-gray-100 dark:bg-white/6'
 				: 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
@@ -344,20 +382,31 @@
 	});
 </script>
 
-<div class="flex flex-col lg:flex-row w-full h-full min-h-0 pb-2">
+<div class="flex flex-col md:flex-row w-full h-full min-h-0 pb-2">
 	<nav
 		id="admin-settings-tabs-container"
-		class="shrink-0 min-w-0 lg:min-h-0 flex lg:block border-b lg:border-b-0 lg:border-r border-gray-100/30 dark:border-white/[0.02] lg:w-[15rem]"
+		class="shrink-0 min-w-0 md:min-h-0 flex md:block border-b md:border-b-0 md:border-r border-gray-100/30 dark:border-white/[0.02] md:w-[15rem]"
 	>
 		<div
-			class="tabs flex min-w-0 flex-1 overflow-x-auto lg:overflow-x-hidden lg:overflow-y-auto lg:flex-col p-1 lg:pt-4 gap-px"
+			class="tabs flex min-w-0 flex-1 overflow-x-auto md:overflow-x-hidden md:overflow-y-auto md:flex-col p-1 gap-px"
 		>
-			<span class="hidden lg:block text-[0.625rem] text-gray-400 dark:text-gray-600 px-2 mb-1">
+			{#if modal}
+				<button
+					type="button"
+					class="flex h-7 shrink-0 items-center gap-1.5 rounded-lg px-2 text-xs text-gray-400 transition-colors hover:text-gray-700 dark:text-gray-600 dark:hover:text-gray-300 md:mb-0 md:w-full"
+					on:click={() => dispatch('close')}
+				>
+					<ChevronLeft className="size-3" strokeWidth="2" />
+					<span>{$i18n.t('Back')}</span>
+				</button>
+			{/if}
+
+			<span class="hidden md:block text-[0.625rem] text-gray-400 dark:text-gray-600 px-2 mt-1 mb-1">
 				{$i18n.t('Admin')}
 			</span>
 
 			<div
-				class="hidden lg:flex items-center gap-1.5 h-7 px-2 lg:w-full shrink-0 rounded-lg text-xs bg-gray-50/70 dark:bg-white/[0.03] mb-2"
+				class="hidden md:flex items-center gap-1.5 h-7 px-2 md:w-full shrink-0 rounded-lg text-xs bg-gray-50/70 dark:bg-white/[0.03] mb-2"
 				id="settings-search"
 			>
 				<div class="self-center rounded-l-xl bg-transparent">
@@ -374,6 +423,7 @@
 			</div>
 
 			<!-- {$i18n.t('General')} -->
+			<!-- {$i18n.t('Platform')} -->
 			<!-- {$i18n.t('Authentication')} -->
 			<!-- {$i18n.t('Connections')} -->
 			<!-- {$i18n.t('Models')} -->
@@ -389,24 +439,41 @@
 			<!-- {$i18n.t('Images')} -->
 			<!-- {$i18n.t('Pipelines')} -->
 			<!-- {$i18n.t('Database')} -->
+			<!-- {$i18n.t('Email')} -->
 			{#each filteredSettings as tab (tab.id)}
-				<a
-					id={tab.id}
-					href={tab.route}
-					draggable="false"
-					class={tabButtonClass(selectedTab === tab.id)}
-				>
-					<AdminTabIcon id={tab.id} className="size-3.5" strokeWidth="2" />
-					<div class="self-center truncate">{$i18n.t(tab.title)}</div>
-				</a>
+				{#if modal}
+					<button
+						id={tab.id}
+						type="button"
+						role="tab"
+						aria-selected={selectedTab === tab.id}
+						class={tabButtonClass(selectedTab === tab.id)}
+						on:click={() => (selectedTab = tab.id)}
+					>
+						<AdminTabIcon id={tab.id} className="size-3.5" strokeWidth="2" />
+						<div class="self-center truncate">{$i18n.t(tab.title)}</div>
+					</button>
+				{:else}
+					<a
+						id={tab.id}
+						href={tab.route}
+						draggable="false"
+						class={tabButtonClass(selectedTab === tab.id)}
+					>
+						<AdminTabIcon id={tab.id} className="size-3.5" strokeWidth="2" />
+						<div class="self-center truncate">{$i18n.t(tab.title)}</div>
+					</a>
+				{/if}
 			{/each}
 		</div>
 	</nav>
 
-	<div class="flex-1 min-h-0 p-4 lg:px-5 flex flex-col">
+	<div class="flex-1 min-h-0 p-4 md:px-5 flex flex-col">
 		<div class="w-full h-full min-h-0 flex flex-col">
 			<div class="flex-1 min-h-0 overflow-hidden">
-				{#if selectedTab === 'general'}
+				{#if selectedTab === 'platform'}
+					<Platform />
+				{:else if selectedTab === 'general'}
 					<General
 						saveHandler={async () => {
 							toast.success($i18n.t('Settings saved successfully!'));
@@ -415,6 +482,8 @@
 							await config.set(await getBackendConfig());
 						}}
 					/>
+				{:else if selectedTab === 'update'}
+					<Update />
 				{:else if selectedTab === 'authentication'}
 					<Authentication />
 				{:else if selectedTab === 'connections'}
@@ -424,12 +493,12 @@
 						}}
 					/>
 				{:else if selectedTab === 'models'}
-					<Models />
+					<Models bind:tabState />
 				{:else if selectedTab === 'subagents'}
 					<Subagents />
 				{:else if selectedTab === 'evaluations'}
 					<Evaluations />
-				{:else if selectedTab === 'analytics'}
+				{:else if selectedTab === 'analytics' && analyticsEnabled}
 					<Analytics />
 				{:else if selectedTab === 'integrations'}
 					<Integrations />
@@ -490,6 +559,8 @@
 							toast.success($i18n.t('Settings saved successfully!'));
 						}}
 					/>
+				{:else if selectedTab === 'email'}
+					<Email />
 				{/if}
 			</div>
 		</div>

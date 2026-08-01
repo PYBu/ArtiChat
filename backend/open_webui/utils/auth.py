@@ -40,6 +40,7 @@ from open_webui.models.auths import Auths
 from open_webui.models.config import Config
 from open_webui.models.users import Users
 from open_webui.utils.access_control import has_permission
+from open_webui.utils.session_security import token_auth_epoch_matches, user_token_claims
 from pytz import UTC
 
 log = logging.getLogger(__name__)
@@ -233,6 +234,14 @@ def create_token(data: dict, expires_delta: Union[timedelta, None] = None) -> st
     return encoded_jwt
 
 
+def create_user_token(user, expires_delta: Union[timedelta, None] = None, **claims) -> str:
+    """Issue a token bound to the user's current session-revocation epoch."""
+    return create_token(
+        data=user_token_claims(user, **claims),
+        expires_delta=expires_delta,
+    )
+
+
 def decode_token(token: str) -> dict | None:
     try:
         decoded = jwt.decode(token, SESSION_SECRET, algorithms=[ALGORITHM])
@@ -384,6 +393,11 @@ async def get_current_user(
                     detail=ERROR_MESSAGES.INVALID_TOKEN,
                 )
             else:
+                if not token_auth_epoch_matches(data, user):
+                    raise HTTPException(
+                        status_code=status.HTTP_401_UNAUTHORIZED,
+                        detail=ERROR_MESSAGES.INVALID_TOKEN,
+                    )
                 if WEBUI_AUTH_TRUSTED_EMAIL_HEADER:
                     trusted_email = request.headers.get(WEBUI_AUTH_TRUSTED_EMAIL_HEADER, '').lower()
                     if trusted_email and user.email != trusted_email:
@@ -507,7 +521,7 @@ async def get_verified_user_by_token(token: str, redis=None):
         return None
 
     user = await Users.get_user_by_id(decoded['id'])
-    if user is None or user.role not in VERIFIED_USER_ROLES:
+    if user is None or not token_auth_epoch_matches(decoded, user) or user.role not in VERIFIED_USER_ROLES:
         return None
 
     return user

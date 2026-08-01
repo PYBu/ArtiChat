@@ -1,5 +1,5 @@
 """
-Built-in tools for Open WebUI.
+Built-in tools for ArtiChat.
 
 These tools are automatically available when native function calling is enabled.
 
@@ -138,7 +138,7 @@ async def notify(
         return 'Notification failed: user not found.'
 
     app_name = getattr(getattr(__request__, 'app', None), 'state', None)
-    app_name = getattr(app_name, 'WEBUI_NAME', 'Open WebUI')
+    app_name = getattr(app_name, 'WEBUI_NAME', 'ArtiChat')
     try:
         result = await notify_target(user_id, message, target=target, title=title, app_name=app_name)
         return f'Notification sent to {result.get("target_id")}.'
@@ -382,7 +382,14 @@ async def generate_image(
         )
 
         # Prepare file entries for the images
-        image_files = [{'type': 'image', 'url': img['url']} for img in images]
+        image_files = [
+            {
+                'type': 'image',
+                'url': img['url'],
+                **({'id': img['id']} if img.get('id') else {}),
+            }
+            for img in images
+        ]
 
         # Persist files to DB if chat context is available
         if is_saved_chat_id(__chat_id__) and __message_id__ and images:
@@ -422,19 +429,20 @@ async def generate_image(
 
 async def edit_image(
     prompt: str,
-    image_urls: list[str],
+    image_urls: list[str] | None = None,
     __request__: Request = None,
     __user__: dict = None,
     __event_emitter__: callable = None,
     __chat_id__: str = None,
     __message_id__: str = None,
+    __metadata__: dict = None,
 ) -> str:
     """
     Transform one or more existing images according to a text prompt.
     Supports targeted edits such as adding, removing, replacing, inpainting, extending, or compositing image content.
 
     :param prompt: A description of the transformation to apply to the provided images
-    :param image_urls: Source image URLs to modify or use as composition inputs
+    :param image_urls: Source image file IDs, ArtiChat file URLs, data URLs, or external HTTP(S) URLs
     :return: Confirmation that the images were edited, or an error message
     """
     if __request__ is None:
@@ -442,15 +450,30 @@ async def edit_image(
 
     try:
         user = UserModel(**__user__) if __user__ else None
+        image_references = image_urls or []
+        if not image_references and __metadata__:
+            image_references = [
+                file.get('id') or file.get('url')
+                for file in (__metadata__.get('files') or [])
+                if (file.get('type') == 'image' or (file.get('content_type') or '').startswith('image/'))
+                and (file.get('id') or file.get('url'))
+            ]
 
         images = await image_edits(
             request=__request__,
-            form_data=EditImageForm(prompt=prompt, image=image_urls),
+            form_data=EditImageForm(prompt=prompt, image=image_references),
             user=user,
         )
 
         # Prepare file entries for the images
-        image_files = [{'type': 'image', 'url': img['url']} for img in images]
+        image_files = [
+            {
+                'type': 'image',
+                'url': img['url'],
+                **({'id': img['id']} if img.get('id') else {}),
+            }
+            for img in images
+        ]
 
         # Persist files to DB if chat context is available
         if is_saved_chat_id(__chat_id__) and __message_id__ and images:

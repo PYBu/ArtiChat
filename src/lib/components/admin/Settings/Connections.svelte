@@ -339,7 +339,7 @@
 							{$i18n.t('Trouble accessing Ollama?')}
 							<a
 								class="font-normal underline hover:text-gray-700 dark:hover:text-gray-300"
-								href="https://github.com/open-webui/open-webui#troubleshooting"
+								href="https://github.com/PYBu/ArtiChat"
 								target="_blank"
 							>
 								{$i18n.t('Click here for help.')}

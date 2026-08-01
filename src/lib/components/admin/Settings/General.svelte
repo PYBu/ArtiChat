@@ -1,17 +1,13 @@
 <script lang="ts">
-	import DOMPurify from 'dompurify';
 	import { v4 as uuidv4 } from 'uuid';
 
-	import { getBackendConfig, getVersionUpdates } from '$lib/apis';
+	import { getBackendConfig } from '$lib/apis';
 	import { getAdminConfig, updateAdminConfig } from '$lib/apis/auths';
 	import { getBanners, setBanners } from '$lib/apis/configs';
 	import SettingsSelect from '$lib/components/common/SettingsSelect.svelte';
 	import Switch from '$lib/components/common/Switch.svelte';
-	import Tooltip from '$lib/components/common/Tooltip.svelte';
-	import { WEBUI_BUILD_HASH, WEBUI_VERSION } from '$lib/constants';
-	import { banners as _banners, config, showChangelog } from '$lib/stores';
+	import { banners as _banners, config } from '$lib/stores';
 	import type { Banner } from '$lib/types';
-	import { compareVersion } from '$lib/utils';
 	import { onMount, getContext } from 'svelte';
 	import { toast } from 'svelte-sonner';
 	import Textarea from '$lib/components/common/Textarea.svelte';
@@ -26,12 +22,6 @@
 
 	export let saveHandler: Function;
 
-	let updateAvailable: boolean | null = false;
-	let version = {
-		current: WEBUI_VERSION,
-		latest: WEBUI_VERSION
-	};
-
 	let adminConfig: any = null;
 
 	let banners: Banner[] = [];
@@ -39,21 +29,6 @@
 		'w-full h-7 rounded-lg border border-gray-100/50 bg-gray-50/40 px-2 text-xs text-gray-700 outline-hidden transition-colors placeholder:text-gray-300 focus:border-blue-400 dark:border-white/[0.04] dark:bg-white/[0.03] dark:text-gray-300 dark:placeholder:text-gray-700 dark:focus:border-blue-500';
 	const textareaClass =
 		'w-full rounded-lg border border-gray-100/50 bg-gray-50/40 px-2 py-1.5 text-xs text-gray-700 outline-hidden transition-colors placeholder:text-gray-300 focus:border-blue-400 dark:border-white/[0.04] dark:bg-white/[0.03] dark:text-gray-300 dark:placeholder:text-gray-700 dark:focus:border-blue-500';
-
-	const checkForVersionUpdates = async () => {
-		updateAvailable = null;
-		version = await getVersionUpdates(localStorage.token).catch((error) => {
-			return {
-				current: WEBUI_VERSION,
-				latest: WEBUI_VERSION
-			};
-		});
-
-		console.info(version);
-
-		updateAvailable = compareVersion(version.latest, version.current);
-		console.info(updateAvailable);
-	};
 
 	const updateBanners = async () => {
 		_banners.set(await setBanners(localStorage.token, banners));
@@ -91,136 +66,19 @@
 	<div class="flex-1 min-h-0 overflow-y-auto scrollbar-hover pr-1.5">
 		{#if adminConfig !== null}
 			<AdminSettingSection first>
-				<div class="flex items-start justify-between gap-4">
-					<div class="min-w-0 text-xs">
-						<div class="text-gray-600 dark:text-gray-400">{$i18n.t('Version')}</div>
-						<div class="mt-1 flex flex-wrap gap-x-1 text-gray-700 dark:text-gray-200">
-							<Tooltip content={WEBUI_BUILD_HASH}>v{WEBUI_VERSION}</Tooltip>
-
-							{#if $config?.features?.enable_version_update_check}
-								<a
-									href="https://github.com/open-webui/open-webui/releases/tag/v{version.latest}"
-									target="_blank"
-									class="text-gray-500 hover:text-gray-700 dark:text-gray-500 dark:hover:text-gray-300"
-								>
-									{updateAvailable === null
-										? $i18n.t('Checking for updates...')
-										: updateAvailable
-											? `(v${version.latest} ${$i18n.t('available!')})`
-											: $i18n.t('(latest)')}
-								</a>
-							{/if}
-						</div>
-
-						<button
-							class="mt-0.5 text-xs text-gray-400 transition-colors hover:text-gray-700 dark:text-gray-600 dark:hover:text-gray-300"
-							type="button"
-							on:click={() => {
-								showChangelog.set(true);
-							}}
-						>
-							{$i18n.t("See what's new")}
-						</button>
-					</div>
-
-					{#if $config?.features?.enable_version_update_check}
-						<button
-							class="shrink-0 text-xs text-gray-500 transition-colors hover:text-gray-900 dark:text-gray-500 dark:hover:text-white"
-							type="button"
-							on:click={() => {
-								checkForVersionUpdates();
-							}}
-						>
-							{$i18n.t('Check for updates')}
-						</button>
-					{/if}
-				</div>
-
 				<div class="text-xs">
-					<div class="flex items-start justify-between gap-4">
-						<div class="min-w-0">
-							<div class="text-gray-600 dark:text-gray-400">{$i18n.t('Help')}</div>
-							<div class="mt-0.5 text-gray-400 dark:text-gray-600">
-								{$i18n.t('Discover how to use Open WebUI and seek support from the community.')}
-							</div>
-						</div>
-
-						<a
-							class="shrink-0 text-gray-500 transition-colors hover:text-gray-900 dark:text-gray-500 dark:hover:text-white"
-							href="https://docs.openwebui.com/"
-							target="_blank"
-						>
-							{$i18n.t('Documentation')}
-						</a>
-					</div>
-
-					<div class="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-gray-400 dark:text-gray-600">
-						<a
-							class="hover:text-gray-700 dark:hover:text-gray-300"
-							href="https://discord.gg/5rJgQTnV4s"
-							target="_blank">Discord</a
-						>
-						<a
-							class="hover:text-gray-700 dark:hover:text-gray-300"
-							href="https://twitter.com/OpenWebUI"
-							target="_blank">X</a
-						>
-						<a
-							class="hover:text-gray-700 dark:hover:text-gray-300"
-							href="https://github.com/open-webui/open-webui"
-							target="_blank">GitHub</a
-						>
-					</div>
-				</div>
-
-				<div class="text-xs">
-					<div class="text-gray-600 dark:text-gray-400">{$i18n.t('License')}</div>
-
-					{#if $config?.license_metadata}
-						<a
-							href="https://docs.openwebui.com/enterprise"
-							target="_blank"
-							class="mt-0.5 block text-gray-500"
-						>
-							<span class="capitalize text-black dark:text-white"
-								>{$config?.license_metadata?.type} license</span
-							>
-							registered to
-							<span class="capitalize text-black dark:text-white"
-								>{$config?.license_metadata?.organization_name}</span
-							>
-							for
-							<span class="text-black dark:text-white"
-								>{$config?.license_metadata?.seats ?? 'Unlimited'} users.</span
-							>
-						</a>
-						{#if $config?.license_metadata?.html}
-							<div class="mt-0.5 text-gray-500">
-								{@html DOMPurify.sanitize($config?.license_metadata?.html)}
-							</div>
-						{/if}
-					{:else}
-						<a
-							class="mt-0.5 block text-gray-400 transition-colors hover:text-gray-700 dark:text-gray-600 dark:hover:text-gray-300"
-							href="https://docs.openwebui.com/enterprise"
-							target="_blank"
-						>
-							{$i18n.t(
-								'Upgrade to a licensed plan for enhanced capabilities, including custom theming and branding, and dedicated support.'
-							)}
-						</a>
-					{/if}
+					<div class="text-gray-600 dark:text-gray-400">{$i18n.t('Project')}</div>
+					<a
+						class="mt-0.5 block text-gray-500 transition-colors hover:text-gray-900 dark:hover:text-white"
+						href="https://github.com/PYBu/ArtiChat"
+						target="_blank"
+					>
+						{$i18n.t('Source code and documentation')}
+					</a>
 				</div>
 			</AdminSettingSection>
 
 			<AdminSettingSection title={$i18n.t('Features')}>
-				<AdminSettingRow
-					label={$i18n.t('Community Sharing')}
-					description={$i18n.t('Allow users to share chats with the Open WebUI community.')}
-					let:labelId
-				>
-					<Switch bind:state={adminConfig.ENABLE_COMMUNITY_SHARING} ariaLabelledbyId={labelId} />
-				</AdminSettingRow>
 				<AdminSettingRow
 					label={$i18n.t('Message Rating')}
 					description={$i18n.t('Let users rate assistant responses.')}

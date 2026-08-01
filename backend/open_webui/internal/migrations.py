@@ -11,17 +11,93 @@ from alembic.config import Config as AlembicConfig
 from alembic.script import ScriptDirectory
 from sqlalchemy import inspect, text
 from sqlalchemy.engine import Connection, Engine
+from sqlalchemy.engine.reflection import Inspector
 
-EXPECTED_ALEMBIC_HEADS = frozenset({'d3e4f5a6b7c8'})
+EXPECTED_ALEMBIC_HEADS = frozenset({'c3d4e5f6a7b8'})
 
-# These are the durable structures that protect an existing ArtiChat service's
-# users, conversations, subscriptions, balances, usage, gift cards, and account
-# security data. Alembic head validation alone cannot detect a manually stamped
-# or partially restored database, so readiness verifies the structures too.
+# Every application-owned durable table that must survive a 0.1.7 -> 0.2.1
+# upgrade. Alembic head validation alone cannot detect a manually stamped or
+# partially restored database, so readiness first verifies the complete table
+# inventory and then checks release-critical columns below.
+REQUIRED_DURABLE_TABLES = frozenset(
+    {
+        'access_grant',
+        'alembic_version',
+        'announcement',
+        'announcement_view',
+        'api_key',
+        'auth',
+        'automation',
+        'automation_run',
+        'calendar',
+        'calendar_event',
+        'calendar_event_attendee',
+        'channel',
+        'channel_file',
+        'channel_member',
+        'channel_webhook',
+        'chat',
+        'chat_file',
+        'chat_message',
+        'chatidtag',
+        'config',
+        'document',
+        'email_challenge',
+        'email_delivery',
+        'email_template',
+        'feedback',
+        'file',
+        'folder',
+        'function',
+        'gift_card_grant',
+        'group',
+        'group_member',
+        'knowledge',
+        'knowledge_directory',
+        'knowledge_file',
+        'memory',
+        'message',
+        'message_reaction',
+        'model',
+        'note',
+        'oauth_session',
+        'password_reset_token',
+        'pinned_note',
+        'prompt',
+        'prompt_history',
+        'redemption_code',
+        'redemption_record',
+        'shared_chat',
+        'skill',
+        'subscription_ledger',
+        'subscription_plan',
+        'subscription_reservation',
+        'subscription_usage',
+        'tag',
+        'tool',
+        'user',
+        'user_subscription',
+    }
+)
+
+# Column checks cover the identities, relationships, balances, and audit fields
+# whose absence could otherwise look like a successful but destructive upgrade.
 REQUIRED_SCHEMA: dict[str, frozenset[str]] = {
+    'auth': frozenset({'id', 'email', 'password', 'active'}),
     'user': frozenset({'id', 'email', 'email_verified_at', 'auth_epoch', 'variables'}),
     'chat': frozenset({'id', 'user_id', 'chat', 'current_message_id', 'variables'}),
     'chat_message': frozenset({'id', 'chat_id', 'parent_id', 'meta'}),
+    'file': frozenset({'id', 'user_id', 'filename', 'path', 'meta'}),
+    'knowledge': frozenset({'id', 'user_id', 'name', 'data'}),
+    'knowledge_file': frozenset({'id', 'knowledge_id', 'file_id', 'user_id'}),
+    'model': frozenset({'id', 'user_id', 'base_model_id', 'params', 'meta'}),
+    'prompt': frozenset({'id', 'user_id', 'command', 'content'}),
+    'tool': frozenset({'id', 'user_id', 'content', 'specs'}),
+    'function': frozenset({'id', 'user_id', 'content', 'valves'}),
+    'memory': frozenset({'id', 'user_id', 'content', 'meta'}),
+    'folder': frozenset({'id', 'user_id', 'parent_id', 'items'}),
+    'group': frozenset({'id', 'user_id', 'permissions'}),
+    'group_member': frozenset({'id', 'group_id', 'user_id'}),
     'automation': frozenset({'id', 'user_id', 'folder_id'}),
     'subscription_plan': frozenset({'id', 'plan_chatpoint_allowance_micros'}),
     'user_subscription': frozenset(
@@ -30,6 +106,7 @@ REQUIRED_SCHEMA: dict[str, frozenset[str]] = {
             'user_id',
             'plan_balance_micros',
             'check_balance_micros',
+            'balance_version',
             'next_reset_at',
         }
     ),
@@ -48,13 +125,44 @@ REQUIRED_SCHEMA: dict[str, frozenset[str]] = {
             'chat_id',
             'message_id',
             'request_id',
+            'idempotency_key',
+            'reservation_id',
             'input_tokens',
             'output_tokens',
             'cost_micros',
+            'unpaid_cost_micros',
             'raw_usage',
         }
     ),
-    'redemption_code': frozenset({'id', 'code_hash', 'used_count'}),
+    'subscription_reservation': frozenset(
+        {
+            'id',
+            'user_id',
+            'request_id',
+            'model_id',
+            'idempotency_key',
+            'status',
+            'period_start_at',
+            'reserved_micros',
+            'reserved_plan_micros',
+            'reserved_check_micros',
+            'actual_cost_micros',
+            'settled_plan_micros',
+            'settled_check_micros',
+            'refunded_plan_micros',
+            'refunded_check_micros',
+            'forfeited_plan_micros',
+            'unpaid_cost_micros',
+            'expires_at',
+            'release_reason',
+            'metadata',
+            'created_at',
+            'updated_at',
+            'settled_at',
+            'released_at',
+        }
+    ),
+    'redemption_code': frozenset({'id', 'code_hash', 'used_count', 'benefit_type', 'purged_at'}),
     'redemption_record': frozenset({'id', 'redemption_code_id', 'user_id'}),
     'gift_card_grant': frozenset({'id', 'redemption_code_id', 'user_id', 'status'}),
     'announcement': frozenset({'id', 'title', 'body', 'display_mode'}),
@@ -63,6 +171,16 @@ REQUIRED_SCHEMA: dict[str, frozenset[str]] = {
     'password_reset_token': frozenset({'id', 'user_id', 'token_hash'}),
     'email_template': frozenset({'key', 'subject', 'markdown_body', 'html_body'}),
     'email_delivery': frozenset({'id', 'recipient', 'status'}),
+}
+
+REQUIRED_UNIQUE_INDEXES: dict[str, dict[str, tuple[str, ...]]] = {
+    'subscription_usage': {
+        'uq_subscription_usage_idempotency_key': ('idempotency_key',),
+        'uq_subscription_usage_reservation_id': ('reservation_id',),
+    },
+    'subscription_reservation': {
+        'uq_subscription_reservation_idempotency_key': ('idempotency_key',),
+    },
 }
 
 
@@ -97,11 +215,34 @@ def upgrade_database(open_webui_dir: Path) -> None:
     command.upgrade(config, 'head')
 
 
+def _find_missing_unique_indexes(
+    inspector: Inspector,
+    table_names: set[str],
+    required_unique_indexes: Mapping[str, Mapping[str, tuple[str, ...]]],
+) -> list[str]:
+    missing: list[str] = []
+    for table_name, required_indexes in required_unique_indexes.items():
+        if table_name not in table_names:
+            continue
+
+        actual_indexes = {index['name']: index for index in inspector.get_indexes(table_name)}
+        for index_name, required_columns in required_indexes.items():
+            actual_index = actual_indexes.get(index_name)
+            actual_columns = tuple(actual_index.get('column_names') or ()) if actual_index else ()
+            if actual_index is None or not bool(actual_index.get('unique')) or actual_columns != required_columns:
+                missing.append(
+                    f'unique index {table_name}.{index_name}({", ".join(required_columns)})'
+                )
+    return missing
+
+
 def assert_database_schema_ready(
     connectable: Engine | Connection,
     *,
     expected_heads: frozenset[str] = EXPECTED_ALEMBIC_HEADS,
+    required_tables: frozenset[str] = REQUIRED_DURABLE_TABLES,
     required_schema: Mapping[str, frozenset[str]] = REQUIRED_SCHEMA,
+    required_unique_indexes: Mapping[str, Mapping[str, tuple[str, ...]]] = REQUIRED_UNIQUE_INDEXES,
 ) -> None:
     """Verify the installed Alembic head and critical durable structures."""
     connection_context = nullcontext(connectable) if isinstance(connectable, Connection) else connectable.connect()
@@ -119,16 +260,21 @@ def assert_database_schema_ready(
                 f'expected {sorted(expected_heads)}, found {sorted(actual_heads)}'
             )
 
-        missing: list[str] = []
+        missing: list[str] = [f'table {table_name}' for table_name in sorted(required_tables - table_names)]
         for table_name, required_columns in required_schema.items():
             if table_name not in table_names:
-                missing.append(f'table {table_name}')
+                if table_name not in required_tables:
+                    missing.append(f'table {table_name}')
                 continue
 
             actual_columns = {column['name'] for column in inspector.get_columns(table_name)}
             missing.extend(
                 f'column {table_name}.{column_name}' for column_name in sorted(required_columns - actual_columns)
             )
+
+        missing.extend(
+            _find_missing_unique_indexes(inspector, table_names, required_unique_indexes)
+        )
 
         if missing:
             raise DatabaseSchemaNotReadyError(

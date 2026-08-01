@@ -1,41 +1,110 @@
 <script lang="ts">
 	import { getContext } from 'svelte';
+	import type { Writable } from 'svelte/store';
 	import { toast } from 'svelte-sonner';
-	import { updateUserPassword } from '$lib/apis/auths';
+	import { updateUserPasswordWithVerification } from '$lib/apis/account-security';
+	import { requestSensitiveChallenge, verifySensitiveChallenge } from '$lib/apis/emails';
+	import { user } from '$lib/stores';
 	import SensitiveInput from '$lib/components/common/SensitiveInput.svelte';
+	import EmailCodeModal from '$lib/components/common/EmailCodeModal.svelte';
+	import { emailErrorMessage } from '$lib/utils/email-errors';
 
-	const i18n = getContext('i18n');
+	const i18n: Writable<any> = getContext('i18n');
 
 	let show = false;
 	let currentPassword = '';
 	let newPassword = '';
 	let newPasswordConfirm = '';
+	let verificationModalOpen = false;
+	let verificationChallengeStartedAt = 0;
+	let busy = false;
 	const actionButtonClass =
 		'text-xs text-gray-500 transition-colors hover:text-gray-900 dark:text-gray-500 dark:hover:text-white';
 
-	const updatePasswordHandler = async () => {
-		if (newPassword === newPasswordConfirm) {
-			const res = await updateUserPassword(localStorage.token, currentPassword, newPassword).catch(
-				(error) => {
-					toast.error(`${error}`);
-					return null;
-				}
-			);
+	const persist = async (verificationToken: string | null) => {
+		const result = await updateUserPasswordWithVerification(
+			localStorage.token,
+			currentPassword,
+			newPassword,
+			verificationToken
+		).catch((error) => {
+			toast.error(emailErrorMessage(error));
+			return null;
+		});
 
-			if (res) {
-				toast.success($i18n.t('Successfully updated.'));
-			}
-
+		if (result) {
+			toast.success($i18n.t('Successfully updated.'));
 			currentPassword = '';
 			newPassword = '';
 			newPasswordConfirm = '';
-		} else {
+			verificationModalOpen = false;
+			verificationChallengeStartedAt = 0;
+		}
+		return result;
+	};
+
+	const updatePasswordHandler = async () => {
+		if (newPassword !== newPasswordConfirm) {
 			toast.error(
 				$i18n.t("The passwords you entered don't quite match. Please double-check and try again.")
 			);
 			newPassword = '';
 			newPasswordConfirm = '';
+			return;
 		}
+
+		if (verificationChallengeStartedAt + 10 * 60 * 1000 > Date.now()) {
+			verificationModalOpen = true;
+			return;
+		}
+
+		busy = true;
+		try {
+			const request = await requestSensitiveChallenge(localStorage.token, 'password').catch(
+				(error) => {
+					toast.error(emailErrorMessage(error));
+					return null;
+				}
+			);
+			if (request?.verification_required) {
+				verificationChallengeStartedAt = Date.now();
+				verificationModalOpen = true;
+				toast.success($i18n.t('A verification code was sent to your email.'));
+			} else if (request?.status) {
+				await persist(null);
+			}
+		} finally {
+			busy = false;
+		}
+	};
+
+	const resendVerification = async () => {
+		busy = true;
+		const result = await requestSensitiveChallenge(localStorage.token, 'password').catch(
+			(error) => {
+				toast.error(emailErrorMessage(error));
+				return null;
+			}
+		);
+		if (result?.status) {
+			verificationChallengeStartedAt = Date.now();
+			toast.success($i18n.t('A new verification code was sent.'));
+		}
+		busy = false;
+	};
+
+	const completeVerification = async (event: CustomEvent<{ code: string }>) => {
+		busy = true;
+		const verified = await verifySensitiveChallenge(
+			localStorage.token,
+			'password',
+			event.detail.code
+		).catch((error) => {
+			toast.error(emailErrorMessage(error));
+			return null;
+		});
+		if (verified?.verification_token) await persist(verified.verification_token);
+		busy = false;
 	};
 </script>
 
@@ -114,9 +183,21 @@
 		</div>
 
 		<div class="flex justify-end">
-			<button class={actionButtonClass}>
+			<button class={actionButtonClass} disabled={busy}>
 				{$i18n.t('Update password')}
 			</button>
 		</div>
 	{/if}
 </form>
+
+<EmailCodeModal
+	bind:show={verificationModalOpen}
+	title={$i18n.t('Verify your email to change your password')}
+	description={$i18n.t('Enter the six-digit code sent to your account email.')}
+	email={$user?.email ?? ''}
+	confirmLabel={$i18n.t('Verify and update password')}
+	{busy}
+	challengeStartedAt={verificationChallengeStartedAt}
+	on:confirm={completeVerification}
+	on:resend={resendVerification}
+/>

@@ -59,7 +59,7 @@
 <div>
 	<div class="flex justify-between items-center mb-2">
 		<div class="flex items-center gap-2">
-			<div class="text-xs text-gray-600 dark:text-gray-400">{$i18n.t('Open Terminal')}</div>
+			<div class="text-xs text-gray-600 dark:text-gray-400">{$i18n.t('Terminal Service')}</div>
 		</div>
 		<Tooltip content={$i18n.t('Add Connection')}>
 			<button

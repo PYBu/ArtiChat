@@ -107,7 +107,10 @@ async def create_task(redis, coroutine, id=None, task_id=None):
     task = asyncio.create_task(coroutine)  # Create the task
 
     # Add a done callback for cleanup
-    task.add_done_callback(lambda t: asyncio.create_task(cleanup_task(redis, task_id, id)))
+    def cleanup_done_task(_task):
+        asyncio.create_task(cleanup_task(redis, task_id, id))
+
+    task.add_done_callback(cleanup_done_task)
     tasks[task_id] = task
 
     # If an ID is provided, associate the task with that ID
@@ -117,7 +120,20 @@ async def create_task(redis, coroutine, id=None, task_id=None):
         item_tasks[id] = [task_id]
 
     if redis:
-        await redis_save_task(redis, task_id, id)
+        try:
+            await redis_save_task(redis, task_id, id)
+        except BaseException:
+            # Registration is part of task creation. If it fails, keep the
+            # coroutine behind its caller's dispatch gate and remove all local
+            # state before surfacing the failure.
+            task.remove_done_callback(cleanup_done_task)
+            await cleanup_task(None, task_id, id)
+            task.cancel()
+            try:
+                await task
+            except BaseException:
+                pass
+            raise
 
     return task_id, task
 
@@ -137,7 +153,7 @@ async def list_task_ids_by_item_id(redis, id):
     """
     if redis:
         return await redis_list_item_tasks(redis, id)
-    return item_tasks.get(id, [])
+    return list(item_tasks.get(id, []))
 
 
 async def stop_task(redis, task_id: str):

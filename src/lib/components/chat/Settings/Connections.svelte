@@ -126,7 +126,7 @@
 
 				<div class="text-[0.6875rem] text-gray-400 dark:text-gray-600">
 					{$i18n.t(
-						'CORS must be properly configured by the provider to allow requests from Open WebUI.'
+						'CORS must be properly configured by the provider to allow requests from ArtiChat.'
 					)}
 				</div>
 			</UserSettingSection>

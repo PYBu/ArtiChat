@@ -85,7 +85,7 @@ from open_webui.models.groups import GroupForm, GroupModel, Groups, GroupUpdateF
 from open_webui.models.oauth_sessions import OAuthSessions
 from open_webui.models.users import Users
 from open_webui.retrieval.web.utils import get_ssrf_safe_session, validate_url
-from open_webui.utils.auth import create_token, get_password_hash
+from open_webui.utils.auth import create_user_token, get_password_hash
 from open_webui.utils.groups import apply_default_group_assignment
 from open_webui.utils.misc import parse_duration
 from open_webui.utils.validate import validate_profile_image_url
@@ -506,7 +506,7 @@ async def get_oauth_client_info_with_dynamic_client_registration(
         redirect_base_url = (str(webui_url or request.base_url)).rstrip('/')
 
         oauth_client_metadata = OAuthClientMetadata(
-            client_name='Open WebUI',
+            client_name='ArtiChat',
             redirect_uris=[f'{redirect_base_url}/oauth/clients/{client_id}/callback'],
             grant_types=['authorization_code', 'refresh_token'],
             response_types=['code'],
@@ -566,7 +566,7 @@ async def get_oauth_client_info_with_dynamic_client_registration(
             raise Exception(
                 'Could not discover the OAuth authorization server metadata '
                 f'(authorization_endpoint) for {oauth_server_url}. The MCP server must '
-                'expose RFC 8414 / RFC 9728 discovery documents so Open WebUI can '
+                'expose RFC 8414 / RFC 9728 discovery documents so ArtiChat can '
                 'resolve where to send users to authorize.'
             )
 
@@ -1622,7 +1622,7 @@ class OAuthManager:
         log.debug(f'Oauth Groups claim: {oauth_claim}')
         log.debug(f'User oauth groups: {user_oauth_groups}')
         log.debug(f"User's current groups: {[g.name for g in user_current_groups]}")
-        log.debug(f'All groups available in OpenWebUI: {[g.name for g in all_available_groups]}')
+        log.debug(f'All groups available in ArtiChat: {[g.name for g in all_available_groups]}')
 
         # Remove groups that user is no longer a part of
         for group_model in user_current_groups:
@@ -2005,8 +2005,8 @@ class OAuthManager:
                         detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
                     )
 
-            jwt_token = create_token(
-                data={'id': user.id},
+            jwt_token = create_user_token(
+                user,
                 expires_delta=parse_duration(auth_config.JWT_EXPIRES_IN),
             )
             if auth_config.ENABLE_OAUTH_GROUP_MANAGEMENT:

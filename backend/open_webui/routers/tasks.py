@@ -19,7 +19,7 @@ from open_webui.constants import ERROR_MESSAGES, TASKS
 from open_webui.models.config import Config
 from open_webui.routers.pipelines import process_pipeline_inlet_filter
 from open_webui.utils.auth import get_admin_user, get_verified_user
-from open_webui.utils.chat import generate_chat_completion
+from open_webui.utils.hosted_inference import generate_billed_chat_completion
 from open_webui.utils.task import (
     autocomplete_generation_template,
     emoji_generation_template,
@@ -182,7 +182,7 @@ async def generate_title(request: Request, form_data: dict, user=Depends(get_ver
         raise e
 
     try:
-        return await generate_chat_completion(request, form_data=payload, user=user)
+        return await generate_billed_chat_completion(request, form_data=payload, user=user)
     except Exception as e:
         log.error('Exception occurred', exc_info=True)
         return JSONResponse(
@@ -252,7 +252,7 @@ async def generate_follow_ups(request: Request, form_data: dict, user=Depends(ge
         raise e
 
     try:
-        return await generate_chat_completion(request, form_data=payload, user=user)
+        return await generate_billed_chat_completion(request, form_data=payload, user=user)
     except Exception as e:
         log.error('Exception occurred', exc_info=True)
         return JSONResponse(
@@ -322,7 +322,7 @@ async def generate_chat_tags(request: Request, form_data: dict, user=Depends(get
         raise e
 
     try:
-        return await generate_chat_completion(request, form_data=payload, user=user)
+        return await generate_billed_chat_completion(request, form_data=payload, user=user)
     except Exception as e:
         log.error(f'Error generating chat completion: {e}')
         return JSONResponse(
@@ -386,7 +386,7 @@ async def generate_image_prompt(request: Request, form_data: dict, user=Depends(
         raise e
 
     try:
-        return await generate_chat_completion(request, form_data=payload, user=user)
+        return await generate_billed_chat_completion(request, form_data=payload, user=user)
     except Exception as e:
         log.error('Exception occurred', exc_info=True)
         return JSONResponse(
@@ -410,6 +410,11 @@ async def generate_queries(request: Request, form_data: dict, user=Depends(get_v
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=ERROR_MESSAGES.FEATURE_DISABLED('Query generation'),
             )
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Query generation type must be web_search or retrieval.',
+        )
 
     if getattr(request.state, 'cached_queries', None):
         log.info(f'Reusing cached queries: {request.state.cached_queries}')
@@ -468,7 +473,7 @@ async def generate_queries(request: Request, form_data: dict, user=Depends(get_v
         raise e
 
     try:
-        return await generate_chat_completion(request, form_data=payload, user=user)
+        return await generate_billed_chat_completion(request, form_data=payload, user=user)
     except Exception as e:
         return JSONResponse(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -549,7 +554,7 @@ async def generate_autocompletion(request: Request, form_data: dict, user=Depend
         raise e
 
     try:
-        return await generate_chat_completion(request, form_data=payload, user=user)
+        return await generate_billed_chat_completion(request, form_data=payload, user=user)
     except Exception as e:
         log.error(f'Error generating chat completion: {e}')
         return JSONResponse(
@@ -616,7 +621,7 @@ async def generate_emoji(request: Request, form_data: dict, user=Depends(get_ver
         raise e
 
     try:
-        return await generate_chat_completion(request, form_data=payload, user=user)
+        return await generate_billed_chat_completion(request, form_data=payload, user=user)
     except Exception as e:
         return JSONResponse(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -669,7 +674,7 @@ async def generate_moa_response(request: Request, form_data: dict, user=Depends(
         raise e
 
     try:
-        return await generate_chat_completion(request, form_data=payload, user=user)
+        return await generate_billed_chat_completion(request, form_data=payload, user=user)
     except Exception as e:
         return JSONResponse(
             status_code=status.HTTP_400_BAD_REQUEST,

@@ -1,0 +1,81 @@
+name: ArtiChat Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Semantic release version to deploy
+        required: true
+        type: string
+      operation_id:
+        description: Update operation identifier
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: artichat-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy selected release
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 15
+    steps:
+      - name: Validate deployment inputs
+        env:
+          VERSION: ${{ inputs.version }}
+          OPERATION_ID: ${{ inputs.operation_id }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+            echo 'invalid version' >&2
+            exit 2
+          }
+          [[ "$OPERATION_ID" =~ ^[A-Za-z0-9._-]{8,128}$ ]] || {
+            echo 'invalid operation id' >&2
+            exit 2
+          }
+          printf 'VERSION=%s\n' "$VERSION" >> "$GITHUB_ENV"
+          printf 'OPERATION_ID=%s\n' "$OPERATION_ID" >> "$GITHUB_ENV"
+
+      - name: Verify published GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          release="$(gh release view "v${VERSION}" --repo "$GITHUB_REPOSITORY" --json tagName,isDraft,isPrerelease)"
+          jq -e --arg tag "v${VERSION}" \
+            '.tagName == $tag and .isDraft == false and .isPrerelease == false' \
+            <<<"$release" >/dev/null
+
+      - name: Configure restricted SSH credentials
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.ARTICHAT_DEPLOY_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.ARTICHAT_DEPLOY_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          [[ -n "$SSH_PRIVATE_KEY" && -n "$SSH_KNOWN_HOSTS" ]] || {
+            echo 'deployment SSH credentials are not configured' >&2
+            exit 1
+          }
+          install -d -m 0700 ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/artichat_deploy
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 0600 ~/.ssh/artichat_deploy ~/.ssh/known_hosts
+          ssh-keygen -y -f ~/.ssh/artichat_deploy >/dev/null
+
+      - name: Deploy release through forced command
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ssh -i ~/.ssh/artichat_deploy \
+            "${{ secrets.ARTICHAT_DEPLOY_USER }}@${{ secrets.ARTICHAT_DEPLOY_HOST }}" \
+            "deploy ${VERSION} ${OPERATION_ID}"

@@ -7,6 +7,11 @@
 	import { goto } from '$app/navigation';
 
 	import { updateUserById, getUserGroupsById } from '$lib/apis/users';
+	import {
+		getAdminSubscriptionPlans,
+		updateAdminUserSubscription,
+		type SubscriptionPlan
+	} from '$lib/apis/subscriptions';
 
 	import Modal from '$lib/components/common/Modal.svelte';
 	import localizedFormat from 'dayjs/plugin/localizedFormat';
@@ -26,11 +31,23 @@
 		init();
 	}
 
-	const init = () => {
+	const init = async () => {
 		if (selectedUser) {
-			_user = selectedUser;
-			_user.password = '';
+			_user = { ...selectedUser, password: '' };
+			const subscription = selectedUser.subscription ?? {};
+			_subscription = {
+				tier: subscription.tier ?? 'free',
+				status: subscription.status ?? 'free',
+				plan_chatpoint: `${(subscription.plan_balance_micros ?? 0) / 1_000_000}`,
+				check_chatpoint: `${(subscription.check_balance_micros ?? 0) / 1_000_000}`,
+				expires_at_input: toDateTimeLocal(subscription.expires_at),
+				notes: subscription.notes ?? ''
+			};
 			loadUserGroups();
+			if (subscriptionPlans.length === 0) {
+				subscriptionPlans =
+					(await getAdminSubscriptionPlans(localStorage.token).catch(() => [])) ?? [];
+			}
 		}
 	};
 
@@ -43,16 +60,51 @@
 	};
 
 	let userGroups: any[] | null = null;
+	let subscriptionPlans: SubscriptionPlan[] = [];
+	let _subscription = {
+		tier: 'free',
+		status: 'free',
+		plan_chatpoint: '0',
+		check_chatpoint: '0',
+		expires_at_input: '',
+		notes: ''
+	};
+
+	const toDateTimeLocal = (value?: number | null) => {
+		if (!value) return '';
+		const date = new Date(value * 1000);
+		date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
+		return date.toISOString().slice(0, 16);
+	};
+
+	const fromDateTimeLocal = (value: string) => {
+		if (!value) return null;
+		const timestamp = new Date(value).getTime();
+		return Number.isNaN(timestamp) ? null : Math.floor(timestamp / 1000);
+	};
 
 	const submitHandler = async () => {
 		const res = await updateUserById(localStorage.token, selectedUser.id, _user).catch((error) => {
 			toast.error(`${error}`);
 		});
 
-		if (res) {
-			dispatch('save');
-			show = false;
-		}
+		if (!res) return;
+
+		const subscription = await updateAdminUserSubscription(localStorage.token, selectedUser.id, {
+			tier: _subscription.tier,
+			status: _subscription.status,
+			plan_chatpoint: _subscription.plan_chatpoint,
+			check_chatpoint: _subscription.check_chatpoint,
+			expires_at: fromDateTimeLocal(_subscription.expires_at_input),
+			notes: _subscription.notes || null
+		}).catch((error) => {
+			toast.error(`${error}`);
+			return null;
+		});
+
+		if (!subscription) return;
+		dispatch('save');
+		show = false;
 	};
 
 	const loadUserGroups = async () => {
@@ -215,6 +267,77 @@
 										</div>
 									</div>
 								</div>
+							</div>
+						</div>
+
+						<div class="mt-4 border-t border-gray-100 pt-4 dark:border-gray-850">
+							<div class="mb-3 text-sm font-medium">{$i18n.t('Subscription')}</div>
+							<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+								<label class="flex flex-col gap-1">
+									<span class="text-xs text-gray-500">{$i18n.t('Plan')}</span>
+									<select
+										class="rounded-lg border border-gray-100 bg-transparent px-2 py-1.5 text-sm outline-hidden dark:border-gray-850"
+										bind:value={_subscription.tier}
+									>
+										{#if subscriptionPlans.length === 0}
+											<option value={_subscription.tier}>{_subscription.tier}</option>
+										{:else}
+											{#each subscriptionPlans as plan}
+												<option value={plan.id}>{plan.display_name}</option>
+											{/each}
+										{/if}
+									</select>
+								</label>
+
+								<label class="flex flex-col gap-1">
+									<span class="text-xs text-gray-500">{$i18n.t('Status')}</span>
+									<select
+										class="rounded-lg border border-gray-100 bg-transparent px-2 py-1.5 text-sm outline-hidden dark:border-gray-850"
+										bind:value={_subscription.status}
+									>
+										<option value="free">Free</option>
+										<option value="active">{$i18n.t('Active')}</option>
+										<option value="expired">{$i18n.t('Expired')}</option>
+										<option value="inactive">{$i18n.t('Inactive')}</option>
+									</select>
+								</label>
+
+								<label class="flex flex-col gap-1 sm:col-span-2">
+									<span class="text-xs text-gray-500">{$i18n.t('Expires at')}</span>
+									<input
+										type="datetime-local"
+										class="rounded-lg border border-gray-100 bg-transparent px-2 py-1.5 text-sm outline-hidden dark:border-gray-850"
+										bind:value={_subscription.expires_at_input}
+									/>
+								</label>
+
+								<label class="flex flex-col gap-1">
+									<span class="text-xs text-gray-500">Plan Chatpoint</span>
+									<input
+										type="number"
+										step="any"
+										class="rounded-lg border border-gray-100 bg-transparent px-2 py-1.5 text-sm outline-hidden dark:border-gray-850"
+										bind:value={_subscription.plan_chatpoint}
+									/>
+								</label>
+
+								<label class="flex flex-col gap-1">
+									<span class="text-xs text-gray-500">Check Chatpoint</span>
+									<input
+										type="number"
+										step="any"
+										class="rounded-lg border border-gray-100 bg-transparent px-2 py-1.5 text-sm outline-hidden dark:border-gray-850"
+										bind:value={_subscription.check_chatpoint}
+									/>
+								</label>
+
+								<label class="flex flex-col gap-1 sm:col-span-2">
+									<span class="text-xs text-gray-500">{$i18n.t('Notes')}</span>
+									<input
+										class="rounded-lg border border-gray-100 bg-transparent px-2 py-1.5 text-sm outline-hidden dark:border-gray-850"
+										bind:value={_subscription.notes}
+									/>
+								</label>
 							</div>
 						</div>
 

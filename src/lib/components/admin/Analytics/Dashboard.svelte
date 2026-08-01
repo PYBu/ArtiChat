@@ -289,7 +289,11 @@
 			>
 			{$i18n.t('messages')}</span
 		>
-		<Tooltip content={$i18n.t('Token counts are estimates and may not reflect actual API usage')}>
+		<Tooltip
+			content={$i18n.t(
+				'Analytics token counts are estimates and do not determine subscription balances or Chatpoint charges.'
+			)}
+		>
 			<span class="cursor-help"
 				><span class="font-normal text-gray-900 dark:text-gray-300"
 					>{formatNumber(totalTokens.total)}</span

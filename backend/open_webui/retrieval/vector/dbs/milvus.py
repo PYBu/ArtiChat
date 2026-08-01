@@ -7,6 +7,7 @@ import logging
 from typing import Optional
 
 from open_webui.config import (
+    MILVUS_COLLECTION_PREFIX,
     MILVUS_DB,
     MILVUS_DISKANN_MAX_DEGREE,
     MILVUS_DISKANN_SEARCH_LIST_SIZE,
@@ -39,7 +40,7 @@ MILVUS_TEXT_MAX_LENGTH = 65535
 
 class MilvusClient(VectorDBBase):
     def __init__(self):
-        self.collection_prefix = 'open_webui'
+        self.collection_prefix = MILVUS_COLLECTION_PREFIX
         if MILVUS_TOKEN is None:
             self.client = Client(uri=MILVUS_URI, db_name=MILVUS_DB)
         else:

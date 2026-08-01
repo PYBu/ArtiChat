@@ -44,6 +44,7 @@ from open_webui.retrieval.vector.async_client import ASYNC_VECTOR_DB_CLIENT
 from open_webui.routers.audio import transcribe
 from open_webui.routers.retrieval import ProcessFileForm, process_file
 from open_webui.storage.provider import Storage
+from open_webui.utils.access_control import has_permission
 from open_webui.utils.auth import get_admin_user, get_verified_user
 from open_webui.utils.misc import strict_match_mime_type
 from pydantic import BaseModel
@@ -125,6 +126,16 @@ def _media_supported_for_extraction(
     return bool(content_extraction_engine and _matches_configured_mime_type(supported, content_type))
 
 
+async def _require_chat_permission(user, permission_key: str, db: AsyncSession | None = None) -> None:
+    if user.role == 'admin':
+        return
+    if not await has_permission(user.id, permission_key, await Config.get('user.permissions'), db=db):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
+        )
+
+
 async def process_uploaded_file(
     request,
     file,
@@ -151,6 +162,7 @@ async def process_uploaded_file(
 
             if content_type and strict_match_mime_type(stt_supported, content_type):
                 # Audio / STT-supported files → transcribe then index
+                await _require_chat_permission(user, 'chat.stt', db=db_session)
                 file_path_processed = await asyncio.to_thread(Storage.get_file, file_path)
                 result = await transcribe(
                     request,
@@ -279,6 +291,12 @@ async def upload_file(
     user=Depends(get_verified_user),
     db: AsyncSession = Depends(get_async_session),
 ):
+    await _require_chat_permission(user, 'chat.file_upload', db=db)
+    if process and file.content_type:
+        stt_supported = await Config.get('audio.stt.supported_content_types', [])
+        if strict_match_mime_type(stt_supported, file.content_type):
+            await _require_chat_permission(user, 'chat.stt', db=db)
+
     result = await upload_file_handler(
         request,
         file=file,
@@ -357,10 +375,10 @@ async def upload_file_handler(
         name = filename
         filename = f'{id}_{filename}'
         tags = {
-            'OpenWebUI-User-Email': user.email,
-            'OpenWebUI-User-Id': user.id,
-            'OpenWebUI-User-Name': user.name,
-            'OpenWebUI-File-Id': id,
+            'ArtiChat-User-Email': user.email,
+            'ArtiChat-User-Id': user.id,
+            'ArtiChat-User-Name': user.name,
+            'ArtiChat-File-Id': id,
         }
         try:
             contents, file_path = await asyncio.to_thread(Storage.upload_file, file.file, filename, tags)

@@ -215,7 +215,7 @@
 			<AdminSettingSection title={$i18n.t('Terminal')}>
 				<div>
 					<div class="mb-2 flex items-center justify-between">
-						<div class="text-xs text-gray-600 dark:text-gray-400">{$i18n.t('Open Terminal')}</div>
+						<div class="text-xs text-gray-600 dark:text-gray-400">{$i18n.t('Terminal Service')}</div>
 
 						<Tooltip content={$i18n.t('Add Connection')}>
 							<button
@@ -297,14 +297,9 @@
 
 					<div class="mt-1 text-[0.6875rem] text-gray-400 dark:text-gray-600">
 						{$i18n.t(
-							'Connect to Open Terminal instances. Admins and users granted access can use file browsing and terminal tools through these servers.'
+							'Connect to terminal service instances. Admins and users granted access can use file browsing and terminal tools through these servers.'
 						)}
 					</div>
-					<a
-						class="mt-0.5 block text-[0.6875rem] text-gray-500 underline hover:text-gray-700 dark:text-gray-500 dark:hover:text-gray-300"
-						href="https://github.com/open-webui/open-terminal"
-						target="_blank">{$i18n.t('Learn more about Open Terminal')} ↗</a
-					>
 				</div>
 			</AdminSettingSection>
 

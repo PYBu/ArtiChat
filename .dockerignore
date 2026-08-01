@@ -3,7 +3,9 @@
 docs
 kubernetes
 node_modules
+/.tmp
 /.svelte-kit
+/build
 /package
 .env
 .env.*

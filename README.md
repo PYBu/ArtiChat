@@ -10,7 +10,7 @@
 
 <br/>
 
-[![Version](https://img.shields.io/badge/version-0.2.0-6366f1?style=flat-square)](https://github.com/PYBu/ArtiChat/releases)
+[![Version](https://img.shields.io/badge/version-0.2.1-6366f1?style=flat-square)](https://github.com/PYBu/ArtiChat/releases)
 [![OpenWebUI](https://img.shields.io/badge/based_on-OpenWebUI_0.11.0-0ea5e9?style=flat-square)](https://github.com/open-webui/open-webui)
 [![Docker](https://img.shields.io/badge/Docker-ready-2496ED?style=flat-square&logo=docker&logoColor=white)](https://www.docker.com/)
 [![SvelteKit](https://img.shields.io/badge/SvelteKit-frontend-FF3E00?style=flat-square&logo=svelte&logoColor=white)](https://kit.svelte.dev/)
@@ -22,7 +22,7 @@
 
 <br/>
 
-> 注意：本项目版本为 ArtiChat ProEdition 0.2+ ，次代版本为 ArtiChat ArtivisAlpha 0.1+（0.1.7为已发布最新版），0.2 版本历经重做存在一些不稳定因素或Bug，但 0.1 系列版本仍然可以无缝更新到 0.2，若稳定使用建议依旧使用 0.1 版本，或等待 0.2 正式版本发布以后选择更新！
+> 当前稳定版本为 **ArtiChat ProEdition 0.2.1**。本版本已验证从 0.1.7 直接升级，无需安装中间版本。升级会自动执行数据库迁移；生产环境升级前请先停止服务并备份 `artichat_data`，旧版 0.1.7 不可直接连接已经迁移到 0.2.1 的数据卷。
 
 ## 简介
 
@@ -293,17 +293,38 @@ curl http://localhost:3000/health
 
 <br/>
 
+### 从 0.1.7 升级
+
+0.2.1 支持从已发布的 0.1.7 直接升级。以下命令会先停止写入并备份命名卷，再更新代码和重建服务：
+
+```bash
+docker compose -p artichat stop artichat
+docker run --rm \
+  -v artichat_data:/source:ro \
+  -v "$PWD":/backup \
+  alpine sh -c 'tar -C /source -czf /backup/artichat-0.1.7-backup.tar.gz .'
+
+git pull --ff-only origin main
+docker compose -p artichat up -d --build artichat
+curl http://localhost:3000/ready
+```
+
+确认 `/ready` 返回 `{"status":true}` 后再恢复外部流量。需要回滚时，请把升级前归档恢复到一个干净数据卷后再启动 0.1.7；不要让 0.1.7 直接读取已经迁移到 0.2.1 的数据卷。
+
+<br/>
+
 ### 生产环境配置
 
 | 参数 | 说明 | 默认值 |
 |:-----|:-----|:------|
-| `WEBUI_SECRET_KEY` | 会话加密密钥，**生产必须修改** | 空（不安全） |
+| `WEBUI_SECRET_KEY_FILE` | 持久化会话密钥文件 | `/app/backend/data/.webui_secret_key` |
+| `WEBUI_SECRET_KEY` | 可选的显式会话密钥；设置后需长期保持不变 | 未设置 |
 | `CORS_ALLOW_ORIGIN` | 跨域来源白名单 | `*`（不安全） |
 | `DATABASE_URL` | 数据库连接字符串 | SQLite 本地文件 |
 | `OPENAI_API_BASE_URL` | OpenAI 兼容 API 地址 | — |
 | `OPENAI_API_KEY` | 对应 API 密钥 | — |
 
-> 💡 生产环境务必将 `CORS_ALLOW_ORIGIN` 从默认的 `*` 收紧为实际域名，并随机生成 `WEBUI_SECRET_KEY`。
+> 💡 Docker Compose 默认会在数据卷内生成并复用会话密钥文件。生产环境务必持久化该文件或设置长期不变的 `WEBUI_SECRET_KEY`，并将 `CORS_ALLOW_ORIGIN` 从默认的 `*` 收紧为实际域名。
 
 <br/>
 
@@ -312,8 +333,8 @@ curl http://localhost:3000/health
 ## 🗺️ &nbsp;路线图
 
 ```
-v0.1.0 - v0.1.8  ✅  底层适配与修改，加固与ArtiChat稳定运行。
-v0.2.0 - now     ✅  系统性升级，ArtiChat组件UI重置与完善，以新功能与用户体验作为优先更新动力。
+v0.1.0 - v0.1.7  ✅  底层适配与修改，加固与 ArtiChat 稳定运行。
+v0.2.1 - now     ✅  系统性升级，重建 ArtiChat 组件与 UI，以新功能与用户体验作为优先更新动力。
 
 v0.3.0           🔜  ArtiLINK — 本地 MCP 接入，让模型直接操控 PowerShell 与本地系统资源，实现真正意义上的「网页版 Codex」
 ```

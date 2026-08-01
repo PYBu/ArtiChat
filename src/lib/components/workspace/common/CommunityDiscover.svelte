@@ -12,7 +12,7 @@
 
 <div class="mt-6 px-2 pb-8">
 	<div class="mb-0.5 text-[11px] font-normal text-gray-400 dark:text-gray-600">
-		{$i18n.t('Made by Open WebUI Community')}
+		{$i18n.t('Community contribution')}
 	</div>
 
 	<a

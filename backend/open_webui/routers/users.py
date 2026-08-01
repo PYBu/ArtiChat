@@ -20,6 +20,7 @@ from open_webui.models.chat_messages import ChatMessages
 from open_webui.models.chats import Chats
 from open_webui.models.groups import Groups
 from open_webui.models.oauth_sessions import OAuthSessions
+from open_webui.models.subscriptions import UserSubscriptions
 from open_webui.models.users import (
     UserGroupIdsListResponse,
     UserGroupIdsModel,
@@ -45,6 +46,8 @@ from open_webui.utils.auth import (
     validate_password,
 )
 from open_webui.utils.chat_variables import ChatVariablesError, normalize_user_variables, validate_user_variables
+from open_webui.utils.settings_security import sanitize_user_settings
+from open_webui.utils.session_security import revoke_user_sessions
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -95,6 +98,7 @@ async def get_users(
     # Fetch groups for all users in a single query to avoid N+1
     user_ids = [user.id for user in users]
     user_groups = await Groups.get_groups_by_member_ids(user_ids, db=db)
+    subscriptions = await UserSubscriptions.get_summaries_by_user_ids(user_ids, db=db)
 
     return {
         'users': [
@@ -102,6 +106,7 @@ async def get_users(
                 **{
                     **user.model_dump(),
                     'group_ids': [group.id for group in user_groups.get(user.id, [])],
+                    'subscription': subscriptions[user.id].model_dump() if user.id in subscriptions else None,
                 }
             )
             for user in users
@@ -440,7 +445,9 @@ async def get_user_settings_by_session_user(
     user=Depends(get_verified_user), db: AsyncSession = Depends(get_async_session)
 ):
     # user already fetched by get_verified_user — no need to refetch
-    return user.settings
+    if user.settings is None:
+        return None
+    return UserSettings(**sanitize_user_settings(user.settings.model_dump()))
 
 
 ############################
@@ -463,7 +470,7 @@ async def update_user_settings_by_session_user(
             detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
         )
 
-    updated_user_settings = form_data.model_dump()
+    updated_user_settings = sanitize_user_settings(form_data.model_dump())
     ui_settings = updated_user_settings.get('ui')
     if (
         user.role != 'admin'
@@ -941,10 +948,16 @@ async def update_user_by_id(
             updated_user = user
 
         if updated_user:
+            sessions_revoked = False
+            if form_data.password:
+                await revoke_user_sessions(request, user_id, db=db)
+                sessions_revoked = True
+
             # If the role changed, disconnect all socket sessions so stale
             # privileges cached in SESSION_POOL are invalidated.
             if updated_user.role != user.role:
-                await disconnect_user_sessions(user_id)
+                if not sessions_revoked:
+                    await disconnect_user_sessions(user_id)
                 await publish_event(
                     request,
                     EVENTS.USER_ROLE_UPDATED,

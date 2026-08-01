@@ -37,7 +37,7 @@ from open_webui.models.chats import ChatForm, Chats
 from open_webui.models.config import Config
 from open_webui.models.folders import Folders
 from open_webui.models.users import Users
-from open_webui.utils.auth import create_token
+from open_webui.utils.auth import create_user_token
 from open_webui.utils.misc import parse_duration
 from open_webui.utils.task import prompt_template
 from open_webui.utils.terminals import get_terminal_server_url
@@ -364,7 +364,7 @@ def _resolve_model_terminal_id(app, model_id: str) -> Optional[str]:
 async def _set_terminal_cwd(app, server_id: str, user, cwd: str, chat_id: str) -> None:
     """Set the working directory on a terminal server via the proxy.
 
-    Routes through the open-webui terminal proxy endpoint so that
+    Routes through the open_webui terminal proxy endpoint so that
     auth headers, orchestrator policy routing, and X-User-Id are
     handled correctly — same path the frontend uses.
     """
@@ -563,9 +563,10 @@ async def execute_automation(app, automation: AutomationModel) -> None:
             expires_delta = parse_duration(str(await Config.get('automations.auth_token_expires_in', '1h')))
         except ValueError:
             expires_delta = None
-        token = create_token(
-            data={'id': user.id, 'typ': 'automation'},
+        token = create_user_token(
+            user,
             expires_delta=expires_delta or timedelta(hours=1),
+            typ='automation',
         )
         request = _build_request(app, token=token)
         await app.state.CHAT_COMPLETION_HANDLER(request, form_data, user=user)

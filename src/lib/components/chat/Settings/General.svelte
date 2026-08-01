@@ -238,18 +238,6 @@
 					{/each}
 				</SettingsSelect>
 			</UserSettingRow>
-			{#if $i18n.language === 'en-US' && !($config?.license_metadata ?? false)}
-				<div class="-mt-1 text-[0.6875rem] text-gray-400 dark:text-gray-600">
-					Couldn't find your language?
-					<a
-						class="font-normal underline text-gray-400 dark:text-gray-600"
-						href="https://github.com/open-webui/open-webui/blob/main/docs/CONTRIBUTING.md#-translations-and-internationalization"
-						target="_blank"
-					>
-						Help us translate Open WebUI!
-					</a>
-				</div>
-			{/if}
 		</UserSettingSection>
 
 		{#if $user?.role === 'admin' || (($user?.permissions.chat?.controls ?? true) && ($user?.permissions.chat?.system_prompt ?? true))}

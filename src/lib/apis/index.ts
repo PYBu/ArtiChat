@@ -1760,6 +1760,15 @@ export interface ModelMeta {
 	description?: string;
 	capabilities?: object;
 	profile_image_url?: string;
+	reasoning_control?: ReasoningControlConfig;
 }
 
 export interface ModelParams {}
+
+export type ReasoningProfile = 'gpt' | 'claude';
+export type ReasoningLevel = 'low' | 'medium' | 'high' | 'extra' | 'max';
+
+export interface ReasoningControlConfig {
+	enabled: boolean;
+	profile: ReasoningProfile | null;
+}

@@ -271,7 +271,7 @@
 
 <div class="flex h-full min-h-0 flex-col">
 	<div class="mb-4">
-		<h2 class="text-sm font-medium text-gray-900 dark:text-white">{$i18n.t('Usage')}</h2>
+		<h2 class="text-sm font-medium text-gray-900 dark:text-white">{$i18n.t('Activity')}</h2>
 	</div>
 
 	{#if loading}
@@ -478,7 +478,9 @@
 			{/if}
 
 			<div class="mt-4 text-right text-[0.6875rem] text-gray-400 dark:text-gray-600">
-				{$i18n.t('Token counts are estimates and may not reflect actual API usage')}
+				{$i18n.t(
+					'Activity token counts are estimates and do not determine subscription balances or Chatpoint charges.'
+				)}
 			</div>
 		</div>
 	{/if}

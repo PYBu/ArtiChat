@@ -3,8 +3,6 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from pydantic import BaseModel
-
 from open_webui.constants import ERROR_MESSAGES
 from open_webui.models.config import Config
 from open_webui.utils.access_control import has_permission
@@ -18,6 +16,7 @@ from open_webui.utils.notifications import (
     test_target,
     update_target,
 )
+from pydantic import BaseModel
 
 router = APIRouter()
 
@@ -94,7 +93,7 @@ async def set_default_notification_target(target_id: str, user=Depends(get_verif
 async def test_notification_target(request: Request, target_id: str, user=Depends(get_verified_user)):
     await _check_notifications_access(user)
     try:
-        app_name = getattr(request.app.state, 'WEBUI_NAME', 'Open WebUI')
+        app_name = getattr(request.app.state, 'WEBUI_NAME', 'ArtiChat')
         return await test_target(user.id, target_id, app_name)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

@@ -1,0 +1,20 @@
+services:
+  artichat:
+    image: "${ARTICHAT_IMAGE:?ARTICHAT_IMAGE is required}"
+    container_name: artichat-prod
+    ports:
+      - "${ARTICHAT_PORT:-13000}:8080"
+    volumes:
+      - /data/artichat-prod/data:/app/backend/data
+      - /data/artichat-prod/update-state:/app/backend/data/update-state
+    environment:
+      - "OLLAMA_BASE_URL=http://host.docker.internal:11434"
+      - "WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY}"
+      - "ARTICHAT_UPDATE_REPOSITORY=${ARTICHAT_UPDATE_REPOSITORY}"
+      - "ARTICHAT_UPDATE_WORKFLOW=artichat-deploy.yml"
+      - "ARTICHAT_UPDATE_REF=main"
+      - "ARTICHAT_UPDATE_GITHUB_TOKEN=${ARTICHAT_UPDATE_GITHUB_TOKEN}"
+      - "ARTICHAT_UPDATE_STATE_PATH=/app/backend/data/update-state/status.json"
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    restart: unless-stopped
