@@ -20,6 +20,7 @@ COMPOSE_FILE="${ARTICHAT_COMPOSE_FILE:-$DEPLOY_DIR/docker-compose.yaml}"
 ENV_FILE="${ARTICHAT_ENV_FILE:-$DEPLOY_DIR/.env}"
 IMAGE_ENV_FILE="${ARTICHAT_IMAGE_ENV_FILE:-$DEPLOY_DIR/image.env}"
 IMAGE_REPOSITORY="${ARTICHAT_IMAGE_REPOSITORY:-}"
+DEFAULT_UPDATE_REPOSITORY='PYBu/ArtiChat'
 HEALTH_URL="${ARTICHAT_HEALTH_URL:-http://127.0.0.1:13000}"
 VERIFY_TIMEOUT_SECONDS="${ARTICHAT_VERIFY_TIMEOUT_SECONDS:-180}"
 VERIFY_INTERVAL_SECONDS="${ARTICHAT_VERIFY_INTERVAL_SECONDS:-2}"
@@ -81,13 +82,15 @@ require_under_deploy 'ARTICHAT_IMAGE_ENV_FILE' "$IMAGE_ENV_FILE"
 if [[ -z "$IMAGE_REPOSITORY" && -f "$ENV_FILE" ]]; then
   IMAGE_REPOSITORY="$(sed -nE 's/^[[:space:]]*ARTICHAT_IMAGE_REPOSITORY=['"'"']?([A-Za-z0-9._-]+\/[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+)['"'"']?[[:space:]]*$/\1/p' "$ENV_FILE" | tail -n 1)"
 fi
-if [[ -z "$IMAGE_REPOSITORY" && -f "$ENV_FILE" ]]; then
-  update_repository="$(sed -nE 's/^[[:space:]]*ARTICHAT_UPDATE_REPOSITORY=['"'"']?([A-Za-z0-9._-]+\/[A-Za-z0-9._-]+)['"'"']?[[:space:]]*$/\1/p' "$ENV_FILE" | tail -n 1)"
-  if [[ -n "$update_repository" ]]; then
-    repository_owner="${update_repository%%/*}"
-    repository_name="${update_repository#*/}"
-    IMAGE_REPOSITORY="ghcr.io/${repository_owner,,}/${repository_name,,}"
+if [[ -z "$IMAGE_REPOSITORY" ]]; then
+  update_repository="$DEFAULT_UPDATE_REPOSITORY"
+  if [[ -f "$ENV_FILE" ]]; then
+    configured_repository="$(sed -nE 's/^[[:space:]]*ARTICHAT_UPDATE_REPOSITORY=['"'"']?([A-Za-z0-9._-]+\/[A-Za-z0-9._-]+)['"'"']?[[:space:]]*$/\1/p' "$ENV_FILE" | tail -n 1)"
+    update_repository="${configured_repository:-$DEFAULT_UPDATE_REPOSITORY}"
   fi
+  repository_owner="${update_repository%%/*}"
+  repository_name="${update_repository#*/}"
+  IMAGE_REPOSITORY="ghcr.io/${repository_owner,,}/${repository_name,,}"
 fi
 [[ "$IMAGE_REPOSITORY" =~ ^ghcr[.]io/[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ ]] || {
   echo 'invalid ARTICHAT_IMAGE_REPOSITORY' >&2

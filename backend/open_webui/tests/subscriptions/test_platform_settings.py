@@ -33,12 +33,12 @@ def test_platform_text_settings_are_trimmed_and_defaulted():
 
 
 def test_platform_about_defaults_use_current_version_and_product_copy():
-    assert platform_about_defaults('0.2.3') == {
-        'about_title': 'ArtiChat ProEdition v0.2.3',
+    assert platform_about_defaults('0.2.4') == {
+        'about_title': 'ArtiChat ProEdition v0.2.4',
         'about_content': DEFAULT_PLATFORM_ABOUT_CONTENT,
     }
     assert platform_about_defaults('') == {
-        'about_title': 'ArtiChat ProEdition v0.2.3',
+        'about_title': 'ArtiChat ProEdition v0.2.4',
         'about_content': DEFAULT_PLATFORM_ABOUT_CONTENT,
     }
 

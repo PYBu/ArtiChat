@@ -34,7 +34,7 @@ class FakeGitHubClient:
             raise self.dispatch_error
 
 
-def make_service(tmp_path, github, *, clock=None):
+def make_service(tmp_path, github, *, clock=None, enabled=True):
     return ArtiChatUpdateService(
         current_version="0.1.1",
         display_version="ArtiChat 0.1.1",
@@ -43,6 +43,7 @@ def make_service(tmp_path, github, *, clock=None):
         github=github,
         workflow="artichat-deploy.yml",
         ref="main",
+        enabled=enabled,
         clock=clock,
     )
 
@@ -60,6 +61,20 @@ async def test_check_reports_available_release_and_deployment_capability(tmp_pat
     assert result["release"]["body"] == "Release notes"
     assert result["status"]["stage"] == "idle"
     assert result["error"] is None
+
+
+@pytest.mark.asyncio
+async def test_check_disabled_is_explicit_and_does_not_call_external_service(tmp_path):
+    github = FakeGitHubClient()
+    service = make_service(tmp_path, github, enabled=False)
+
+    result = await service.check()
+
+    assert github.latest_calls == 0
+    assert result["latest"] == result["current"]
+    assert result["update_available"] is False
+    assert result["deployment_enabled"] is False
+    assert result["error"] == "version update checks are disabled"
 
 
 @pytest.mark.asyncio
@@ -96,7 +111,7 @@ async def test_check_without_repository_does_not_call_external_service(tmp_path)
     assert result["update_available"] is False
     assert result["deployment_enabled"] is False
     assert result["release"] is None
-    assert result["error"] is None
+    assert result["error"] == "version update repository is not configured"
 
 
 @pytest.mark.asyncio
@@ -175,4 +190,12 @@ async def test_deploy_without_repository_is_rejected(tmp_path):
     service = make_service(tmp_path, None)
 
     with pytest.raises(ValueError, match="update repository is not configured"):
+        await service.deploy("0.1.2")
+
+
+@pytest.mark.asyncio
+async def test_deploy_when_disabled_is_rejected(tmp_path):
+    service = make_service(tmp_path, FakeGitHubClient(), enabled=False)
+
+    with pytest.raises(ValueError, match="version update checks are disabled"):
         await service.deploy("0.1.2")

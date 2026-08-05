@@ -149,6 +149,12 @@ unset ARTICHAT_IMAGE_REPOSITORY
 "$DEPLOY_SCRIPT" 0.1.2 operation-repository-derived
 grep -q 'ARTICHAT_IMAGE=ghcr.io/artivis-test/artichat:0.1.2' "$ARTICHAT_IMAGE_ENV_FILE" || fail 'GHCR repository was not derived from update repository'
 
+setup_case repository-default success
+sed -i '/^ARTICHAT_UPDATE_REPOSITORY=/d' "$ARTICHAT_ENV_FILE"
+unset ARTICHAT_IMAGE_REPOSITORY
+"$DEPLOY_SCRIPT" 0.1.2 operation-repository-default
+grep -q 'ARTICHAT_IMAGE=ghcr.io/pybu/artichat:0.1.2' "$ARTICHAT_IMAGE_ENV_FILE" || fail 'default GHCR repository was not applied'
+
 setup_case external-persistence success
 export FAKE_EXTERNAL_PERSISTENCE=true
 if "$DEPLOY_SCRIPT" 0.1.2 operation-external-persistence; then

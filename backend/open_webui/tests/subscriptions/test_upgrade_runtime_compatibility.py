@@ -48,4 +48,4 @@ def test_experimental_scim_fails_closed_for_this_release(tmp_path):
     )
 
     assert result.returncode != 0
-    assert 'SCIM is not supported by ArtiChat 0.2.3' in result.stderr
+    assert 'SCIM is not supported by ArtiChat 0.2.4' in result.stderr

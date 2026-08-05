@@ -855,7 +855,7 @@ SCIM_AUTH_PROVIDER = os.getenv('SCIM_AUTH_PROVIDER', '')
 
 if ENABLE_SCIM:
     raise RuntimeError(
-        'SCIM is not supported by ArtiChat 0.2.3 because the experimental upstream implementation '
+        'SCIM is not supported by ArtiChat 0.2.4 because the experimental upstream implementation '
         'does not preserve ArtiChat authentication, session-revocation, subscription, and billing lifecycle '
         'invariants. Remove ENABLE_SCIM/SCIM_ENABLED or set it to false before starting this release.'
     )
@@ -1122,7 +1122,12 @@ PIP_PACKAGE_INDEX_OPTIONS = os.getenv('PIP_PACKAGE_INDEX_OPTIONS', '').split()
 ####################################
 
 ENABLE_VERSION_UPDATE_CHECK = os.getenv('ENABLE_VERSION_UPDATE_CHECK', 'true').lower() == 'true'
-ARTICHAT_UPDATE_REPOSITORY = os.getenv('ARTICHAT_UPDATE_REPOSITORY', '').strip()
+# Keep the official public repository usable out of the box. Installations that
+# must stay offline can explicitly set ENABLE_VERSION_UPDATE_CHECK=false.
+ARTICHAT_UPDATE_REPOSITORY = (
+    os.getenv('ARTICHAT_UPDATE_REPOSITORY', 'PYBu/ArtiChat').strip()
+    or 'PYBu/ArtiChat'
+)
 ARTICHAT_UPDATE_WORKFLOW = os.getenv('ARTICHAT_UPDATE_WORKFLOW', 'artichat-deploy.yml').strip()
 ARTICHAT_UPDATE_REF = os.getenv('ARTICHAT_UPDATE_REF', 'main').strip()
 ARTICHAT_UPDATE_GITHUB_TOKEN = os.getenv('ARTICHAT_UPDATE_GITHUB_TOKEN', '').strip()

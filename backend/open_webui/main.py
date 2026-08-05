@@ -2800,16 +2800,28 @@ async def get_app_version():
 async def get_app_latest_release_version(user=Depends(get_verified_user)):
     if not ENABLE_VERSION_UPDATE_CHECK:
         log.debug(f'Version update check is disabled, returning current version as latest version')
-        return {'current': VERSION, 'latest': VERSION}
+        return {
+            'current': VERSION,
+            'latest': VERSION,
+            'update_available': False,
+            'error': 'version update checks are disabled',
+        }
     try:
         result = await updates.get_update_service().check()
         return {
             'current': result.get('current', VERSION),
             'latest': result.get('latest', VERSION),
+            'update_available': bool(result.get('update_available')),
+            'error': result.get('error'),
         }
     except Exception as e:
-        log.debug(e)
-        return {'current': VERSION, 'latest': VERSION}
+        log.warning('Version update check failed: %s', e)
+        return {
+            'current': VERSION,
+            'latest': VERSION,
+            'update_available': False,
+            'error': 'version update check failed',
+        }
 
 
 @app.get('/api/changelog')

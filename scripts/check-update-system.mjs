@@ -91,7 +91,8 @@ for (const required of [
 	'ARTICHAT_ANNOUNCEMENT_URL',
 	'https://artichatupdate.artivis.cc/index.json',
 	'ARTICHAT_ANNOUNCEMENT_CACHE_TTL_SECONDS',
-	'ARTICHAT_ANNOUNCEMENT_TIMEOUT_SECONDS'
+	'ARTICHAT_ANNOUNCEMENT_TIMEOUT_SECONDS',
+	"os.getenv('ARTICHAT_UPDATE_REPOSITORY', 'PYBu/ArtiChat')"
 ]) {
 	if (!env.includes(required)) throw new Error(`Environment config is missing ${required}`);
 }
@@ -112,6 +113,11 @@ for (const required of [
 	}
 }
 
+const updateService = fs.readFileSync('backend/open_webui/utils/update_service.py', 'utf8');
+if (!updateService.includes('version update checks are disabled')) {
+	throw new Error('Update service must expose disabled checks');
+}
+
 const deployPath = 'deploy/aws-1panel/artichat-deploy.sh';
 if (!fs.existsSync(deployPath)) {
 	throw new Error(`Deployment script is missing: ${deployPath}`);
@@ -120,6 +126,7 @@ if (!fs.existsSync(deployPath)) {
 const deploy = fs.readFileSync(deployPath, 'utf8');
 for (const required of [
 	'flock',
+	"DEFAULT_UPDATE_REPOSITORY='PYBu/ArtiChat'",
 	'--no-deps',
 	'--force-recreate',
 	'/ready',
@@ -167,6 +174,7 @@ for (const required of [
 const compose = fs.readFileSync(runnerFiles[2], 'utf8');
 for (const required of [
 	'${ARTICHAT_IMAGE:?ARTICHAT_IMAGE is required}',
+	'${ARTICHAT_UPDATE_REPOSITORY:-PYBu/ArtiChat}',
 	'/data/artichat-prod/data:/app/backend/data',
 	'/data/artichat-prod/update-state:/app/backend/data/update-state',
 	'ARTICHAT_UPDATE_GITHUB_TOKEN'

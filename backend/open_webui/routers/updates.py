@@ -14,6 +14,7 @@ from open_webui.env import (
     ARTICHAT_UPDATE_STALE_AFTER_SECONDS,
     ARTICHAT_UPDATE_STATE_PATH,
     ARTICHAT_UPDATE_WORKFLOW,
+    ENABLE_VERSION_UPDATE_CHECK,
     VERSION,
     WEBUI_BUILD_HASH,
 )
@@ -45,7 +46,7 @@ def get_update_service() -> ArtiChatUpdateService:
                 ARTICHAT_UPDATE_REPOSITORY,
                 token=ARTICHAT_UPDATE_GITHUB_TOKEN,
             )
-            if ARTICHAT_UPDATE_REPOSITORY
+            if ENABLE_VERSION_UPDATE_CHECK and ARTICHAT_UPDATE_REPOSITORY
             else None
         )
         _update_service = ArtiChatUpdateService(
@@ -59,6 +60,7 @@ def get_update_service() -> ArtiChatUpdateService:
             github=github,
             workflow=ARTICHAT_UPDATE_WORKFLOW,
             ref=ARTICHAT_UPDATE_REF,
+            enabled=ENABLE_VERSION_UPDATE_CHECK,
             cache_ttl_seconds=ARTICHAT_UPDATE_CACHE_TTL_SECONDS,
         )
     return _update_service

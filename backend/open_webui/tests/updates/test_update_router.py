@@ -92,8 +92,25 @@ def test_get_update_service_stays_offline_without_repository(
     service = updates.get_update_service()
 
     assert service.github is None
+    assert service.enabled is True
     assert service.current_version == updates.VERSION
     assert service.display_version == f"{updates.VERSION} (Artivis Alpha)"
+    updates._update_service = None
+
+
+def test_get_update_service_is_offline_when_checks_are_disabled(
+    updates_module, monkeypatch, tmp_path
+):
+    updates, _ = updates_module
+    monkeypatch.setattr(updates, "ENABLE_VERSION_UPDATE_CHECK", False)
+    monkeypatch.setattr(updates, "ARTICHAT_UPDATE_REPOSITORY", "PYBu/ArtiChat")
+    monkeypatch.setattr(updates, "ARTICHAT_UPDATE_STATE_PATH", tmp_path / "status.json")
+    updates._update_service = None
+
+    service = updates.get_update_service()
+
+    assert service.enabled is False
+    assert service.github is None
     updates._update_service = None
 
 

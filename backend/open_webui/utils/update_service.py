@@ -18,6 +18,7 @@ class ArtiChatUpdateService:
         github: Any | None,
         workflow: str,
         ref: str,
+        enabled: bool = True,
         cache_ttl_seconds: float = 300,
         clock: Callable[[], float] | None = None,
     ):
@@ -28,6 +29,7 @@ class ArtiChatUpdateService:
         self.github = github
         self.workflow = workflow
         self.ref = ref
+        self.enabled = enabled
         self.cache_ttl_seconds = cache_ttl_seconds
         self.clock = clock or time.monotonic
         self._cached_release: dict | None = None
@@ -62,13 +64,19 @@ class ArtiChatUpdateService:
             "build_hash": self.build_hash,
             "update_available": False,
             "deployment_enabled": bool(
-                self.github is not None and getattr(self.github, "token", "")
+                self.enabled
+                and self.github is not None
+                and getattr(self.github, "token", "")
             ),
             "release": None,
             "status": self.status(),
             "error": None,
         }
+        if not self.enabled:
+            result["error"] = "version update checks are disabled"
+            return result
         if self.github is None:
+            result["error"] = "version update repository is not configured"
             return result
 
         try:
@@ -93,6 +101,8 @@ class ArtiChatUpdateService:
         return self.state_store.read()
 
     async def deploy(self, target_version: str) -> dict:
+        if not self.enabled:
+            raise ValueError("version update checks are disabled")
         if self.github is None:
             raise ValueError("update repository is not configured")
 
