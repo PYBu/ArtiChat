@@ -3,7 +3,7 @@
 ![ArtiChat Banner](artivis-ass/new/ntitle.png)
 
 # ArtiChat
-ArtiChat --- New Pro Edition ArtiChat 0.2+ --- ArtiChat
+Artivis Studio | ArtiChat Pro Edition | 0.2+
 
 **企业级私有化定制的 AI 对话平台**
 
