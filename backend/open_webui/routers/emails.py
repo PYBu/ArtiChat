@@ -21,6 +21,7 @@ from open_webui.utils.email_delivery import (
     SMTPStageError,
     check_smtp_connection,
     deliver_email,
+    enqueue_email,
     email_logo_data_uri,
     email_template_content_html,
     normalize_smtp_settings,
@@ -387,23 +388,30 @@ async def request_email_challenge(
     if not should_deliver:
         return {'status': True}
 
-    delivery = await deliver_email(
-        template_key='registration_code' if purpose == 'registration' else 'login_code',
-        recipient=email,
-        variables={
-            'platform_name': settings.get('sender_name') or 'ArtiChat',
-            'platform_url': settings.get('public_url') or '',
-            'user_name': getattr(user, 'name', None) or email.split('@', 1)[0],
-            'code': code,
-            'expires_minutes': 10,
-        },
-        settings=settings,
-        secret_key=WEBUI_SECRET_KEY,
-        db=db,
-    )
-    if delivery.status != 'sent':
+    try:
+        delivery = await enqueue_email(
+            template_key='registration_code' if purpose == 'registration' else 'login_code',
+            recipient=email,
+            variables={
+                'platform_name': settings.get('sender_name') or 'ArtiChat',
+                'platform_url': settings.get('public_url') or '',
+                'user_name': getattr(user, 'name', None) or email.split('@', 1)[0],
+                'code': code,
+                'expires_minutes': 10,
+            },
+            settings=settings,
+            secret_key=WEBUI_SECRET_KEY,
+            db=db,
+        )
+    except Exception as exc:
         await invalidate_email_challenge(challenge.id, now=now_ts(), db=db)
-    return {'status': True}
+        log.exception('Email challenge could not be queued')
+        raise HTTPException(status_code=502, detail='EMAIL_DELIVERY_FAILED') from exc
+    return {
+        'status': True,
+        'delivery_id': delivery.id,
+        'delivery_status': delivery.status,
+    }
 
 
 @router.post('/challenges/verify')

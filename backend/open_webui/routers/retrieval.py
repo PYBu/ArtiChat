@@ -2580,7 +2580,7 @@ async def process_web_search(request: Request, form_data: SearchForm, user=Depen
         )
 
     # Search providers and optional retrieval embeddings are a separately
-    # permissioned resource in 0.2.1; they never debit text-generation Chatpoints.
+    # permissioned resource in 0.2.2; they never debit text-generation Chatpoints.
     log.info(
         'Web search authorized: user_id=%s engine=%s billing_mode=%s',
         user.id,

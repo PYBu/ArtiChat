@@ -4,9 +4,11 @@ import asyncio
 import base64
 import hashlib
 import html
+import logging
 import re
 import smtplib
 import ssl
+import time
 from contextlib import contextmanager
 from dataclasses import dataclass
 from email.message import EmailMessage
@@ -19,6 +21,7 @@ from urllib.parse import urlparse
 import markdown
 from cryptography.fernet import Fernet, InvalidToken
 from open_webui.env import DATA_DIR, VERSION
+from open_webui.models.config import Config
 from open_webui.models.email_security import (
     EmailDeliveries,
     EmailDeliveryModel,
@@ -27,10 +30,14 @@ from open_webui.models.email_security import (
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
+log = logging.getLogger(__name__)
+
+
 SMTP_SECURITY_MODES = {'none', 'starttls', 'ssl'}
 PASSWORD_MASK = '********'
 TEMPLATE_VARIABLE = re.compile(r'{{\s*([a-z][a-z0-9_]*)\s*}}')
 SENSITIVE_DELIVERY_VARIABLES = {'code', 'reset_url'}
+QUEUED_RENDERED_PAYLOAD = '_queued_rendered_payload'
 EMAIL_LOGO_CID = 'artichat-platform-logo'
 
 ALLOWED_EMAIL_HTML_TAGS = {
@@ -265,6 +272,32 @@ def _smtp_fernet(secret_key: str) -> Fernet:
         raise ValueError('SMTP_SECRET_KEY_REQUIRED')
     digest = hashlib.sha256(f'artichat:smtp:{secret_key}'.encode('utf-8')).digest()
     return Fernet(base64.urlsafe_b64encode(digest))
+
+
+def _delivery_payload_fernet(secret_key: str) -> Fernet:
+    if not secret_key:
+        raise ValueError('EMAIL_DELIVERY_SECRET_KEY_REQUIRED')
+    digest = hashlib.sha256(f'artichat:email-delivery:{secret_key}'.encode('utf-8')).digest()
+    return Fernet(base64.urlsafe_b64encode(digest))
+
+
+def _encrypt_rendered_payload(rendered: RenderedEmail, *, secret_key: str) -> str:
+    payload = '\n'.join((rendered.subject, rendered.html_body, rendered.text_body))
+    return _delivery_payload_fernet(secret_key).encrypt(payload.encode('utf-8')).decode('ascii')
+
+
+def _decrypt_rendered_payload(value: str, *, secret_key: str) -> RenderedEmail:
+    try:
+        payload = _delivery_payload_fernet(secret_key).decrypt(value.encode('ascii')).decode('utf-8')
+    except (InvalidToken, UnicodeDecodeError, UnicodeEncodeError, ValueError) as exc:
+        raise ValueError('EMAIL_DELIVERY_PAYLOAD_INVALID') from exc
+    subject, separator, body = payload.partition('\n')
+    if not separator:
+        raise ValueError('EMAIL_DELIVERY_PAYLOAD_INVALID')
+    html_body, separator, text_body = body.partition('\n')
+    if not separator:
+        raise ValueError('EMAIL_DELIVERY_PAYLOAD_INVALID')
+    return RenderedEmail(subject=subject, html_body=html_body, text_body=text_body)
 
 
 def encrypt_smtp_password(password: str, *, secret_key: str) -> str:
@@ -516,13 +549,29 @@ async def _attempt_delivery(
     now: int | None,
     db: AsyncSession | None,
     rendered_override: RenderedEmail | None = None,
+    attempt_started: bool = False,
 ) -> EmailDeliveryModel:
-    delivery = await EmailDeliveries.start_attempt(delivery.id, now=now, db=db)
-    rendered = rendered_override or RenderedEmail(
-        subject=delivery.subject,
-        html_body=delivery.html_body,
-        text_body=delivery.text_body,
-    )
+    if not attempt_started:
+        delivery = await EmailDeliveries.start_attempt(delivery.id, now=now, db=db)
+    if rendered_override is not None:
+        rendered = rendered_override
+    else:
+        queued_payload = (delivery.variables or {}).get(QUEUED_RENDERED_PAYLOAD)
+        if queued_payload:
+            try:
+                rendered = _decrypt_rendered_payload(queued_payload, secret_key=secret_key)
+            except ValueError:
+                return await EmailDeliveries.mark_failed(
+                    delivery.id,
+                    error='EMAIL_DELIVERY_PAYLOAD_INVALID',
+                    db=db,
+                )
+        else:
+            rendered = RenderedEmail(
+                subject=delivery.subject,
+                html_body=delivery.html_body,
+                text_body=delivery.text_body,
+            )
     try:
         await asyncio.to_thread(
             send_func,
@@ -548,6 +597,7 @@ async def deliver_email(
     send_func: Callable[..., None] = send_smtp_message,
     now: int | None = None,
     db: AsyncSession | None = None,
+    send_now: bool = True,
 ) -> EmailDeliveryModel:
     if not settings.get('enabled'):
         raise ValueError('EMAIL_DELIVERY_DISABLED')
@@ -587,10 +637,19 @@ async def deliver_email(
         subject=stored_rendered.subject,
         html_body=stored_rendered.html_body,
         text_body=stored_rendered.text_body,
-        variables=stored_variables,
+        variables={
+            **stored_variables,
+            **(
+                {QUEUED_RENDERED_PAYLOAD: _encrypt_rendered_payload(rendered, secret_key=secret_key)}
+                if not send_now
+                else {}
+            ),
+        },
         now=now,
         db=db,
     )
+    if not send_now:
+        return delivery
     return await _attempt_delivery(
         delivery,
         settings=settings,
@@ -600,6 +659,83 @@ async def deliver_email(
         db=db,
         rendered_override=rendered,
     )
+
+
+async def enqueue_email(
+    *,
+    template_key: str,
+    recipient: str,
+    variables: dict[str, Any],
+    settings: dict[str, Any],
+    secret_key: str,
+    now: int | None = None,
+    db: AsyncSession | None = None,
+) -> EmailDeliveryModel:
+    """Persist an email for the durable SMTP worker without blocking SMTP."""
+    return await deliver_email(
+        template_key=template_key,
+        recipient=recipient,
+        variables=variables,
+        settings=settings,
+        secret_key=secret_key,
+        now=now,
+        db=db,
+        send_now=False,
+    )
+
+
+async def process_email_delivery_queue(*, limit: int = 10) -> int:
+    """Attempt a bounded batch of queued email deliveries."""
+    from open_webui.env import WEBUI_SECRET_KEY
+
+    values = await Config.get_many(
+        'email.enabled',
+        'email.smtp.host',
+        'email.smtp.port',
+        'email.smtp.username',
+        'email.smtp.password_encrypted',
+        'email.smtp.security',
+        'email.sender_email',
+        'email.sender_name',
+        'email.reply_to',
+        'email.public_url',
+        'platform.name',
+    )
+    settings = {
+        'enabled': values.get('email.enabled', False),
+        'host': values.get('email.smtp.host', ''),
+        'port': values.get('email.smtp.port', 587),
+        'username': values.get('email.smtp.username', ''),
+        'password_encrypted': values.get('email.smtp.password_encrypted', ''),
+        'security': values.get('email.smtp.security', 'starttls'),
+        'sender_email': values.get('email.sender_email', ''),
+        'sender_name': values.get('email.sender_name', 'ArtiChat'),
+        'reply_to': values.get('email.reply_to', ''),
+        'public_url': values.get('email.public_url', ''),
+        '_platform_name': values.get('platform.name') or values.get('email.sender_name') or 'ArtiChat',
+    }
+    if not settings['enabled']:
+        return 0
+
+    processed = 0
+    for delivery in await EmailDeliveries.list_ready(limit=limit):
+        claimed = await EmailDeliveries.claim_attempt(delivery.id, now=int(time.time()), db=None)
+        if claimed is None:
+            continue
+        try:
+            await _attempt_delivery(
+                claimed,
+                settings=settings,
+                secret_key=WEBUI_SECRET_KEY,
+                send_func=send_smtp_message,
+                now=int(time.time()),
+                db=None,
+                attempt_started=True,
+            )
+            processed += 1
+        except Exception:
+            log.exception('Email delivery worker failed for %s', delivery.id)
+    return processed
 
 
 async def retry_email_delivery(

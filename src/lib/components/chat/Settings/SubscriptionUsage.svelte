@@ -35,7 +35,10 @@
 			{$i18n.t('Billing usage is currently unavailable.')}
 		</div>
 	{:else}
-		<div class="scrollbar-hover min-h-0 flex-1 overflow-y-auto pr-1.5">
+		<div
+			class="scrollbar-hover min-h-0 flex-1 overflow-y-auto pr-1.5"
+			style="scrollbar-gutter: stable;"
+		>
 			<div
 				class="flex flex-wrap items-end justify-between gap-2 border-b border-gray-100 pb-3 dark:border-gray-850"
 			>

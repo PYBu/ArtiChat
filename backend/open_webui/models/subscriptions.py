@@ -1986,6 +1986,25 @@ class SubscriptionReservationsTable:
             )
             return list(result.scalars().all())
 
+    async def list_active(
+        self,
+        *,
+        user_id: str | None = None,
+        limit: int = 100,
+        db: AsyncSession | None = None,
+    ) -> list[SubscriptionReservationModel]:
+        async with get_subscription_db_context(db) as session:
+            filters = [SubscriptionReservation.status == 'active']
+            if user_id is not None:
+                filters.append(SubscriptionReservation.user_id == user_id)
+            result = await session.execute(
+                select(SubscriptionReservation)
+                .where(*filters)
+                .order_by(SubscriptionReservation.created_at.asc())
+                .limit(max(1, limit))
+            )
+            return [SubscriptionReservationModel.model_validate(row) for row in result.scalars().all()]
+
 
 SubscriptionReservations = SubscriptionReservationsTable()
 

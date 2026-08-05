@@ -145,6 +145,10 @@
 		null;
 
 	let loading = true;
+	const isQuotaError = (value: unknown) =>
+		value === 'CHATPOINT_BALANCE_EXHAUSTED' ||
+		value === 'CHATPOINT_BALANCE_INSUFFICIENT_FOR_INPUT';
+	const quotaErrorMessage = '额度不足支撑下次对话。';
 	$: chatContainerId = embedded ? 'note-chat-container' : 'chat-container';
 	$: messageInputDropzoneId = embedded ? 'note-chat-input-dropzone' : 'chat-pane';
 
@@ -3314,7 +3318,9 @@
 				errorMessage = $i18n.t(`Uh-oh! There was an issue with the response.`);
 			}
 
-			toast.error(`${errorMessage}`);
+			toast.error(
+				isQuotaError(errorMessage) ? quotaErrorMessage : `${errorMessage}`
+			);
 			responseMessage.error = {
 				content: error
 			};
@@ -3378,7 +3384,9 @@
 		console.error(innerError);
 		if ('detail' in innerError) {
 			// FastAPI error
-			toast.error(innerError.detail);
+			toast.error(
+				isQuotaError(innerError.detail) ? quotaErrorMessage : innerError.detail
+			);
 			errorMessage = innerError.detail;
 		} else if ('error' in innerError) {
 			// OpenAI error

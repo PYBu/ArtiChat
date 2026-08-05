@@ -173,7 +173,7 @@ if (!subscriptionRoute.includes('SubscriptionCenter')) {
 }
 
 const userMenu = read('src/lib/components/layout/Sidebar/UserMenu.svelte');
-for (const marker of ['SubscriptionQuotaRing', 'showQuota', "showSettings.set('usage')"]) {
+for (const marker of ['SubscriptionQuotaRing', 'showQuota', 'account/subscription?tab=usage']) {
 	if (!userMenu.includes(marker)) failures.push(`UserMenu quota fallback missing ${marker}`);
 }
 
@@ -184,7 +184,7 @@ for (const marker of [
 	'<PendingGiftEntry',
 	'<SubscriptionQuotaRing',
 	"showSettings.set('redeem_code')",
-	"showSettings.set('usage')"
+	'account/subscription?tab=usage'
 ]) {
 	if (!sidebar.includes(marker)) failures.push(`Sidebar billing entry missing ${marker}`);
 }

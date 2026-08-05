@@ -1,5 +1,6 @@
 import ast
 import asyncio
+import logging
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -364,6 +365,52 @@ def test_streaming_billing_precedes_optional_persistence_and_generic_errors_are_
         and 'audit_interrupted_subscription_usage' in _call_names(node)
     )
     assert 'audit_interrupted_subscription_usage' in _call_names(generic_handler)
+
+
+@pytest.mark.asyncio
+async def test_slow_subscription_billing_is_logged_for_completion_latency_diagnosis(monkeypatch, caplog):
+    from open_webui.utils import hosted_inference
+
+    clock = iter((0.0, 0.75))
+    billed = []
+    heartbeat_stopped = []
+    metadata = {
+        'request_id': 'slow-billing-request',
+        'subscription_policy': {'quota_mode': 'metered', 'usage_multiplier': '1'},
+    }
+
+    async def bill_model_usage(**kwargs):
+        billed.append(kwargs)
+
+    async def stop_heartbeat(reservation_id):
+        heartbeat_stopped.append(reservation_id)
+
+    monkeypatch.setattr(hosted_inference, 'stop_hosted_inference_reservation_heartbeat', stop_heartbeat)
+    monkeypatch.setattr(hosted_inference, 'clear_hosted_inference_reservation_metadata', lambda _: None)
+
+    bill_once = _load_top_level_function(
+        'bill_subscription_usage_once',
+        {
+            'bill_model_usage': bill_model_usage,
+            'get_request_client_ip': lambda _: None,
+            'time': SimpleNamespace(perf_counter=lambda: next(clock)),
+            'log': logging.getLogger('artichat.test.billing'),
+        },
+    )
+    ctx = {
+        'metadata': metadata,
+        'user': SimpleNamespace(id='billing-user', role='user'),
+        'form_data': {'model': 'billing-model'},
+        'model': {},
+        'request': None,
+    }
+
+    with caplog.at_level(logging.WARNING, logger='artichat.test.billing'):
+        await bill_once(ctx, {'input_tokens': 1, 'output_tokens': 1})
+
+    assert billed and billed[0]['request_id'] == 'slow-billing-request'
+    assert heartbeat_stopped == [None]
+    assert 'Subscription billing delayed chat completion' in caplog.text
 
 
 def test_interrupted_billing_is_shielded_and_marked_for_audit():

@@ -1805,7 +1805,7 @@
 							<div class="shrink-0">
 								<SubscriptionQuotaRing
 									on:openUsage={async () => {
-										await showSettings.set('usage');
+										await goto('/account/subscription?tab=usage');
 										if ($mobile) {
 											await tick();
 											showSidebar.set(false);

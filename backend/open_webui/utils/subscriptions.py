@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 from decimal import Decimal, InvalidOperation
 
 from open_webui.models.subscriptions import (
@@ -19,6 +20,7 @@ from open_webui.models.subscriptions import (
     calculate_token_cost_micros,
     debit_balances,
     get_subscription_db_context,
+    json_safe_metadata,
     now_ts,
 )
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -26,6 +28,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 SECONDS_PER_DAY = 24 * 60 * 60
+log = logging.getLogger(__name__)
 
 
 class ChatpointReservationRequest(BaseModel):
@@ -77,6 +80,177 @@ class ChatpointReservationConflictError(ValueError):
 class ChatpointReservationGrant(BaseModel):
     reservation: SubscriptionReservationModel
     acquired: bool
+
+
+PENDING_SETTLEMENT_KEY = '_artichat_pending_settlement'
+PENDING_SETTLEMENT_LEASE_SECONDS = 120
+MAX_PENDING_SETTLEMENTS_PER_USER = 3
+
+
+def _pending_settlement_metadata(reservation: SubscriptionReservationModel) -> dict | None:
+    value = (reservation.metadata or {}).get(PENDING_SETTLEMENT_KEY)
+    return value if isinstance(value, dict) else None
+
+
+async def defer_chatpoint_reservation_settlement(
+    reservation_id: str,
+    payload: dict,
+    *,
+    now: int | None = None,
+    db: AsyncSession | None = None,
+) -> SubscriptionReservationModel:
+    """Release the input hold while keeping the reservation for later billing.
+
+    This lets a completed response return immediately and lets the next prompt
+    reserve against the restored balance. The settlement worker will charge the
+    actual usage later; any overage is intentionally recorded as unpaid.
+    """
+    current_time = now if now is not None else now_ts()
+    async with get_subscription_db_context(db) as session:
+        try:
+            reservation = await SubscriptionReservations.lock_by_id(reservation_id, db=session)
+            if reservation is None:
+                raise ChatpointReservationConflictError('CHATPOINT_RESERVATION_NOT_FOUND')
+            if reservation.status != 'active':
+                return reservation
+            if _pending_settlement_metadata(reservation) is not None:
+                return reservation
+
+            refund_plan = max(reservation.reserved_plan_micros, 0)
+            refund_check = max(reservation.reserved_check_micros, 0)
+            if refund_plan or refund_check:
+                await UserSubscriptions.adjust_balances(
+                    reservation.user_id,
+                    plan_delta_micros=refund_plan,
+                    check_delta_micros=refund_check,
+                    event_type='reservation_pending_settlement_release',
+                    reference_type='subscription_reservation',
+                    reference_id=reservation.id,
+                    metadata={'reserved_micros': reservation.reserved_micros},
+                    created_by=None,
+                    created_at=current_time,
+                    commit=False,
+                    db=session,
+                )
+
+            metadata = dict(reservation.metadata or {})
+            metadata[PENDING_SETTLEMENT_KEY] = {
+                'state': 'pending',
+                'attempts': 0,
+                'queued_at': current_time,
+                'payload': json_safe_metadata(payload) or {},
+            }
+            result = await SubscriptionReservations.update_state(
+                reservation.id,
+                values={
+                    'reserved_micros': 0,
+                    'reserved_plan_micros': 0,
+                    'reserved_check_micros': 0,
+                    'expires_at': current_time + 86400,
+                    'meta': metadata,
+                    'updated_at': current_time,
+                },
+                commit=False,
+                db=session,
+            )
+            await session.commit()
+            return result
+        except Exception:
+            await session.rollback()
+            raise
+
+
+async def list_pending_chatpoint_settlements(
+    *,
+    limit: int = 20,
+    db: AsyncSession | None = None,
+) -> list[SubscriptionReservationModel]:
+    rows = await SubscriptionReservations.list_active(limit=max(limit * 4, limit), db=db)
+    pending = []
+    now = now_ts()
+    for row in rows:
+        marker = _pending_settlement_metadata(row)
+        if not marker:
+            continue
+        if marker.get('state') == 'running' and int(marker.get('lease_until') or 0) > now:
+            continue
+        pending.append(row)
+        if len(pending) >= limit:
+            break
+    return pending
+
+
+async def count_pending_chatpoint_settlements(user_id: str, *, db: AsyncSession | None = None) -> int:
+    rows = await SubscriptionReservations.list_active(user_id=user_id, limit=100, db=db)
+    return sum(1 for row in rows if _pending_settlement_metadata(row) is not None)
+
+
+async def claim_pending_chatpoint_settlement(
+    reservation_id: str,
+    *,
+    now: int | None = None,
+    db: AsyncSession | None = None,
+) -> tuple[SubscriptionReservationModel, dict] | None:
+    current_time = now if now is not None else now_ts()
+    async with get_subscription_db_context(db) as session:
+        try:
+            reservation = await SubscriptionReservations.lock_by_id(reservation_id, db=session)
+            if reservation is None or reservation.status != 'active':
+                return None
+            marker = _pending_settlement_metadata(reservation)
+            if not marker:
+                return None
+            if marker.get('state') == 'running' and int(marker.get('lease_until') or 0) > current_time:
+                return None
+            payload = marker.get('payload') if isinstance(marker.get('payload'), dict) else {}
+            marker = {
+                **marker,
+                'state': 'running',
+                'lease_until': current_time + PENDING_SETTLEMENT_LEASE_SECONDS,
+                'attempts': int(marker.get('attempts') or 0) + 1,
+            }
+            metadata = dict(reservation.metadata or {})
+            metadata[PENDING_SETTLEMENT_KEY] = marker
+            claimed = await SubscriptionReservations.update_state(
+                reservation.id,
+                values={'meta': metadata, 'updated_at': current_time},
+                commit=False,
+                db=session,
+            )
+            await session.commit()
+            return claimed, payload
+        except Exception:
+            await session.rollback()
+            raise
+
+
+async def mark_pending_chatpoint_settlement_retry(
+    reservation_id: str,
+    error: str,
+    *,
+    now: int | None = None,
+    db: AsyncSession | None = None,
+) -> None:
+    current_time = now if now is not None else now_ts()
+    async with get_subscription_db_context(db) as session:
+        reservation = await SubscriptionReservations.get_by_id(reservation_id, db=session)
+        if reservation is None or reservation.status != 'active':
+            return
+        marker = _pending_settlement_metadata(reservation)
+        if not marker:
+            return
+        metadata = dict(reservation.metadata or {})
+        metadata[PENDING_SETTLEMENT_KEY] = {
+            **marker,
+            'state': 'pending',
+            'last_error': error[:200],
+            'lease_until': None,
+        }
+        await SubscriptionReservations.update_state(
+            reservation.id,
+            values={'meta': metadata, 'updated_at': current_time},
+            db=session,
+        )
 
 
 def period_seconds(period_days: int) -> int:
@@ -1384,3 +1558,41 @@ async def bill_model_usage(
         except Exception:
             await session.rollback()
             raise
+
+
+async def process_pending_chatpoint_settlements(
+    *,
+    limit: int = 10,
+    db: AsyncSession | None = None,
+) -> int:
+    """Settle completed chats from durable reservation metadata."""
+    processed = 0
+    for reservation in await list_pending_chatpoint_settlements(limit=limit, db=db):
+        claimed = await claim_pending_chatpoint_settlement(reservation.id, db=db)
+        if claimed is None:
+            continue
+        _, payload = claimed
+        try:
+            await bill_model_usage(
+                user_id=str(payload.get('user_id') or reservation.user_id),
+                model_id=str(payload.get('model_id') or reservation.model_id),
+                quota_mode=str(payload.get('quota_mode') or 'metered'),
+                usage_multiplier=str(payload.get('usage_multiplier') or '1'),
+                usage=payload.get('usage'),
+                metadata=payload.get('metadata') if isinstance(payload.get('metadata'), dict) else {},
+                is_admin=bool(payload.get('is_admin')),
+                pricing=payload.get('pricing') if isinstance(payload.get('pricing'), dict) else None,
+                request_id=payload.get('request_id'),
+                reservation_id=reservation.id,
+                allow_partial_reservation=True,
+                charge_reserved_on_missing_usage=True,
+                client_ip=payload.get('client_ip'),
+                first_token_latency_ms=payload.get('first_token_latency_ms'),
+                total_duration_ms=payload.get('total_duration_ms'),
+                db=db,
+            )
+            processed += 1
+        except Exception as exc:
+            log.exception('Deferred Chatpoint settlement failed for %s', reservation.id)
+            await mark_pending_chatpoint_settlement_retry(reservation.id, str(exc), db=db)
+    return processed

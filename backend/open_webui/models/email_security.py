@@ -7,7 +7,7 @@ from uuid import uuid4
 
 from open_webui.internal.db import Base, get_async_db_context
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import BigInteger, Boolean, Column, Index, Integer, JSON, Text, select
+from sqlalchemy import BigInteger, Boolean, Column, Index, Integer, JSON, Text, and_, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -256,6 +256,52 @@ class EmailDeliveriesTable:
             row = await session.get(EmailDelivery, delivery_id)
             return EmailDeliveryModel.model_validate(row) if row is not None else None
 
+    async def list_ready(
+        self,
+        *,
+        now: int | None = None,
+        limit: int = 20,
+        max_attempts: int = 5,
+        db: AsyncSession | None = None,
+    ) -> list[EmailDeliveryModel]:
+        """Return queued, retryable, or stale in-flight deliveries.
+
+        The worker re-checks the status before attempting a row, so a process
+        restart cannot strand a delivery in ``sending`` forever.
+        """
+        timestamp = now if now is not None else int(time.time())
+        async with get_email_security_db_context(db) as session:
+            result = await session.execute(
+                select(EmailDelivery)
+                .where(
+                    or_(
+                        EmailDelivery.status == 'pending',
+                        EmailDelivery.status == 'failed',
+                        EmailDelivery.status == 'sending',
+                    ),
+                    EmailDelivery.attempts < max_attempts,
+                )
+                .order_by(EmailDelivery.created_at.asc())
+                .limit(max(1, limit * 4))
+            )
+            ready: list[EmailDeliveryModel] = []
+            for row in result.scalars().all():
+                if row.status == 'pending':
+                    ready.append(EmailDeliveryModel.model_validate(row))
+                    continue
+                if row.last_attempt_at is None:
+                    ready.append(EmailDeliveryModel.model_validate(row))
+                    continue
+                # Exponential backoff, capped at one minute. Stale sending
+                # rows get a longer lease so an SMTP call is not duplicated
+                # while the original process is still alive.
+                delay = 120 if row.status == 'sending' else min(60, 2 ** max(row.attempts - 1, 0))
+                if timestamp - row.last_attempt_at >= delay:
+                    ready.append(EmailDeliveryModel.model_validate(row))
+                if len(ready) >= limit:
+                    break
+            return ready
+
     async def list_recent(
         self,
         *,
@@ -288,6 +334,45 @@ class EmailDeliveriesTable:
             await session.commit()
             await session.refresh(row)
             return EmailDeliveryModel.model_validate(row)
+
+    async def claim_attempt(
+        self,
+        delivery_id: str,
+        *,
+        now: int | None = None,
+        stale_after: int = 120,
+        db: AsyncSession | None = None,
+    ) -> EmailDeliveryModel | None:
+        timestamp = now if now is not None else int(time.time())
+        async with get_email_security_db_context(db) as session:
+            claimed = await session.execute(
+                update(EmailDelivery)
+                .where(
+                    EmailDelivery.id == delivery_id,
+                    or_(
+                        EmailDelivery.status.in_(['pending', 'failed']),
+                        and_(
+                            EmailDelivery.status == 'sending',
+                            or_(
+                                EmailDelivery.last_attempt_at.is_(None),
+                                EmailDelivery.last_attempt_at <= timestamp - stale_after,
+                            ),
+                        ),
+                    ),
+                )
+                .values(
+                    status='sending',
+                    error=None,
+                    attempts=EmailDelivery.attempts + 1,
+                    last_attempt_at=timestamp,
+                )
+            )
+            if claimed.rowcount != 1:
+                await session.rollback()
+                return None
+            await session.commit()
+            row = await session.get(EmailDelivery, delivery_id)
+            return EmailDeliveryModel.model_validate(row) if row is not None else None
 
     async def mark_sent(
         self,

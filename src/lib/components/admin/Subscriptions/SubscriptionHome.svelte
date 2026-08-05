@@ -4,6 +4,7 @@
 	import Badge from '$lib/components/icons/UserBadgeCheck.svelte';
 	import Bolt from '$lib/components/icons/Bolt.svelte';
 	import ChatBubbles from '$lib/components/icons/ChatBubbles.svelte';
+	import Component from '$lib/components/icons/Component.svelte';
 	import DocumentChartBar from '$lib/components/icons/DocumentChartBar.svelte';
 	import Grid from '$lib/components/icons/Grid.svelte';
 	import Sparkles from '$lib/components/icons/Sparkles.svelte';
@@ -14,6 +15,12 @@
 	} from '$lib/apis/subscriptions';
 
 	const sections = [
+		{
+			href: '/admin/subscriptions/plugins',
+			title: '插件中心',
+			description: '同步、安装和管理扩展插件。',
+			icon: Component
+		},
 		{
 			href: '/admin/subscriptions/plans',
 			title: '订阅计划',
@@ -219,25 +226,27 @@
 				<h2 class="text-sm font-medium text-gray-900 dark:text-gray-100">运营工具</h2>
 				<span class="text-xs text-gray-500">{sections.length} 个模块</span>
 			</div>
-			<nav class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" aria-label="运营管理功能">
+			<nav class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3" aria-label="运营管理功能">
 				{#each sections as section}
 					<a
 						href={section.href}
-						class="group flex min-h-32 flex-col justify-between rounded-lg border border-gray-100 p-4 transition hover:border-gray-200 hover:bg-gray-50/70 dark:border-gray-850 dark:hover:border-gray-700 dark:hover:bg-gray-900"
+						class="group flex min-h-[6.5rem] flex-col justify-between rounded-lg border border-gray-100 p-3 transition hover:border-gray-200 hover:bg-gray-50/70 dark:border-gray-850 dark:hover:border-gray-700 dark:hover:bg-gray-900"
 					>
-						<div class="flex items-start justify-between gap-4">
+						<div class="flex items-start justify-between gap-3">
 							<div
-								class="flex size-9 items-center justify-center rounded-lg bg-gray-100 text-gray-700 dark:bg-gray-850 dark:text-gray-200"
+								class="flex size-8 items-center justify-center rounded-lg bg-gray-100 text-gray-700 dark:bg-gray-850 dark:text-gray-200"
 							>
-								<svelte:component this={section.icon} className="size-4.5" />
+								<svelte:component this={section.icon} className="size-4" />
 							</div>
 							<span class="text-gray-400 transition group-hover:translate-x-0.5" aria-hidden="true"
 								>→</span
 							>
 						</div>
-						<div class="min-w-0 pt-4">
-							<div class="font-medium text-gray-900 dark:text-gray-100">{section.title}</div>
-							<div class="mt-1 text-sm text-gray-500">{section.description}</div>
+						<div class="min-w-0 pt-3">
+							<div class="text-[13px] font-medium text-gray-900 dark:text-gray-100">
+								{section.title}
+							</div>
+							<div class="mt-0.5 text-[11px] text-gray-500">{section.description}</div>
 						</div>
 					</a>
 				{/each}

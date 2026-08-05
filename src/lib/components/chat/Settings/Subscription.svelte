@@ -51,9 +51,9 @@
 	$: currentSubscription = $subscription;
 </script>
 
-<div id="tab-subscription" class="flex h-full min-h-0 flex-col gap-4 overflow-y-auto pr-1 text-sm">
-	<div class="flex items-center justify-between gap-3">
-		<div class="text-sm font-medium text-gray-900 dark:text-white">订阅</div>
+<div id="tab-subscription" class="flex h-full min-h-0 flex-col text-sm">
+	<div class="mb-4 flex shrink-0 items-center justify-between gap-3">
+		<h2 class="text-sm font-medium text-gray-900 dark:text-white">订阅</h2>
 		<button
 			type="button"
 			class="h-7 rounded-lg border border-gray-200 px-2.5 text-[0.6875rem] font-medium text-gray-700 transition hover:bg-gray-50 dark:border-gray-800 dark:text-gray-200 dark:hover:bg-gray-900"
@@ -63,79 +63,92 @@
 		</button>
 	</div>
 
-	{#if loading}
-		<div class="text-gray-500">加载中...</div>
-	{:else if currentSubscription}
-		<div class="rounded-lg border border-gray-100 p-3 dark:border-gray-850">
-			<div class="flex items-center justify-between gap-3">
-				<div class="text-[13px] font-medium text-gray-900 dark:text-white">
-					{tierLabel(currentSubscription.tier, currentSubscription.display_name)}
-				</div>
-				<div class="text-[0.6875rem] text-gray-500">{statusLabel(currentSubscription.status)}</div>
-			</div>
-			<div class="mt-3 grid grid-cols-2 gap-2 text-[0.6875rem] text-gray-600 dark:text-gray-300">
-				<div>到期时间</div>
-				<div class="text-right">{formatDate(currentSubscription.expires_at)}</div>
-				<div>本周期开始</div>
-				<div class="text-right">{formatDate(currentSubscription.period_start_at)}</div>
-				<div>本周期结束</div>
-				<div class="text-right">{formatDate(currentSubscription.period_end_at)}</div>
-				<div>下次重置</div>
-				<div class="text-right">{formatDate(currentSubscription.next_reset_at)}</div>
-				<div>Plan Chatpoint</div>
-				<div class="text-right">{formatChatpoint(currentSubscription.plan_balance_micros)}</div>
-				<div>Check Chatpoint</div>
-				<div class="text-right">{formatChatpoint(currentSubscription.check_balance_micros)}</div>
-			</div>
-		</div>
-	{/if}
-
-	<div class="grid gap-3 md:grid-cols-3">
-		{#each plans as plan}
-			<div
-				class="flex min-h-52 flex-col rounded-lg border border-gray-100 p-3 dark:border-gray-850"
-			>
-				<div class="flex items-start justify-between gap-3">
-					<div>
+	<div
+		class="scrollbar-hover min-h-0 flex-1 overflow-y-auto pr-1.5"
+		style="scrollbar-gutter: stable;"
+	>
+		<div class="flex flex-col gap-4">
+			{#if loading}
+				<div class="text-gray-500">加载中...</div>
+			{:else if currentSubscription}
+				<div class="rounded-lg border border-gray-100 p-3 dark:border-gray-850">
+					<div class="flex items-center justify-between gap-3">
 						<div class="text-[13px] font-medium text-gray-900 dark:text-white">
-							{tierLabel(plan.id, plan.display_name)}
+							{tierLabel(currentSubscription.tier, currentSubscription.display_name)}
 						</div>
-						<div class="mt-1 text-[0.6875rem] text-gray-500">
-							{plan.features?.subtitle ?? plan.description}
+						<div class="text-[0.6875rem] text-gray-500">
+							{statusLabel(currentSubscription.status)}
 						</div>
 					</div>
 					<div
-						class="rounded-lg bg-gray-50 px-2 py-1 text-[0.6875rem] font-medium uppercase text-gray-600 dark:bg-gray-900 dark:text-gray-300"
+						class="mt-3 grid grid-cols-2 gap-2 text-[0.6875rem] text-gray-600 dark:text-gray-300"
 					>
-						{plan.features?.icon ?? 'plan'}
+						<div>到期时间</div>
+						<div class="text-right">{formatDate(currentSubscription.expires_at)}</div>
+						<div>本周期开始</div>
+						<div class="text-right">{formatDate(currentSubscription.period_start_at)}</div>
+						<div>本周期结束</div>
+						<div class="text-right">{formatDate(currentSubscription.period_end_at)}</div>
+						<div>下次重置</div>
+						<div class="text-right">{formatDate(currentSubscription.next_reset_at)}</div>
+						<div>Plan Chatpoint</div>
+						<div class="text-right">{formatChatpoint(currentSubscription.plan_balance_micros)}</div>
+						<div>Check Chatpoint</div>
+						<div class="text-right">
+							{formatChatpoint(currentSubscription.check_balance_micros)}
+						</div>
 					</div>
 				</div>
+			{/if}
 
-				<div class="mt-4 text-lg font-semibold text-gray-900 dark:text-white">
-					{formatChatpoint(plan.plan_chatpoint_allowance_micros)}
-				</div>
-				<div class="text-[0.6875rem] text-gray-500">每月 Plan Chatpoint</div>
-
-				<div class="mt-4 flex-1 space-y-2 text-[0.6875rem] text-gray-600 dark:text-gray-300">
-					{#each plan.features?.highlights ?? [] as item}
-						<div class="flex gap-2">
-							<span class="mt-1 size-1.5 rounded-full bg-green-500"></span>
-							<span>{item}</span>
+			<div class="grid gap-3 md:grid-cols-3">
+				{#each plans as plan}
+					<div
+						class="flex min-h-52 flex-col rounded-lg border border-gray-100 p-3 dark:border-gray-850"
+					>
+						<div class="flex items-start justify-between gap-3">
+							<div>
+								<div class="text-[13px] font-medium text-gray-900 dark:text-white">
+									{tierLabel(plan.id, plan.display_name)}
+								</div>
+								<div class="mt-1 text-[0.6875rem] text-gray-500">
+									{plan.features?.subtitle ?? plan.description}
+								</div>
+							</div>
+							<div
+								class="rounded-lg bg-gray-50 px-2 py-1 text-[0.6875rem] font-medium uppercase text-gray-600 dark:bg-gray-900 dark:text-gray-300"
+							>
+								{plan.features?.icon ?? 'plan'}
+							</div>
 						</div>
-					{/each}
-					<div>{plan.features?.model_summary ?? plan.description}</div>
-				</div>
 
-				<button
-					type="button"
-					class="mt-4 h-7 w-full rounded-lg border border-gray-200 bg-transparent px-3 text-[0.6875rem] font-medium text-gray-700 transition hover:bg-gray-50 dark:border-gray-800 dark:text-gray-200 dark:hover:bg-gray-900"
-					on:click={() => toast.info('购买功能暂未开放。')}
-				>
-					{currentSubscription?.tier === plan.id
-						? '当前订阅'
-						: (plan.features?.cta_label ?? '购买')}
-				</button>
+						<div class="mt-4 text-lg font-semibold text-gray-900 dark:text-white">
+							{formatChatpoint(plan.plan_chatpoint_allowance_micros)}
+						</div>
+						<div class="text-[0.6875rem] text-gray-500">每月 Plan Chatpoint</div>
+
+						<div class="mt-4 flex-1 space-y-2 text-[0.6875rem] text-gray-600 dark:text-gray-300">
+							{#each plan.features?.highlights ?? [] as item}
+								<div class="flex gap-2">
+									<span class="mt-1 size-1.5 rounded-full bg-green-500"></span>
+									<span>{item}</span>
+								</div>
+							{/each}
+							<div>{plan.features?.model_summary ?? plan.description}</div>
+						</div>
+
+						<button
+							type="button"
+							class="mt-4 h-7 w-full rounded-lg border border-gray-200 bg-transparent px-3 text-[0.6875rem] font-medium text-gray-700 transition hover:bg-gray-50 dark:border-gray-800 dark:text-gray-200 dark:hover:bg-gray-900"
+							on:click={() => toast.info('购买功能暂未开放。')}
+						>
+							{currentSubscription?.tier === plan.id
+								? '当前订阅'
+								: (plan.features?.cta_label ?? '购买')}
+						</button>
+					</div>
+				{/each}
 			</div>
-		{/each}
+		</div>
 	</div>
 </div>

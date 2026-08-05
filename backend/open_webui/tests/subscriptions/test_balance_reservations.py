@@ -13,6 +13,8 @@ from open_webui.utils.subscriptions import (
     ChatpointReservationConflictError,
     ChatpointReservationInsufficientError,
     bill_model_usage,
+    count_pending_chatpoint_settlements,
+    defer_chatpoint_reservation_settlement,
     ensure_subscription_current,
     extend_chatpoint_reservation,
     get_reservation_id,
@@ -22,6 +24,7 @@ from open_webui.utils.subscriptions import (
     reserve_chatpoints,
     resize_chatpoint_reservation_batch,
     settle_chatpoint_reservation,
+    process_pending_chatpoint_settlements,
 )
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
@@ -48,6 +51,51 @@ async def set_balances(db_session, user_id: str, *, plan: int, check: int = 0):
         created_by='test',
         db=db_session,
     )
+
+
+@pytest.mark.asyncio
+async def test_deferred_settlement_restores_hold_and_bills_once(db_session):
+    await set_balances(db_session, 'deferred-user', plan=10)
+    grant = await reserve_chatpoints(
+        'deferred-user',
+        request_id='deferred-request',
+        model_id='model-a',
+        amount_micros=chatpoint_to_micros(8),
+        now=NOW + 1,
+        db=db_session,
+    )
+    reservation_id = grant.reservation.id
+
+    await defer_chatpoint_reservation_settlement(
+        reservation_id,
+        {
+            'user_id': 'deferred-user',
+            'model_id': 'model-a',
+            'quota_mode': 'metered',
+            'usage_multiplier': '1',
+            'usage': {'input_tokens': 10_000, 'output_tokens': 0},
+            'metadata': {'request_id': 'deferred-request'},
+            'is_admin': False,
+            'pricing': {
+                'input_chatpoint_per_million': '100',
+                'output_chatpoint_per_million': '100',
+                'cache_creation_chatpoint_per_million': '0',
+                'cache_read_chatpoint_per_million': '0',
+            },
+            'request_id': 'deferred-request',
+        },
+        now=NOW + 2,
+        db=db_session,
+    )
+
+    restored = await UserSubscriptions.get_by_user_id('deferred-user', db=db_session)
+    assert restored.plan_balance_micros == chatpoint_to_micros(10)
+    assert await count_pending_chatpoint_settlements('deferred-user', db=db_session) == 1
+
+    assert await process_pending_chatpoint_settlements(limit=5, db=db_session) == 1
+    settled = await SubscriptionReservations.get_by_id(reservation_id, db=db_session)
+    assert settled.status in {'settled', 'partially_settled'}
+    assert await count_pending_chatpoint_settlements('deferred-user', db=db_session) == 0
 
 
 @pytest.mark.asyncio

@@ -2,7 +2,7 @@
 
 ![ArtiChat Banner](artivis-ass/new/ntitle.png)
 
-# ArtiChat 
+# ArtiChat
 
 [![Version](https://img.shields.io/badge/Artivis%20Studio%20|%20ArtiChat%20ProEdition%20|%200.2+-8A2BE2)](https://github.com/PYBu/ArtiChat/)
 
@@ -24,7 +24,7 @@
 
 <br/>
 
-> 当前稳定版本为 **ArtiChat ProEdition 0.2.1**。本版本已验证从 0.1.7 直接升级，无需安装中间版本。升级会自动执行数据库迁移；生产环境升级前请先停止服务并备份 `artichat_data`，旧版 0.1.7 不可直接连接已经迁移到 0.2.1 的数据卷。
+> 当前稳定版本为 **ArtiChat ProEdition 0.2.2**。本版本已验证从 0.1.7 直接升级，无需安装中间版本。升级会自动执行数据库迁移；生产环境升级前请先停止服务并备份 `artichat_data`，旧版 0.1.7 不可直接连接已经迁移到 0.2.2 的数据卷。
 
 ## 简介
 
@@ -297,7 +297,7 @@ curl http://localhost:3000/health
 
 ### 从 0.1.7 升级
 
-0.2.1 支持从已发布的 0.1.7 直接升级。以下命令会先停止写入并备份命名卷，再更新代码和重建服务：
+0.2.2 支持从已发布的 0.1.7 直接升级。以下命令会先停止写入并备份命名卷，再更新代码和重建服务：
 
 ```bash
 docker compose -p artichat stop artichat
@@ -311,7 +311,7 @@ docker compose -p artichat up -d --build artichat
 curl http://localhost:3000/ready
 ```
 
-确认 `/ready` 返回 `{"status":true}` 后再恢复外部流量。需要回滚时，请把升级前归档恢复到一个干净数据卷后再启动 0.1.7；不要让 0.1.7 直接读取已经迁移到 0.2.1 的数据卷。
+确认 `/ready` 返回 `{"status":true}` 后再恢复外部流量。需要回滚时，请把升级前归档恢复到一个干净数据卷后再启动 0.1.7；不要让 0.1.7 直接读取已经迁移到 0.2.2 的数据卷。
 
 <br/>
 
@@ -336,7 +336,7 @@ curl http://localhost:3000/ready
 
 ```
 v0.1.0 - v0.1.7  ✅  底层适配与修改，加固与 ArtiChat 稳定运行。
-v0.2.1 - now     ✅  系统性升级，重建 ArtiChat 组件与 UI，以新功能与用户体验作为优先更新动力。
+v0.2.2 - now     ✅  系统性升级，重建 ArtiChat 组件与 UI，以新功能与用户体验作为优先更新动力。
 
 v0.3.0           🔜  ArtiLINK — 本地 MCP 接入，让模型直接操控 PowerShell 与本地系统资源，实现真正意义上的「网页版 Codex」
 ```

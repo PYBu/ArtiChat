@@ -45,11 +45,6 @@
 	};
 
 	const handleClick = async () => {
-		if ($mobile) {
-			await setDetailsOpen(!detailsOpen);
-			return;
-		}
-
 		detailsOpen = false;
 		dispatch('openUsage');
 	};
@@ -143,8 +138,6 @@
 	on:focus={handleMouseEnter}
 	on:blur={handleMouseLeave}
 	aria-label="用量 / Usage"
-	aria-haspopup={$mobile ? 'dialog' : undefined}
-	aria-expanded={$mobile ? detailsOpen : undefined}
 >
 	<span class="max-w-[4.5rem] truncate text-[11px] font-medium text-gray-600 dark:text-gray-200">
 		{tier}

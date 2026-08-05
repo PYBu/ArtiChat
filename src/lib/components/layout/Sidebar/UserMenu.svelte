@@ -164,10 +164,10 @@
 				</div>
 				{#if showQuota}
 					<div class="mt-1 flex justify-end px-1">
-						<SubscriptionQuotaRing
-							on:openUsage={async () => {
-								show = false;
-								await showSettings.set('usage');
+										<SubscriptionQuotaRing
+											on:openUsage={async () => {
+												show = false;
+												await goto('/account/subscription?tab=usage');
 								if ($mobile) {
 									await tick();
 									showSidebar.set(false);

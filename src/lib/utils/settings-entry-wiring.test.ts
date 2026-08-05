@@ -29,9 +29,15 @@ describe('settings entry wiring', () => {
 		}
 		expect(modal).not.toContain("selectedTab === 'admin:");
 		expect(modal).not.toContain('AdminGeneral');
-		expect(subscription).toContain('min-h-0 flex-col gap-4 overflow-y-auto');
-		expect(redeem).toContain('min-h-0 flex-col overflow-y-auto');
+		expect(subscription).toContain('flex h-full min-h-0 flex-col text-sm');
+		expect(subscription).toContain('scrollbar-hover min-h-0 flex-1 overflow-y-auto');
+		expect(subscription).toContain(
+			'<h2 class="text-sm font-medium text-gray-900 dark:text-white">'
+		);
+		expect(redeem).toContain('flex h-full min-h-0 flex-col text-sm');
+		expect(redeem).toContain('scrollbar-hover min-h-0 flex-1 overflow-y-auto');
 		expect(redeem).toContain('max-w-2xl');
+		expect(redeem).not.toContain('mx-auto flex w-full max-w-2xl');
 		expect(redeem).toContain('h-7');
 		expect(redeem).not.toContain('rounded-full');
 	});
@@ -42,7 +48,7 @@ describe('settings entry wiring', () => {
 
 		expect(sidebar).toContain('<PendingGiftEntry');
 		expect(sidebar).toContain('<SubscriptionQuotaRing');
-		expect(sidebar).toContain("showSettings.set('usage')");
+		expect(sidebar).toContain("goto('/account/subscription?tab=usage')");
 		expect(menu).toContain('export let showQuota = true');
 		expect(menu).not.toContain("{#if role !== 'admin'}");
 	});

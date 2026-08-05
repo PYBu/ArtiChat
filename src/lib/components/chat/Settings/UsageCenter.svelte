@@ -11,7 +11,7 @@
 	let view: UsageView = 'billing';
 </script>
 
-<div class="flex h-full min-h-0 flex-col">
+<div class="flex h-full min-h-0 min-w-0 flex-col text-sm">
 	<div class="mb-4 flex shrink-0 items-center justify-between gap-3">
 		<h2 class="text-sm font-medium text-gray-900 dark:text-white">{$i18n.t('Usage')}</h2>
 		<div
@@ -44,7 +44,7 @@
 		</div>
 	</div>
 
-	<div class="min-h-0 flex-1">
+	<div class="min-h-0 min-w-0 flex-1 overflow-hidden">
 		{#if view === 'billing'}
 			<SubscriptionUsage />
 		{:else}

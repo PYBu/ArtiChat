@@ -126,7 +126,14 @@ from open_webui.utils.payload import apply_system_prompt_to_body, resolve_system
 from open_webui.utils.plugin import load_function_module_by_id
 from open_webui.utils.response import merge_usage, normalize_usage
 from open_webui.utils.sanitize import sanitize_code
-from open_webui.utils.subscriptions import bill_model_usage, get_request_client_ip, stream_event_has_content
+from open_webui.utils.subscriptions import (
+    bill_model_usage,
+    count_pending_chatpoint_settlements,
+    defer_chatpoint_reservation_settlement,
+    MAX_PENDING_SETTLEMENTS_PER_USER,
+    get_request_client_ip,
+    stream_event_has_content,
+)
 from open_webui.utils.task import (
     get_task_model_id,
     rag_template,
@@ -3582,6 +3589,7 @@ async def bill_subscription_usage_once(
     usage: dict | None,
     *,
     completion_status: str = 'completed',
+    defer_settlement: bool = True,
 ):
     if ctx.get('subscription_usage_billed'):
         return
@@ -3630,6 +3638,42 @@ async def bill_subscription_usage_once(
         }
     )
     reservation_id = metadata.get('_artichat_chatpoint_reservation_id')
+    defer_helper = globals().get('defer_chatpoint_reservation_settlement')
+    pending_count = 0
+    if defer_settlement and reservation_id and defer_helper is not None:
+        pending_count = await count_pending_chatpoint_settlements(user.id)
+    if (
+        defer_settlement
+        and reservation_id
+        and defer_helper is not None
+        and pending_count < MAX_PENDING_SETTLEMENTS_PER_USER
+    ):
+        payload = {
+            'user_id': user.id,
+            'model_id': model_id,
+            'quota_mode': policy_data.get('quota_mode', 'metered'),
+            'usage_multiplier': policy_data.get('usage_multiplier', '1'),
+            'usage': usage,
+            'metadata': billing_metadata,
+            'is_admin': getattr(user, 'role', None) == 'admin',
+            'pricing': policy_data,
+            'request_id': metadata.get('request_id'),
+            'client_ip': get_request_client_ip(ctx.get('request')),
+            'first_token_latency_ms': first_token_latency_ms,
+            'total_duration_ms': total_duration_ms,
+            'allow_partial_reservation': True,
+            'charge_reserved_on_missing_usage': True,
+        }
+        await defer_helper(reservation_id, payload)
+        from open_webui.utils.hosted_inference import stop_hosted_inference_reservation_heartbeat
+
+        await stop_hosted_inference_reservation_heartbeat(reservation_id)
+        ctx['subscription_usage_billed'] = True
+        from open_webui.utils.hosted_inference import clear_hosted_inference_reservation_metadata
+
+        clear_hosted_inference_reservation_metadata(metadata)
+        return
+    billing_started_at = time.perf_counter()
     try:
         await bill_model_usage(
             user_id=user.id,
@@ -3649,6 +3693,14 @@ async def bill_subscription_usage_once(
             charge_reserved_on_missing_usage=True,
         )
     finally:
+        billing_elapsed_ms = int((time.perf_counter() - billing_started_at) * 1000)
+        if billing_elapsed_ms >= 500:
+            log.warning(
+                'Subscription billing delayed chat completion: elapsed_ms=%s request_id=%s reservation_id=%s',
+                billing_elapsed_ms,
+                metadata.get('request_id'),
+                reservation_id,
+            )
         from open_webui.utils.hosted_inference import stop_hosted_inference_reservation_heartbeat
 
         await stop_hosted_inference_reservation_heartbeat(reservation_id)

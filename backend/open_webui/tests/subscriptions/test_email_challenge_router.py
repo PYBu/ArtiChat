@@ -93,9 +93,9 @@ async def test_registration_challenge_applies_domain_rule_and_sends_code(monkeyp
 
     async def deliver(**kwargs):
         captured.update(kwargs)
-        return SimpleNamespace(status='sent')
+        return SimpleNamespace(id='delivery-1', status='pending')
 
-    monkeypatch.setattr(emails, 'deliver_email', deliver)
+    monkeypatch.setattr(emails, 'enqueue_email', deliver)
 
     with pytest.raises(HTTPException) as exc_info:
         await emails.request_email_challenge(
@@ -110,7 +110,7 @@ async def test_registration_challenge_applies_domain_rule_and_sends_code(monkeyp
         emails.EmailChallengeRequestForm(email='alice@example.com', purpose='registration'),
         db=db_session,
     )
-    assert response == {'status': True}
+    assert response == {'status': True, 'delivery_id': 'delivery-1', 'delivery_status': 'pending'}
     assert captured['template_key'] == 'registration_code'
     assert 'code' in captured['variables']
 
@@ -136,13 +136,20 @@ async def test_failed_mail_invalidates_the_created_challenge(monkeypatch, db_ses
         captured.update(kwargs)
         return SimpleNamespace(status='failed')
 
-    monkeypatch.setattr(emails, 'deliver_email', fail_delivery)
+    async def fail_queue(**kwargs):
+        captured.update(kwargs)
+        raise ValueError('SMTP_QUEUE_FAILED')
 
-    assert await emails.request_email_challenge(
-        request_from(),
-        emails.EmailChallengeRequestForm(email='alice@example.com', purpose='registration'),
-        db=db_session,
-    ) == {'status': True}
+    monkeypatch.setattr(emails, 'enqueue_email', fail_queue)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await emails.request_email_challenge(
+            request_from(),
+            emails.EmailChallengeRequestForm(email='alice@example.com', purpose='registration'),
+            db=db_session,
+        )
+    assert exc_info.value.status_code == 502
+    assert exc_info.value.detail == 'EMAIL_DELIVERY_FAILED'
 
     with pytest.raises(ValueError, match='EMAIL_CODE_ALREADY_USED'):
         await verify_email_challenge(
