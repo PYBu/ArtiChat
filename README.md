@@ -2,8 +2,9 @@
 
 ![ArtiChat Banner](artivis-ass/new/ntitle.png)
 
-# ArtiChat
-Artivis Studio | ArtiChat Pro Edition | 0.2+
+# ArtiChat 
+
+[![Version](https://img.shields.io/badge/Artivis%20Studio%20|%20ArtiChat%20ProEdition%20|%200.2+-8A2BE2)](https://github.com/PYBu/ArtiChat/)
 
 **企业级私有化定制的 AI 对话平台**
 
@@ -11,7 +12,7 @@ Artivis Studio | ArtiChat Pro Edition | 0.2+
 
 <br/>
 
-[![Version](https://img.shields.io/badge/version-0.2.1-6366f1?style=flat-square)](https://github.com/PYBu/ArtiChat/releases)
+[![Version](https://img.shields.io/badge/version-0.2.2-6366f1?style=flat-square)](https://github.com/PYBu/ArtiChat/releases)
 [![OpenWebUI](https://img.shields.io/badge/based_on-OpenWebUI_0.11.0-0ea5e9?style=flat-square)](https://github.com/open-webui/open-webui)
 [![Docker](https://img.shields.io/badge/Docker-ready-2496ED?style=flat-square&logo=docker&logoColor=white)](https://www.docker.com/)
 [![SvelteKit](https://img.shields.io/badge/SvelteKit-frontend-FF3E00?style=flat-square&logo=svelte&logoColor=white)](https://kit.svelte.dev/)
