@@ -34,6 +34,8 @@ def registration_settings(**overrides):
 def smtp_settings():
     return {
         'enabled': True,
+        'host': 'smtp.example.com',
+        'sender_email': 'mailer@example.com',
         'sender_name': 'ArtiChat',
         'public_url': 'https://chat.example.com',
     }

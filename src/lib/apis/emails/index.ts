@@ -3,6 +3,7 @@ import { apiJsonFetch } from '$lib/apis/base';
 
 export type EmailSettings = {
 	enabled: boolean;
+	configured: boolean;
 	host: string;
 	port: number;
 	username: string;

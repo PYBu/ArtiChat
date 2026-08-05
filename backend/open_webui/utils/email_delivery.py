@@ -316,6 +316,7 @@ def normalize_smtp_settings(
     *,
     secret_key: str,
     current_encrypted_password: str | None = None,
+    allow_incomplete_enable: bool = False,
 ) -> dict[str, Any]:
     security = str(data.get('security') or 'starttls').strip().lower()
     if security not in SMTP_SECURITY_MODES:
@@ -331,9 +332,9 @@ def normalize_smtp_settings(
     enabled = bool(data.get('enabled', False))
     host = str(data.get('host') or '').strip()
     sender_email = str(data.get('sender_email') or '').strip().lower()
-    if enabled and not host:
+    if enabled and not host and not allow_incomplete_enable:
         raise ValueError('SMTP_HOST_REQUIRED')
-    if enabled and not sender_email:
+    if enabled and not sender_email and not allow_incomplete_enable:
         raise ValueError('SMTP_SENDER_EMAIL_REQUIRED')
 
     password = str(data.get('password') or '')
@@ -365,6 +366,32 @@ def normalize_smtp_settings(
     }
 
 
+def smtp_settings_configured(settings: dict[str, Any], *, secret_key: str | None = None) -> bool:
+    """Return whether the saved SMTP details are complete enough for delivery."""
+    if not str(settings.get('host') or '').strip():
+        return False
+    if not str(settings.get('sender_email') or '').strip():
+        return False
+
+    username = str(settings.get('username') or '').strip()
+    if not username:
+        return True
+
+    encrypted_password = str(settings.get('password_encrypted') or '')
+    if not encrypted_password:
+        return False
+    if secret_key:
+        try:
+            decrypt_smtp_password(encrypted_password, secret_key=secret_key)
+        except ValueError:
+            return False
+    return True
+
+
+def smtp_settings_ready(settings: dict[str, Any], *, secret_key: str | None = None) -> bool:
+    return bool(settings.get('enabled')) and smtp_settings_configured(settings, secret_key=secret_key)
+
+
 def smtp_admin_settings(settings: dict[str, Any], *, secret_key: str | None = None) -> dict[str, Any]:
     encrypted_password = str(settings.get('password_encrypted') or '')
     password_requires_reset = False
@@ -389,6 +416,7 @@ def smtp_admin_settings(settings: dict[str, Any], *, secret_key: str | None = No
     response['password'] = PASSWORD_MASK if encrypted_password and not password_requires_reset else ''
     response['password_configured'] = bool(encrypted_password)
     response['password_requires_reset'] = password_requires_reset
+    response['configured'] = smtp_settings_configured(settings, secret_key=secret_key)
     return response
 
 
@@ -714,7 +742,7 @@ async def process_email_delivery_queue(*, limit: int = 10) -> int:
         'public_url': values.get('email.public_url', ''),
         '_platform_name': values.get('platform.name') or values.get('email.sender_name') or 'ArtiChat',
     }
-    if not settings['enabled']:
+    if not smtp_settings_ready(settings, secret_key=WEBUI_SECRET_KEY):
         return 0
 
     processed = 0

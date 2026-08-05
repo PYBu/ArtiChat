@@ -33,6 +33,7 @@
 		toggling = true;
 		const payload = { ...emailSettings, enabled } as Partial<EmailSettingsValue>;
 		delete payload.password_configured;
+		delete payload.configured;
 		const saved = await updateEmailSettings(localStorage.token, payload).catch((error) => {
 			toast.error(`${error}`);
 			return null;
@@ -68,7 +69,7 @@
 				</AdminSettingRow>
 			</AdminSettingSection>
 
-			<RegistrationSettings embedded emailEnabled={emailSettings.enabled} />
+			<RegistrationSettings embedded emailEnabled={emailSettings.enabled && emailSettings.configured} />
 
 			{#if emailSettings.enabled}
 				<EmailSettings showEnableToggle={false} />

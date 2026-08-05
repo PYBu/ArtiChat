@@ -4,7 +4,7 @@ RAW_PROVIDER_PREFIXES = ('/openai/', '/ollama/')
 
 
 def assert_raw_embedding_access(user) -> None:
-    """Restrict unpriced embedding APIs to administrators in ArtiChat 0.2.2."""
+    """Restrict unpriced embedding APIs to administrators in ArtiChat 0.2.3."""
     if getattr(user, 'role', None) != 'admin':
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

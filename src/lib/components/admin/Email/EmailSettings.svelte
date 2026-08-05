@@ -19,6 +19,7 @@
 
 	const defaults: EmailSettings = {
 		enabled: false,
+		configured: false,
 		host: '',
 		port: 587,
 		username: '',
@@ -72,6 +73,7 @@
 	const persist = async (notify = true) => {
 		saving = true;
 		const payload: Partial<EmailSettings> = { ...settings };
+		delete payload.configured;
 		delete payload.password_configured;
 		delete payload.password_requires_reset;
 		const saved = await updateEmailSettings(localStorage.token, payload).catch((error) => {

@@ -29,6 +29,7 @@ from open_webui.utils.email_delivery import (
     retry_email_delivery,
     sanitize_email_html,
     smtp_admin_settings,
+    smtp_settings_ready,
     validate_email_template,
 )
 from open_webui.utils.email_security import (
@@ -234,7 +235,7 @@ async def load_registration_settings() -> dict[str, Any]:
 async def load_effective_registration_settings() -> dict[str, Any]:
     settings = await load_registration_settings()
     smtp_settings = await load_smtp_settings()
-    if not smtp_settings.get('enabled'):
+    if not smtp_settings_ready(smtp_settings, secret_key=WEBUI_SECRET_KEY):
         settings = {
             **settings,
             'verification_enabled': False,
@@ -361,7 +362,7 @@ async def request_email_challenge(
     )
 
     settings = await load_smtp_settings()
-    if not settings.get('enabled'):
+    if not smtp_settings_ready(settings, secret_key=WEBUI_SECRET_KEY):
         return {'status': True}
 
     code = generate_email_code()
@@ -447,7 +448,7 @@ async def forgot_password(
     try:
         user = await Users.get_user_by_email(email, db=db)
         settings = await load_smtp_settings()
-        if user is None or not settings.get('enabled'):
+        if user is None or not smtp_settings_ready(settings, secret_key=WEBUI_SECRET_KEY):
             return {'status': True}
 
         raw_token = generate_reset_token()
@@ -513,7 +514,7 @@ async def request_sensitive_challenge(
     if not registration['sensitive_action_verification_enabled']:
         return {'status': True, 'verification_required': False}
     settings = await load_smtp_settings()
-    if not settings.get('enabled'):
+    if not smtp_settings_ready(settings, secret_key=WEBUI_SECRET_KEY):
         raise HTTPException(status_code=400, detail='EMAIL_DELIVERY_DISABLED')
     try:
         session_id = current_session_id(request)
@@ -594,7 +595,7 @@ async def request_new_email_challenge(
     if not registration['sensitive_action_verification_enabled']:
         return {'status': True, 'verification_required': False}
     settings = await load_smtp_settings()
-    if not settings.get('enabled'):
+    if not smtp_settings_ready(settings, secret_key=WEBUI_SECRET_KEY):
         raise HTTPException(status_code=400, detail='EMAIL_DELIVERY_DISABLED')
     try:
         session_id = current_session_id(request)
@@ -702,7 +703,7 @@ async def reset_password(
 
     try:
         settings = await load_smtp_settings()
-        if settings.get('enabled'):
+        if smtp_settings_ready(settings, secret_key=WEBUI_SECRET_KEY):
             await deliver_email(
                 template_key='password_changed',
                 recipient=user.email,
@@ -729,11 +730,25 @@ async def get_smtp_settings(user=Depends(get_email_admin_user)):
 @router.put('/admin/settings')
 async def update_smtp_settings(form_data: SMTPSettingsForm, user=Depends(get_email_admin_user)):
     current = await load_smtp_settings()
+    data = form_data.model_dump()
+    allow_incomplete_enable = bool(
+        form_data.enabled
+        and not current.get('enabled')
+        and not current.get('host')
+        and not current.get('sender_email')
+        and not current.get('username')
+        and not current.get('password_encrypted')
+        and not str(form_data.host or '').strip()
+        and not str(form_data.sender_email or '').strip()
+        and not str(form_data.username or '').strip()
+        and form_data.password in {'', '********'}
+    )
     try:
         normalized = normalize_smtp_settings(
-            form_data.model_dump(),
+            data,
             current_encrypted_password=str(current.get('password_encrypted') or ''),
             secret_key=WEBUI_SECRET_KEY,
+            allow_incomplete_enable=allow_incomplete_enable,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

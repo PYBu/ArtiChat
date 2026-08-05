@@ -4,7 +4,7 @@ import logging
 from datetime import UTC, datetime
 
 from open_webui.env import WEBUI_SECRET_KEY
-from open_webui.utils.email_delivery import deliver_email
+from open_webui.utils.email_delivery import deliver_email, smtp_settings_ready
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -23,7 +23,7 @@ async def notify_user(
         from open_webui.routers.emails import load_smtp_settings
 
         settings = await load_smtp_settings()
-        if not settings.get('enabled'):
+        if not smtp_settings_ready(settings, secret_key=WEBUI_SECRET_KEY):
             return False
         if subscription_notification and not settings.get('subscription_notifications', True):
             return False

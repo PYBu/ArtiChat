@@ -7,6 +7,8 @@ from open_webui.utils.email_delivery import (
     normalize_smtp_settings,
     render_email_template,
     smtp_admin_settings,
+    smtp_settings_configured,
+    smtp_settings_ready,
 )
 
 
@@ -49,7 +51,23 @@ def test_smtp_settings_mask_password_and_preserve_existing_secret():
     response = smtp_admin_settings(saved)
     assert response['password'] == '********'
     assert response['password_configured'] is True
+    assert response['configured'] is True
     assert 'password_encrypted' not in response
+
+
+def test_smtp_settings_can_be_enabled_before_details_are_entered():
+    settings = normalize_smtp_settings(
+        {'enabled': True},
+        secret_key='primary-secret',
+        allow_incomplete_enable=True,
+    )
+
+    assert settings['enabled'] is True
+    assert smtp_settings_configured(settings) is False
+    assert smtp_settings_ready(settings, secret_key='primary-secret') is False
+
+    with pytest.raises(ValueError, match='SMTP_HOST_REQUIRED'):
+        normalize_smtp_settings({'enabled': True}, secret_key='primary-secret')
 
 
 def test_smtp_settings_require_reentry_after_secret_key_rotation():

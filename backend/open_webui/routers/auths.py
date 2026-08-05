@@ -471,10 +471,10 @@ async def update_email(
 
     try:
         from open_webui.routers.emails import load_smtp_settings
-        from open_webui.utils.email_delivery import deliver_email
+        from open_webui.utils.email_delivery import deliver_email, smtp_settings_ready
 
         settings = await load_smtp_settings()
-        if settings.get('enabled'):
+        if smtp_settings_ready(settings, secret_key=WEBUI_SECRET_KEY):
             variables = {
                 'platform_name': settings.get('sender_name') or 'ArtiChat',
                 'platform_url': settings.get('public_url') or '',
