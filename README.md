@@ -12,7 +12,7 @@
 
 <br/>
 
-[![Version](https://img.shields.io/badge/version-0.2.2-6366f1?style=flat-square)](https://github.com/PYBu/ArtiChat/releases)
+[![Version](https://img.shields.io/badge/version-0.2.4-6366f1?style=flat-square)](https://github.com/PYBu/ArtiChat/releases)
 [![OpenWebUI](https://img.shields.io/badge/based_on-OpenWebUI_0.11.0-0ea5e9?style=flat-square)](https://github.com/open-webui/open-webui)
 [![Docker](https://img.shields.io/badge/Docker-ready-2496ED?style=flat-square&logo=docker&logoColor=white)](https://www.docker.com/)
 [![SvelteKit](https://img.shields.io/badge/SvelteKit-frontend-FF3E00?style=flat-square&logo=svelte&logoColor=white)](https://kit.svelte.dev/)
@@ -24,7 +24,7 @@
 
 <br/>
 
-> 当前稳定版本为 **ArtiChat ProEdition 0.2.2**。本版本已验证从 0.1.7 直接升级，无需安装中间版本。升级会自动执行数据库迁移；生产环境升级前请先停止服务并备份 `artichat_data`，旧版 0.1.7 不可直接连接已经迁移到 0.2.2 的数据卷。
+> 当前稳定版本为 **ArtiChat ProEdition 0.2.4**。本版本已验证从 0.1.7 直接升级，无需安装中间版本。升级会自动执行数据库迁移；生产环境升级前请先停止服务并备份 `artichat_data`，旧版 0.1.7 不可直接连接已经迁移到 0.2.4 的数据卷。
 
 ## 简介
 
@@ -113,6 +113,32 @@ ArtiChat 是由 **Artivis Studio** 基于 [OpenWebUI 0.11.0](https://github.com/
 
 </td>
 </tr>
+
+<tr>
+<td width="50%" valign="top">
+
+**🧩 &nbsp;插件中心 ACPlugin**
+
+为模型装上可调用的工具，能力边界由你定义：
+
+- 支持自制插件上传即用，无需改动主程序代码
+- 内置 **ACPlugin** 目录：Artivis 官方插件 + 已认证社区插件，一键安装
+- 插件专用于模型工具（Tools），由模型在对话中按需调用
+
+</td>
+<td width="50%" valign="top">
+
+**📦 &nbsp;镜像分发**
+
+已上传至 GHCR 与 DockerHub，拉取即部署：
+
+- 官方镜像已发布，无需本地构建
+- 单条 `docker pull` 命令完成拉取
+- [GHCR](https://github.com/PYBu/ArtiChat/pkgs/container/artichat) · [DockerHub](https://hub.docker.com/r/minier/artichat)
+
+</td>
+</tr>
+
 </table>
 
 ---
@@ -269,22 +295,78 @@ ArtiChat 的每一次迭代都来自用户的真实声音。如果你遇到了Bu
 | 依赖 | 版本要求 |
 |:-----|:--------|
 | Docker | 20.10+ |
-| Docker Compose | v2.x |
+| Docker Compose | v2.x（可选，仅 Compose 部署需要） |
 | 服务器内存 | ≥ 2 GB（推荐 4 GB+） |
 | 网络 | 可访问目标 AI API |
 
-### 一键启动
+<br/>
+
+### 方案一：官方镜像（推荐）
+
+镜像已发布到 GHCR 与 DockerHub，无需克隆仓库、无需本地构建，拉取即用。两个仓库是同一份镜像，任选其一：
+
+| 仓库 | 镜像地址 |
+|:-----|:--------|
+| GHCR | `ghcr.io/pybu/artichat:latest` |
+| DockerHub | `minier/artichat:latest` |
+
+```bash
+docker run -d \
+  --name artichat \
+  -p 3000:8080 \
+  -v artichat_data:/app/backend/data \
+  -e OPENAI_API_BASE_URL=https://your-api-endpoint/v1 \
+  -e OPENAI_API_KEY=sk-xxxxxx \
+  --restart unless-stopped \
+  ghcr.io/pybu/artichat:latest
+```
+
+也可以用 Compose，新建一个 `docker-compose.yaml`：
+
+```yaml
+services:
+  artichat:
+    image: ghcr.io/pybu/artichat:latest
+    container_name: artichat
+    ports:
+      - "3000:8080"
+    volumes:
+      - artichat_data:/app/backend/data
+    environment:
+      - OPENAI_API_BASE_URL=https://your-api-endpoint/v1
+      - OPENAI_API_KEY=sk-xxxxxx
+    restart: unless-stopped
+
+volumes:
+  artichat_data:
+```
+
+```bash
+docker compose -p artichat up -d
+```
+
+> 💡 `latest` 始终指向最新稳定版。生产环境如需固定版本，把标签换成具体版本号（如 `:0.2.2`）即可，方便回滚。升级只需拉取新标签并重建容器，`artichat_data` 数据卷会自动保留。
+
+<br/>
+
+### 方案二：源码构建
+
+需要自行修改代码时使用，首次构建约需 3–5 分钟：
 
 ```bash
 # 1. 克隆仓库
 git clone https://github.com/PYBu/ArtiChat.git
 cd ArtiChat
 
-# 2. 启动服务（首次构建约需 3–5 分钟）
+# 2. 构建并启动
 docker compose -p artichat up -d --build artichat
 ```
 
-启动完成后访问 **[http://localhost:3000](http://localhost:3000)**，首次进入即可完成管理员账号初始化。
+<br/>
+
+### 启动后
+
+访问 **[http://localhost:3000](http://localhost:3000)**，首次进入即可完成管理员账号初始化。
 
 健康检查：
 
@@ -297,7 +379,7 @@ curl http://localhost:3000/health
 
 ### 从 0.1.7 升级
 
-0.2.2 支持从已发布的 0.1.7 直接升级。以下命令会先停止写入并备份命名卷，再更新代码和重建服务：
+0.2.2 支持从已发布的 0.1.7 直接升级。无论用哪种方式部署，都请先停止写入并备份命名卷：
 
 ```bash
 docker compose -p artichat stop artichat
@@ -305,7 +387,21 @@ docker run --rm \
   -v artichat_data:/source:ro \
   -v "$PWD":/backup \
   alpine sh -c 'tar -C /source -czf /backup/artichat-0.1.7-backup.tar.gz .'
+```
 
+备份完成后，按部署方式选择对应的升级命令。
+
+镜像部署：
+
+```bash
+docker compose -p artichat pull
+docker compose -p artichat up -d
+curl http://localhost:3000/ready
+```
+
+源码部署：
+
+```bash
 git pull --ff-only origin main
 docker compose -p artichat up -d --build artichat
 curl http://localhost:3000/ready
@@ -332,13 +428,15 @@ curl http://localhost:3000/ready
 
 ---
 
-## 🗺️ &nbsp;路线图
+## 🗺️ &nbsp;重要更新节点
 
 ```
-v0.1.0 - v0.1.7  ✅  底层适配与修改，加固与 ArtiChat 稳定运行。
-v0.2.2 - now     ✅  系统性升级，重建 ArtiChat 组件与 UI，以新功能与用户体验作为优先更新动力。
+v0.1.3  ✅  完整重建 ArtiChat 内容，最为分支区分于 OpenWebUI 。
+v0.1.7  ✅  底层适配与修改，加固与 ArtiChat 稳定运行。
+v0.2.0  ✅  系统性升级，重建 ArtiChat 组件与 UI，以新功能与用户体验作为优先更新动力。
+v0.2.2  ✅  插件中心（ACPlugin），支持上传或使用Artivis或社区提供的插件。
 
-v0.3.0           🔜  ArtiLINK — 本地 MCP 接入，让模型直接操控 PowerShell 与本地系统资源，实现真正意义上的「网页版 Codex」
+v0.3.0  🔜  ArtiLINK — 本地 MCP 接入，让模型直接操控 PowerShell 与本地系统资源，实现真正意义上的「网页版 Codex」
 ```
 
 <br/>
