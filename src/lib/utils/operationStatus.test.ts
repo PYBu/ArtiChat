@@ -4,6 +4,7 @@ import {
 	appendOperationStatus,
 	getDefaultOperationStatusConfig,
 	getVisibleOperationStatusHistory,
+	getToolCallFailureReason,
 	getToolCallOperationStatusId,
 	resolveOperationStatus
 } from './operationStatus';
@@ -46,6 +47,21 @@ describe('operation status configuration', () => {
 		expect(getToolCallOperationStatusId('generate_video', true, true)).toBe('video.failed');
 		expect(getToolCallOperationStatusId('search_web', true)).toBe('tool.completed');
 		expect(getToolCallOperationStatusId('search_web', true, true)).toBe('tool.failed');
+	});
+
+	it('recognizes common tool failure result shapes', () => {
+		expect(getToolCallFailureReason({ error: '[ERROR: Too Many Requests]' })).toBe(
+			'[ERROR: Too Many Requests]'
+		);
+		expect(getToolCallFailureReason({ detail: { error: 'provider unavailable' } })).toBe(
+			'provider unavailable'
+		);
+		expect(getToolCallFailureReason({ status: 'incomplete', message: 'Timed out' })).toBe(
+			'Timed out'
+		);
+		expect(getToolCallFailureReason(undefined, '[ERROR: Too Many Requests]')).toBe(
+			'[ERROR: Too Many Requests]'
+		);
 	});
 
 	it('provides built-in terminal labels for media completion states', () => {

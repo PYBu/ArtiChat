@@ -17,7 +17,11 @@
 	import Image from './Image.svelte';
 	import FullHeightIframe from './FullHeightIframe.svelte';
 	import { config, settings } from '$lib/stores';
-	import { getToolCallOperationStatusId, resolveOperationStatus } from '$lib/utils/operationStatus';
+	import {
+		getToolCallFailureReason,
+		getToolCallOperationStatusId,
+		resolveOperationStatus
+	} from '$lib/utils/operationStatus';
 
 	export let id: string = '';
 	export let attributes: {
@@ -86,28 +90,6 @@
 		}
 	}
 
-	function getToolResultError(value: unknown, raw: string): string {
-		if (value && typeof value === 'object' && !Array.isArray(value)) {
-			const record = value as Record<string, unknown>;
-			const detail = record.detail;
-			const detailError =
-				detail && typeof detail === 'object'
-					? (detail as Record<string, unknown>).error
-					: undefined;
-			const error = record.error ?? detailError;
-			if (error) return typeof error === 'string' ? error : JSON.stringify(error);
-
-			const status = String(record.status ?? '').toLowerCase();
-			if (['error', 'failed', 'failure', 'cancelled'].includes(status)) {
-				const message = record.message ?? record.detail ?? status;
-				return typeof message === 'string' ? message : JSON.stringify(message);
-			}
-		}
-
-		const text = raw.trim();
-		return /^\s*(?:\[error\b|error\s*[:：]|failed\s*[:：])/i.test(text) ? text : '';
-	}
-
 	export let resultContent: string = '';
 
 	$: result = resultContent || decode(attributes?.result ?? '');
@@ -118,7 +100,7 @@
 	$: isDone = attributes?.done === 'true';
 	$: isExecuting = attributes?.done && attributes?.done !== 'true';
 	$: parsedResult = parseJSONString(result);
-	$: toolResultError = getToolResultError(parsedResult, result);
+	$: toolResultError = getToolCallFailureReason(parsedResult, result);
 	$: isFailed = Boolean(toolResultError) || attributes?.failed === 'true';
 	$: operationStatus = resolveOperationStatus(
 		{

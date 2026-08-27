@@ -10,10 +10,11 @@
 	import WrenchSolid from '$lib/components/icons/WrenchSolid.svelte';
 	import Sparkles from '$lib/components/icons/Sparkles.svelte';
 	import CheckCircle from '$lib/components/icons/CheckCircle.svelte';
+	import XMark from '$lib/components/icons/XMark.svelte';
 	import FullHeightIframe from '$lib/components/common/FullHeightIframe.svelte';
 
 	import { config, settings } from '$lib/stores';
-	import { resolveOperationStatus } from '$lib/utils/operationStatus';
+	import { getToolCallFailureReason, resolveOperationStatus } from '$lib/utils/operationStatus';
 
 	const i18n = getContext('i18n');
 
@@ -27,7 +28,9 @@
 			duration?: string;
 			embeds?: string;
 			arguments?: string;
+			failed?: string;
 		};
+		text?: string;
 	}> = [];
 
 	export let messageDone = true;
@@ -49,6 +52,12 @@
 	$: hasPending =
 		!messageDone &&
 		tokens.some((t) => t?.attributes?.done !== undefined && t?.attributes?.done !== 'true');
+	$: hasFailed = tokens.some((t) => {
+		if (t?.attributes?.type !== 'tool_calls') return false;
+		if (t.attributes?.failed === 'true') return true;
+		const raw = decode(t.text ?? '');
+		return Boolean(getToolCallFailureReason(undefined, raw));
+	});
 
 	$: codeInterpreterCount = tokens.filter((t) => t?.attributes?.type === 'code_interpreter').length;
 
@@ -135,6 +144,10 @@
 			{#if hasPending}
 				<div>
 					<Spinner className="size-4" />
+				</div>
+			{:else if hasFailed}
+				<div class="text-red-500 dark:text-red-400">
+					<XMark className="size-4" strokeWidth="2" />
 				</div>
 			{:else if toolCallCount > 0}
 				<div class="text-emerald-500 dark:text-emerald-400">

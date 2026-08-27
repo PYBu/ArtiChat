@@ -320,6 +320,44 @@ export const getToolCallOperationStatusId = (
 	return done ? 'tool.completed' : 'tool.executing';
 };
 
+/** Return a user-facing failure reason from a tool result without assuming one response shape. */
+export const getToolCallFailureReason = (value: unknown, raw = ''): string => {
+	const inspect = (candidate: unknown, depth = 0): string => {
+		if (depth > 4 || candidate === null || candidate === undefined) return '';
+
+		if (typeof candidate === 'string') {
+			const text = candidate.trim();
+			if (!text) return '';
+			if (/^\s*(?:\[error\b|error\s*[:：]|failed\s*[:：])/i.test(text)) return text;
+			if (depth < 4 && (text.startsWith('{') || text.startsWith('[') || text.startsWith('"'))) {
+				try {
+					return inspect(JSON.parse(text), depth + 1);
+				} catch {
+					return '';
+				}
+			}
+			return '';
+		}
+
+		if (typeof candidate !== 'object' || Array.isArray(candidate)) return '';
+		const record = candidate as Record<string, unknown>;
+		if (record.error) {
+			return typeof record.error === 'string' ? record.error : JSON.stringify(record.error);
+		}
+		const detailError = inspect(record.detail, depth + 1);
+		if (detailError) return detailError;
+
+		const status = String(record.status ?? '').toLowerCase();
+		if (['error', 'failed', 'failure', 'cancelled', 'canceled', 'incomplete'].includes(status)) {
+			const message = record.message ?? record.detail ?? status;
+			return typeof message === 'string' ? message : JSON.stringify(message);
+		}
+		return '';
+	};
+
+	return inspect(value) || inspect(raw);
+};
+
 const interpolate = (template: string, status: OperationStatus): string => {
 	const duration = Number(status.duration ?? 0);
 	const values: Record<string, unknown> = {
