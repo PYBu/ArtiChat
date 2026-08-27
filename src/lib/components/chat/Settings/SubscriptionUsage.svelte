@@ -14,9 +14,13 @@
 		((micros ?? 0) / 1_000_000).toLocaleString(undefined, { maximumFractionDigits: 6 });
 	const formatDate = (value: number | null | undefined) =>
 		value ? new Date(value * 1000).toLocaleString() : '-';
+	const formatNumber = (value: number | null | undefined) => (value ?? 0).toLocaleString();
 	const formatDuration = (value: number | null | undefined) =>
 		value == null ? '-' : value >= 1000 ? `${(value / 1000).toFixed(2)} s` : `${value} ms`;
 	const deductedCost = (plan: number, check: number) => plan + check;
+	const mediaTypeLabel = (usageType: string | null | undefined) =>
+		usageType === 'video' ? 'Video' : usageType === 'image' ? 'Image' : usageType || 'Chat';
+	const mediaUnitLabel = (unit: string | null | undefined) => (unit === 'second' ? 'seconds' : 'images');
 
 	onMount(async () => {
 		data = await getMySubscriptionUsage(localStorage.token).catch((error) => {
@@ -128,6 +132,24 @@
 				</div>
 			</section>
 
+			{#if data.usage.media_totals.length}
+				<section class="border-b border-gray-100 py-4 dark:border-gray-850">
+					<h3 class="mb-3 text-[0.6875rem] font-medium text-gray-500">Media usage</h3>
+					<div class="divide-y divide-gray-100 dark:divide-gray-850">
+						{#each data.usage.media_totals as media}
+							<div class="flex items-center justify-between gap-4 py-2 text-[0.6875rem]">
+								<span class="text-gray-500">
+									{mediaTypeLabel(media.usage_type)} · {mediaUnitLabel(media.media_unit)}
+								</span>
+								<span class="tabular-nums">
+									{formatNumber(media.units)} · {formatChatpoint(media.cost_micros)} CP
+								</span>
+							</div>
+						{/each}
+					</div>
+				</section>
+			{/if}
+
 			{#if data.usage.total_unpaid_cost_micros > 0}
 				<div
 					class="border-b border-gray-100 py-3 text-[0.6875rem] text-amber-700 dark:border-gray-850 dark:text-amber-300"
@@ -210,6 +232,13 @@
 										{formatChatpoint(item.check_cost_micros)} CP
 									</div>
 								</div>
+								{#if item.usage_type !== 'chat' || item.media_units != null}
+									<div class="mt-2 text-[0.6875rem] text-gray-500">
+										{mediaTypeLabel(item.usage_type)} · {formatNumber(item.media_units)} {mediaUnitLabel(
+											item.media_unit
+										)}
+									</div>
+								{/if}
 								<div class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[0.6875rem] text-gray-500">
 									<span>First token {formatDuration(item.first_token_latency_ms)}</span>
 									<span>Total {formatDuration(item.total_duration_ms)}</span>

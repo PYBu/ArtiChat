@@ -50,6 +50,7 @@
 		total_cache_read_tokens: 0,
 		total_tokens: 0,
 		total_request_count: 0,
+		media_totals: [],
 		model_totals: []
 	});
 	const emptyOverview = (): SubscriptionUsageOverview => ({
@@ -72,6 +73,8 @@
 	let searchingUsers = false;
 	let userSearchComplete = false;
 	let statusFilter = '';
+	let usageTypeFilter = '';
+	let mediaUnitFilter = '';
 	let timePreset: TimePreset = 'all';
 	let startDate = '';
 	let endDate = '';
@@ -110,6 +113,7 @@
 		if (status === 'unlimited') return '无限使用';
 		if (status === 'admin_bypass') return '管理员绕过';
 		if (status === 'missing_usage') return '缺少用量';
+		if (status === 'failed') return '生成失败（未计费）';
 		return status;
 	};
 	const eventLabel = (eventType: string) => {
@@ -158,6 +162,8 @@
 	const currentFilters = (): AdminUsageFilters => ({
 		userId: selectedUser?.id,
 		status: statusFilter || undefined,
+		usageType: usageTypeFilter || undefined,
+		mediaUnit: mediaUnitFilter || undefined,
 		...getTimeRange()
 	});
 
@@ -218,6 +224,8 @@
 		userQuery = '';
 		userResults = [];
 		statusFilter = '';
+		usageTypeFilter = '';
+		mediaUnitFilter = '';
 		timePreset = 'all';
 		startDate = '';
 		endDate = '';
@@ -485,6 +493,25 @@
 				</div>
 			</div>
 		</section>
+
+		<section class="min-w-0 rounded-lg border border-gray-100/70 p-4 dark:border-white/[0.08]">
+			<div class="mb-3 text-sm font-medium">媒体用量</div>
+			{#if usage.media_totals.length}
+				<dl class="divide-y divide-gray-100 text-xs dark:divide-white/[0.08]">
+					{#each usage.media_totals as media}
+						<div class="flex items-center justify-between gap-3 py-2">
+							<dt class="text-gray-500">
+								{media.usage_type === 'video' ? '视频' : '图片'}
+								· {media.media_unit === 'second' ? '秒' : '张'}
+							</dt>
+							<dd class="tabular-nums">{formatNumber(media.units)}</dd>
+						</div>
+					{/each}
+				</dl>
+			{:else}
+				<div class="text-xs text-gray-500">暂无媒体用量</div>
+			{/if}
+		</section>
 	</div>
 
 	<section class="min-w-0 border-t border-gray-100/70 pt-4 dark:border-white/[0.08]">
@@ -496,7 +523,7 @@
 				on:click={resetFilters}>重置</button
 			>
 		</div>
-		<div class="grid min-w-0 gap-2 md:grid-cols-[minmax(13rem,1fr)_10rem_10rem_auto]">
+		<div class="grid min-w-0 gap-2 md:grid-cols-[minmax(13rem,1fr)_8rem_8rem_8rem_8rem_auto]">
 			<div class="relative min-w-0">
 				<Search
 					className="pointer-events-none absolute left-2.5 top-2 size-3.5 text-gray-400"
@@ -555,6 +582,25 @@
 				<option value="unlimited">无限使用</option>
 				<option value="admin_bypass">管理员绕过</option>
 				<option value="missing_usage">缺少用量</option>
+			</select>
+			<select
+				class="h-8 rounded-lg border border-gray-100/70 bg-gray-50/40 px-2 text-xs outline-hidden focus:border-blue-400 dark:border-white/[0.08] dark:bg-white/[0.03]"
+				bind:value={usageTypeFilter}
+				aria-label="Media type"
+			>
+				<option value="">All types</option>
+				<option value="chat">Chat</option>
+				<option value="image">Image</option>
+				<option value="video">Video</option>
+			</select>
+			<select
+				class="h-8 rounded-lg border border-gray-100/70 bg-gray-50/40 px-2 text-xs outline-hidden focus:border-blue-400 dark:border-white/[0.08] dark:bg-white/[0.03]"
+				bind:value={mediaUnitFilter}
+				aria-label="Media unit"
+			>
+				<option value="">All units</option>
+				<option value="image">Images</option>
+				<option value="second">Seconds</option>
 			</select>
 			<select
 				class="h-8 rounded-lg border border-gray-100/70 bg-gray-50/40 px-2 text-xs outline-hidden focus:border-blue-400 dark:border-white/[0.08] dark:bg-white/[0.03]"
@@ -685,7 +731,7 @@
 					<table class="w-full min-w-[70rem] text-left text-[11px]">
 						<thead class="bg-gray-50/70 text-gray-500 dark:bg-white/[0.03]"
 							><tr
-								>{#each ['时间', '用户', '模型', '输入', '输出', '创缓', '读缓', 'Plan CP', '充值 CP', '状态'] as heading}<th
+								>{#each ['时间', '用户', '类型', '模型', '用量', '输入', '输出', '创建缓存', '读取缓存', 'Plan CP', '充值 CP', '状态'] as heading}<th
 										class="whitespace-nowrap px-3 py-2 font-medium">{heading}</th
 									>{/each}</tr
 							></thead
@@ -693,25 +739,30 @@
 						<tbody class="divide-y divide-gray-100 dark:divide-white/[0.06]">
 							{#each usage.items as item (item.id)}
 								<tr>
-									<td class="whitespace-nowrap px-3 py-2">{formatDate(item.created_at)}</td><td
-										class="max-w-48 truncate px-3 py-2"
-										title={userLabel(item)}>{userLabel(item)}</td
-									><td class="max-w-48 truncate px-3 py-2" title={item.model_id}>{item.model_id}</td
-									>
-									<td class="px-3 py-2 tabular-nums">{formatNumber(item.input_tokens)}</td><td
-										class="px-3 py-2 tabular-nums">{formatNumber(item.output_tokens)}</td
-									><td class="px-3 py-2 tabular-nums">{formatNumber(item.cache_creation_tokens)}</td
-									><td class="px-3 py-2 tabular-nums">{formatNumber(item.cache_read_tokens)}</td>
-									<td class="px-3 py-2 tabular-nums">{formatChatpoint(item.plan_cost_micros)}</td
-									><td class="px-3 py-2 tabular-nums">{formatChatpoint(item.check_cost_micros)}</td
-									><td class="px-3 py-2"
-										><span
-											class:status-amber={item.status === 'partially_billed' ||
-												item.status === 'missing_usage'}
+									<td class="whitespace-nowrap px-3 py-2">{formatDate(item.created_at)}</td>
+									<td class="max-w-48 truncate px-3 py-2" title={userLabel(item)}>{userLabel(item)}</td>
+									<td class="px-3 py-2">
+										{item.usage_type === 'video' ? '视频' : item.usage_type === 'image' ? '图片' : '聊天'}
+									</td>
+									<td class="max-w-48 truncate px-3 py-2" title={item.model_id}>{item.model_id}</td>
+									<td class="px-3 py-2 tabular-nums">
+										{item.media_units != null
+											? `${formatNumber(item.media_units)} ${item.media_unit === 'second' ? '秒' : '张'}`
+											: '-'}
+									</td>
+									<td class="px-3 py-2 tabular-nums">{formatNumber(item.input_tokens)}</td>
+									<td class="px-3 py-2 tabular-nums">{formatNumber(item.output_tokens)}</td>
+									<td class="px-3 py-2 tabular-nums">{formatNumber(item.cache_creation_tokens)}</td>
+									<td class="px-3 py-2 tabular-nums">{formatNumber(item.cache_read_tokens)}</td>
+									<td class="px-3 py-2 tabular-nums">{formatChatpoint(item.plan_cost_micros)}</td>
+									<td class="px-3 py-2 tabular-nums">{formatChatpoint(item.check_cost_micros)}</td>
+									<td class="px-3 py-2">
+										<span
+											class:status-amber={item.status === 'partially_billed' || item.status === 'missing_usage'}
 											class:status-green={item.status === 'billed'}
 											class="status-badge">{statusLabel(item.status)}</span
-										></td
-									>
+										>
+									</td>
 								</tr>
 							{/each}
 						</tbody>

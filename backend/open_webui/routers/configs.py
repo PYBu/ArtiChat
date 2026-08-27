@@ -8,7 +8,7 @@ import aiohttp
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 from mcp.shared.auth import OAuthMetadata
-from open_webui.config import BannerModel
+from open_webui.config import BannerModel, DEFAULT_OPERATION_STATUS_CONFIG
 from open_webui.env import AIOHTTP_CLIENT_SESSION_SSL, AIOHTTP_CLIENT_TIMEOUT, DATA_DIR, VERSION
 from open_webui.events import EVENTS, publish_event
 from open_webui.models.config import Config
@@ -87,6 +87,69 @@ async def get_config_values(key_map: dict[str, str]) -> dict:
 
 def config_updates(data: dict, key_map: dict[str, str]) -> dict:
     return {key_map[field]: value for field, value in data.items() if field in key_map}
+
+
+OPERATION_STATUS_CONFIG_KEY = 'ui.operation_status'
+
+
+class OperationStatusEntry(BaseModel):
+    visible: bool = True
+    text: str = Field(default='', max_length=500)
+
+
+class OperationStatusConfigForm(BaseModel):
+    enabled: bool = True
+    deduplicate: bool = True
+    entries: dict[str, OperationStatusEntry] = Field(default_factory=dict)
+
+
+def normalize_operation_status_config(value: dict | None) -> dict:
+    """Merge user edits with the catalog defaults and bound custom text."""
+    source = value if isinstance(value, dict) else {}
+    default_entries = DEFAULT_OPERATION_STATUS_CONFIG['entries']
+    source_entries = source.get('entries') if isinstance(source.get('entries'), dict) else {}
+    entries = {}
+    for status_id, default in default_entries.items():
+        candidate = source_entries.get(status_id)
+        if not isinstance(candidate, dict):
+            candidate = {}
+        text = candidate.get('text', default.get('text', ''))
+        if text is None:
+            text = ''
+        entries[status_id] = {
+            'visible': bool(candidate.get('visible', default.get('visible', True))),
+            'text': str(text)[:500],
+        }
+    return {
+        'enabled': bool(source.get('enabled', DEFAULT_OPERATION_STATUS_CONFIG['enabled'])),
+        'deduplicate': bool(source.get('deduplicate', DEFAULT_OPERATION_STATUS_CONFIG['deduplicate'])),
+        'entries': entries,
+    }
+
+
+@router.get('/operation-status', response_model=OperationStatusConfigForm)
+async def get_operation_status_config(user=Depends(get_admin_user)):
+    value = await Config.get(OPERATION_STATUS_CONFIG_KEY, DEFAULT_OPERATION_STATUS_CONFIG)
+    return normalize_operation_status_config(value)
+
+
+@router.post('/operation-status', response_model=OperationStatusConfigForm)
+async def set_operation_status_config(
+    request: Request,
+    form_data: OperationStatusConfigForm,
+    user=Depends(get_admin_user),
+):
+    value = normalize_operation_status_config(form_data.model_dump())
+    await Config.upsert({OPERATION_STATUS_CONFIG_KEY: value})
+    await publish_event(
+        request,
+        EVENTS.CONFIG_UPDATED,
+        actor=user,
+        subject_id=OPERATION_STATUS_CONFIG_KEY,
+        subject_type='config',
+        data={'enabled': value['enabled'], 'deduplicate': value['deduplicate']},
+    )
+    return value
 
 
 PLATFORM_CONFIG_KEYS = {

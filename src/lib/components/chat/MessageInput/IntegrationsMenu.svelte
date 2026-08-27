@@ -31,6 +31,7 @@
 	import Sparkles from '$lib/components/icons/Sparkles.svelte';
 	import GlobeAlt from '$lib/components/icons/GlobeAlt.svelte';
 	import Photo from '$lib/components/icons/Photo.svelte';
+	import Play from '$lib/components/icons/Play.svelte';
 	import Terminal from '$lib/components/icons/Terminal.svelte';
 	import ChevronRight from '$lib/components/icons/ChevronRight.svelte';
 	import ChevronLeft from '$lib/components/icons/ChevronLeft.svelte';
@@ -52,6 +53,8 @@
 	export let webSearchEnabled = false;
 	export let showImageGenerationButton = false;
 	export let imageGenerationEnabled = false;
+	export let showVideoGenerationButton = false;
+	export let videoGenerationEnabled = false;
 	export let showCodeInterpreterButton = false;
 	export let codeInterpreterEnabled = false;
 
@@ -330,6 +333,40 @@
 										state={imageGenerationEnabled}
 										on:change={async (e) => {
 											const state = e.detail;
+											await tick();
+										}}
+									/>
+								</div>
+							</button>
+						</Tooltip>
+					{/if}
+
+					{#if showVideoGenerationButton}
+						<Tooltip content={$i18n.t('生成视频')} placement="top-start">
+							<button
+								class="flex w-full justify-between gap-2 items-center h-[1.6875rem] px-2 text-[13px] font-normal cursor-pointer rounded-xl hover:bg-gray-50/40 dark:hover:bg-gray-800/40"
+								aria-pressed={videoGenerationEnabled}
+								aria-label={videoGenerationEnabled
+									? $i18n.t('关闭视频生成')
+									: $i18n.t('开启视频生成')}
+								on:click={() => {
+									videoGenerationEnabled = !videoGenerationEnabled;
+								}}
+							>
+								<div class="flex-1 truncate">
+									<div class="flex flex-1 gap-2 items-center">
+										<div class="shrink-0">
+											<Play className="size-3.5" strokeWidth="1.5" />
+										</div>
+
+										<div class=" truncate">{$i18n.t('视频')}</div>
+									</div>
+								</div>
+
+								<div class=" shrink-0">
+									<Switch
+										state={videoGenerationEnabled}
+										on:change={async () => {
 											await tick();
 										}}
 									/>

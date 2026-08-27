@@ -196,7 +196,18 @@ export const getImageGenerationModels = async (token: string = '') => {
 	return res;
 };
 
-export const imageGenerations = async (token: string = '', prompt: string) => {
+export const getImageGenerationEstimate = (token: string = '', count = 1, edit = false) =>
+	fetch(`${IMAGES_API_BASE_URL}/estimate?count=${Math.max(1, Math.min(16, count))}&edit=${edit}`, {
+		headers: {
+			Accept: 'application/json',
+			...(token && { authorization: `Bearer ${token}` })
+		}
+	}).then(async (response) => {
+		if (!response.ok) throw await response.json();
+		return response.json();
+	});
+
+export const imageGenerations = async (token: string = '', prompt: string, confirmCost = false) => {
 	let error = null;
 
 	const res = await fetch(`${IMAGES_API_BASE_URL}/generations`, {
@@ -207,7 +218,8 @@ export const imageGenerations = async (token: string = '', prompt: string) => {
 			...(token && { authorization: `Bearer ${token}` })
 		},
 		body: JSON.stringify({
-			prompt: prompt
+			prompt: prompt,
+			confirm_cost: confirmCost
 		})
 	})
 		.then(async (res) => {
@@ -242,7 +254,8 @@ export const imageEdits = async (
 	model?: string,
 	size?: string,
 	n?: number,
-	background?: string
+	background?: string,
+	confirmCost = false
 ) => {
 	let error = null;
 
@@ -259,7 +272,8 @@ export const imageEdits = async (
 			...(model && { model }),
 			...(size && { size }),
 			...(n && { n }),
-			...(background && { background })
+			...(background && { background }),
+			confirm_cost: confirmCost
 		})
 	})
 		.then(async (res) => {

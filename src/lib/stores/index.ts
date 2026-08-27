@@ -4,6 +4,7 @@ import type { ModelConfig, ReasoningLevel } from '$lib/apis';
 import type { Banner } from '$lib/types';
 import type { Socket } from 'socket.io-client';
 import type { AudioQueue } from '$lib/utils/audio';
+import type { OperationStatusConfig } from '$lib/utils/operationStatus';
 
 import emojiShortCodes from '$lib/emoji-shortcodes.json';
 
@@ -331,6 +332,7 @@ type Config = {
 		enable_google_drive_integration: boolean;
 		enable_onedrive_integration: boolean;
 		enable_image_generation: boolean;
+		enable_video_generation?: boolean;
 		enable_admin_export: boolean;
 		enable_admin_chat_access: boolean;
 		enable_admin_analytics: boolean;
@@ -353,6 +355,7 @@ type Config = {
 	ui?: {
 		pending_user_overlay_title?: string;
 		pending_user_overlay_content?: string;
+		operation_status?: OperationStatusConfig;
 		iframe_csp?: string;
 	};
 };

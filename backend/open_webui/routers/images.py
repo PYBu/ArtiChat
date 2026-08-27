@@ -15,7 +15,7 @@ from typing import Optional
 from urllib.parse import quote, urljoin, urlparse
 
 import aiohttp
-from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile
 from PIL import Image, ImageOps
 from open_webui.config import (
     CACHE_DIR,
@@ -35,6 +35,14 @@ from open_webui.utils.access_control import has_permission
 from open_webui.utils.auth import get_admin_user, get_verified_user
 from open_webui.utils.headers import include_user_info_headers
 from open_webui.utils.image_refs import ResolvedImage, resolve_image_references
+from open_webui.utils.media_billing import (
+    media_cost_chatpoints,
+    parse_media_rate,
+    release_media_generation,
+    reserve_media_generation,
+    settle_media_generation,
+    utc_day_start,
+)
 from open_webui.utils.images.comfyui import (
     ComfyUICreateImageForm,
     ComfyUIEditImageForm,
@@ -44,7 +52,7 @@ from open_webui.utils.images.comfyui import (
     comfyui_upload_image,
 )
 from open_webui.utils.session_pool import get_session
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 log = logging.getLogger(__name__)
@@ -73,6 +81,9 @@ IMAGE_CONFIG_KEYS = {
     'ENABLE_IMAGE_PROMPT_GENERATION': 'image_generation.prompt.enable',
     'IMAGE_GENERATION_ENGINE': 'image_generation.engine',
     'IMAGE_GENERATION_MODEL': 'image_generation.model',
+    'IMAGE_GENERATION_CHATPOINTS_PER_IMAGE': 'billing.media.image_chatpoints_per_image',
+    'IMAGE_GENERATION_REQUIRE_CONFIRMATION': 'billing.media.image_require_confirmation',
+    'IMAGE_GENERATION_DAILY_MAX_CHATPOINTS': 'billing.media.image_daily_max_chatpoints',
     'IMAGE_SIZE': 'image_generation.size',
     'IMAGE_STEPS': 'image_generation.steps',
     'IMAGES_OPENAI_API_BASE_URL': 'image_generation.openai.api_base_url',
@@ -126,6 +137,29 @@ async def assert_image_operation_access(user, image_config: SimpleNamespace, *, 
         and not await has_permission(user.id, 'features.image_generation', image_config.USER_PERMISSIONS)
     ):
         raise HTTPException(status_code=403, detail=ERROR_MESSAGES.ACCESS_PROHIBITED)
+
+
+def _image_billing_settings(user, image_config: SimpleNamespace, units: int, confirmed: bool):
+    rate = parse_media_rate(getattr(image_config, 'IMAGE_GENERATION_CHATPOINTS_PER_IMAGE', 1))
+    daily_cap = parse_media_rate(getattr(image_config, 'IMAGE_GENERATION_DAILY_MAX_CHATPOINTS', 0))
+    if (
+        getattr(user, 'role', None) != 'admin'
+        and rate > 0
+        and getattr(image_config, 'IMAGE_GENERATION_REQUIRE_CONFIRMATION', True)
+        and not confirmed
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail={
+                'code': 'IMAGE_COST_CONFIRMATION_REQUIRED',
+                'message': '请先确认图片生成费用后再提交。',
+                'image_count': int(units),
+                'rate_chatpoints_per_image': str(rate),
+                'estimated_chatpoints': str(media_cost_chatpoints(units, rate)),
+                'confirm_cost': True,
+            },
+        )
+    return rate, daily_cap
 
 
 def config_updates(data: dict, key_map: dict[str, str]) -> dict:
@@ -290,6 +324,9 @@ class ImagesConfig(BaseModel):
 
     IMAGE_GENERATION_ENGINE: str
     IMAGE_GENERATION_MODEL: str
+    IMAGE_GENERATION_CHATPOINTS_PER_IMAGE: float = Field(default=1, ge=0, le=1_000_000)
+    IMAGE_GENERATION_REQUIRE_CONFIRMATION: bool = True
+    IMAGE_GENERATION_DAILY_MAX_CHATPOINTS: float = Field(default=0, ge=0, le=1_000_000)
     IMAGE_SIZE: str | None
     IMAGE_STEPS: int | None
 
@@ -333,8 +370,38 @@ async def get_config(request: Request, user=Depends(get_admin_user)):
     return await get_config_values(IMAGE_CONFIG_KEYS)
 
 
+@router.get('/estimate', response_model=dict)
+async def estimate_image_generation(
+    count: int = Query(default=1, ge=1, le=16),
+    edit: bool = False,
+    user=Depends(get_verified_user),
+):
+    image_config = await get_image_config()
+    await assert_image_operation_access(user, image_config, edit=edit)
+    rate, daily_cap = _image_billing_settings(user, image_config, count, True)
+    return {
+        'image_count': count,
+        'rate_chatpoints_per_image': str(rate),
+        'estimated_chatpoints': str(media_cost_chatpoints(count, rate)),
+        'daily_max_chatpoints': str(daily_cap),
+        'requires_confirmation': bool(
+            getattr(user, 'role', None) != 'admin'
+            and rate > 0
+            and getattr(image_config, 'IMAGE_GENERATION_REQUIRE_CONFIRMATION', True)
+        ),
+    }
+
+
 @router.post('/config/update')
 async def update_config(request: Request, form_data: ImagesConfig, user=Depends(get_admin_user)):
+    for rate in (
+        form_data.IMAGE_GENERATION_CHATPOINTS_PER_IMAGE,
+        form_data.IMAGE_GENERATION_DAILY_MAX_CHATPOINTS,
+    ):
+        try:
+            parse_media_rate(rate)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
     if form_data.IMAGE_OUTPUT_URL_FORMAT not in {'relative', 'absolute'}:
         raise HTTPException(
             status_code=400,
@@ -516,6 +583,7 @@ class CreateImageForm(BaseModel):
     n: int = 1
     steps: int | None = None
     negative_prompt: str | None = None
+    confirm_cost: bool = False
 
 
 GenerateImageForm = CreateImageForm  # Alias for backward compatibility
@@ -693,7 +761,7 @@ async def generate_images(request: Request, form_data: CreateImageForm, user=Dep
     return result
 
 
-async def image_generations(
+async def _image_generations_unbilled(
     request: Request,
     form_data: CreateImageForm,
     metadata: dict | None = None,
@@ -945,6 +1013,41 @@ async def image_generations(
         raise HTTPException(status_code=400, detail=ERROR_MESSAGES.DEFAULT(error))
 
 
+async def image_generations(
+    request: Request,
+    form_data: CreateImageForm,
+    metadata: dict | None = None,
+    user=None,
+):
+    image_config = await get_image_config()
+    await assert_image_operation_access(user, image_config)
+    units_requested = max(int(form_data.n or 1), 1)
+    model_id = form_data.model or image_config.IMAGE_GENERATION_MODEL or f'image:{image_config.IMAGE_GENERATION_ENGINE}'
+    rate, daily_cap = _image_billing_settings(user, image_config, units_requested, form_data.confirm_cost)
+    billing = await reserve_media_generation(
+        user,
+        media_type='image',
+        units=units_requested,
+        rate_chatpoints=rate,
+        model_id=model_id,
+        metadata=metadata,
+        request_id=(metadata or {}).get('request_id'),
+        daily_cap_chatpoints=daily_cap if daily_cap > 0 else None,
+        daily_cap_since=utc_day_start(),
+    )
+    try:
+        result = await _image_generations_unbilled(request, form_data, metadata=metadata, user=user)
+        await settle_media_generation(
+            billing,
+            units=len(result),
+            metadata={'provider': image_config.IMAGE_GENERATION_ENGINE, 'output_count': len(result)},
+        )
+        return result
+    except BaseException as exc:
+        await release_media_generation(billing, reason=f'image generation failed: {exc}')
+        raise
+
+
 class EditImageForm(BaseModel):
     image: str | list[str]  # base64-encoded image(s) or URL(s)
     prompt: str
@@ -953,6 +1056,7 @@ class EditImageForm(BaseModel):
     n: int | None = None
     negative_prompt: str | None = None
     background: str | None = None
+    confirm_cost: bool = False
 
 
 @router.post('/edit')
@@ -973,7 +1077,7 @@ async def edit_images(request: Request, form_data: EditImageForm, user=Depends(g
     return result
 
 
-async def image_edits(
+async def _image_edits_unbilled(
     request: Request,
     form_data: EditImageForm,
     metadata: dict | None = None,
@@ -1224,3 +1328,38 @@ async def image_edits(
                 error = e.message
 
         raise HTTPException(status_code=400, detail=ERROR_MESSAGES.DEFAULT(error))
+
+
+async def image_edits(
+    request: Request,
+    form_data: EditImageForm,
+    metadata: dict | None = None,
+    user=Depends(get_verified_user),
+):
+    image_config = await get_image_config()
+    await assert_image_operation_access(user, image_config, edit=True)
+    units_requested = max(int(form_data.n or 1), 1)
+    model_id = form_data.model or image_config.IMAGE_EDIT_MODEL or f'image-edit:{image_config.IMAGE_EDIT_ENGINE}'
+    rate, daily_cap = _image_billing_settings(user, image_config, units_requested, form_data.confirm_cost)
+    billing = await reserve_media_generation(
+        user,
+        media_type='image',
+        units=units_requested,
+        rate_chatpoints=rate,
+        model_id=model_id,
+        metadata=metadata,
+        request_id=(metadata or {}).get('request_id'),
+        daily_cap_chatpoints=daily_cap if daily_cap > 0 else None,
+        daily_cap_since=utc_day_start(),
+    )
+    try:
+        result = await _image_edits_unbilled(request, form_data, metadata=metadata, user=user)
+        await settle_media_generation(
+            billing,
+            units=len(result),
+            metadata={'provider': image_config.IMAGE_EDIT_ENGINE, 'operation': 'edit', 'output_count': len(result)},
+        )
+        return result
+    except BaseException as exc:
+        await release_media_generation(billing, reason=f'image edit failed: {exc}')
+        raise

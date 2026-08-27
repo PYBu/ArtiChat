@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import time
 from decimal import Decimal, InvalidOperation
 
+from open_webui.models.config import Config
 from open_webui.models.subscriptions import (
     CHATPOWER_TIER,
     FREE_TIER,
@@ -11,9 +13,11 @@ from open_webui.models.subscriptions import (
     RedemptionCodes,
     RedemptionRecords,
     SubscriptionLedgers,
+    SubscriptionReservation,
     SubscriptionPlans,
     SubscriptionReservationModel,
     SubscriptionReservations,
+    SubscriptionUsage,
     SubscriptionUsages,
     UserSubscriptionModel,
     UserSubscriptions,
@@ -25,6 +29,7 @@ from open_webui.models.subscriptions import (
 )
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 SECONDS_PER_DAY = 24 * 60 * 60
@@ -73,6 +78,17 @@ class ChatpointReservationInsufficientError(PermissionError):
         )
 
 
+class ChatpointReservationCapExceededError(PermissionError):
+    def __init__(self, *, requested_micros: int, committed_micros: int, cap_micros: int):
+        self.requested_micros = requested_micros
+        self.committed_micros = committed_micros
+        self.cap_micros = cap_micros
+        super().__init__(
+            f'CHATPOINT_MEDIA_DAILY_CAP_EXCEEDED: requested={requested_micros}, '
+            f'committed={committed_micros}, cap={cap_micros}'
+        )
+
+
 class ChatpointReservationConflictError(ValueError):
     pass
 
@@ -84,7 +100,41 @@ class ChatpointReservationGrant(BaseModel):
 
 PENDING_SETTLEMENT_KEY = '_artichat_pending_settlement'
 PENDING_SETTLEMENT_LEASE_SECONDS = 120
-MAX_PENDING_SETTLEMENTS_PER_USER = 3
+DEFAULT_MAX_PENDING_SETTLEMENTS_PER_USER = 3
+# Backward-compatible export for integrations that imported the old default.
+MAX_PENDING_SETTLEMENTS_PER_USER = DEFAULT_MAX_PENDING_SETTLEMENTS_PER_USER
+MAX_PENDING_SETTLEMENTS_LIMIT = 100
+_PENDING_SETTLEMENT_LIMIT_CACHE_TTL_SECONDS = 5
+_pending_settlement_limit_cache: tuple[float, int] | None = None
+
+
+async def get_max_pending_settlements_per_user() -> int:
+    """Read the administrator's continuation allowance with a safe bound."""
+    global _pending_settlement_limit_cache
+    now = time.monotonic()
+    if (
+        _pending_settlement_limit_cache is not None
+        and now - _pending_settlement_limit_cache[0] < _PENDING_SETTLEMENT_LIMIT_CACHE_TTL_SECONDS
+    ):
+        return _pending_settlement_limit_cache[1]
+
+    configured = await Config.get(
+        'billing.max_pending_settlements_per_user',
+        DEFAULT_MAX_PENDING_SETTLEMENTS_PER_USER,
+    )
+    try:
+        value = int(configured)
+    except (TypeError, ValueError):
+        value = DEFAULT_MAX_PENDING_SETTLEMENTS_PER_USER
+    value = min(max(value, 0), MAX_PENDING_SETTLEMENTS_LIMIT)
+    _pending_settlement_limit_cache = (now, value)
+    return value
+
+
+def cache_max_pending_settlements_per_user(value: int) -> None:
+    """Refresh the local setting cache after an administrator update."""
+    global _pending_settlement_limit_cache
+    _pending_settlement_limit_cache = (time.monotonic(), min(max(int(value), 0), MAX_PENDING_SETTLEMENTS_LIMIT))
 
 
 def _pending_settlement_metadata(reservation: SubscriptionReservationModel) -> dict | None:
@@ -92,13 +142,56 @@ def _pending_settlement_metadata(reservation: SubscriptionReservationModel) -> d
     return value if isinstance(value, dict) else None
 
 
+async def _reconcile_pending_settlement_count(
+    user_id: str,
+    subscription: UserSubscriptionModel,
+    *,
+    now: int,
+    db: AsyncSession,
+) -> tuple[UserSubscriptionModel, int]:
+    """Initialize the counter for rows created before the counter migration."""
+    if subscription.pending_settlement_count is not None:
+        return subscription, max(int(subscription.pending_settlement_count), 0)
+
+    rows = await SubscriptionReservations.list_active(user_id=user_id, limit=None, db=db)
+    count = sum(1 for row in rows if _pending_settlement_metadata(row) is not None)
+    subscription = await UserSubscriptions.update_pending_settlement_count(
+        user_id,
+        count,
+        now=now,
+        commit=False,
+        db=db,
+    )
+    return subscription, count
+
+
+async def _decrement_pending_settlement_count(
+    user_id: str,
+    subscription: UserSubscriptionModel,
+    *,
+    now: int,
+    db: AsyncSession,
+) -> UserSubscriptionModel:
+    """Release one slot when a pending reservation becomes terminal."""
+    if subscription.pending_settlement_count is None:
+        return subscription
+    return await UserSubscriptions.update_pending_settlement_count(
+        user_id,
+        max(int(subscription.pending_settlement_count) - 1, 0),
+        now=now,
+        commit=False,
+        db=db,
+    )
+
+
 async def defer_chatpoint_reservation_settlement(
     reservation_id: str,
     payload: dict,
     *,
+    max_pending_settlements: int | None = None,
     now: int | None = None,
     db: AsyncSession | None = None,
-) -> SubscriptionReservationModel:
+) -> SubscriptionReservationModel | None:
     """Release the input hold while keeping the reservation for later billing.
 
     This lets a completed response return immediately and lets the next prompt
@@ -106,8 +199,41 @@ async def defer_chatpoint_reservation_settlement(
     actual usage later; any overage is intentionally recorded as unpaid.
     """
     current_time = now if now is not None else now_ts()
+    if max_pending_settlements is None:
+        max_pending_settlements = await get_max_pending_settlements_per_user()
+    max_pending_settlements = min(max(int(max_pending_settlements), 0), MAX_PENDING_SETTLEMENTS_LIMIT)
     async with get_subscription_db_context(db) as session:
         try:
+            reservation = await SubscriptionReservations.get_by_id(reservation_id, db=session)
+            if reservation is None:
+                raise ChatpointReservationConflictError('CHATPOINT_RESERVATION_NOT_FOUND')
+            if reservation.status != 'active':
+                return reservation
+
+            await ensure_subscription_current(
+                reservation.user_id,
+                now=current_time,
+                commit=False,
+                db=session,
+            )
+            subscription = await UserSubscriptions.lock_for_billing(reservation.user_id, db=session)
+            _subscription, pending_count = await _reconcile_pending_settlement_count(
+                reservation.user_id,
+                subscription,
+                now=current_time,
+                db=session,
+            )
+            if pending_count >= max_pending_settlements:
+                reservation = await SubscriptionReservations.lock_by_id(reservation_id, db=session)
+                if reservation is None:
+                    raise ChatpointReservationConflictError('CHATPOINT_RESERVATION_NOT_FOUND')
+                if _pending_settlement_metadata(reservation) is not None:
+                    await session.commit()
+                    return reservation
+                await session.commit()
+                return None
+
+            # Serialize the marker write after the per-user slot decision.
             reservation = await SubscriptionReservations.lock_by_id(reservation_id, db=session)
             if reservation is None:
                 raise ChatpointReservationConflictError('CHATPOINT_RESERVATION_NOT_FOUND')
@@ -153,6 +279,13 @@ async def defer_chatpoint_reservation_settlement(
                 commit=False,
                 db=session,
             )
+            await UserSubscriptions.update_pending_settlement_count(
+                reservation.user_id,
+                pending_count + 1,
+                now=current_time,
+                commit=False,
+                db=session,
+            )
             await session.commit()
             return result
         except Exception:
@@ -165,7 +298,11 @@ async def list_pending_chatpoint_settlements(
     limit: int = 20,
     db: AsyncSession | None = None,
 ) -> list[SubscriptionReservationModel]:
-    rows = await SubscriptionReservations.list_active(limit=max(limit * 4, limit), db=db)
+    if limit <= 0:
+        return []
+    # Scan all active rows so older non-pending reservations cannot starve the
+    # durable continuation queue.
+    rows = await SubscriptionReservations.list_active(limit=None, db=db)
     pending = []
     now = now_ts()
     for row in rows:
@@ -180,8 +317,19 @@ async def list_pending_chatpoint_settlements(
     return pending
 
 
-async def count_pending_chatpoint_settlements(user_id: str, *, db: AsyncSession | None = None) -> int:
-    rows = await SubscriptionReservations.list_active(user_id=user_id, limit=100, db=db)
+async def count_pending_chatpoint_settlements(
+    user_id: str,
+    *,
+    limit: int = MAX_PENDING_SETTLEMENTS_LIMIT,
+    db: AsyncSession | None = None,
+) -> int:
+    if limit <= 0:
+        return 0
+    rows = await SubscriptionReservations.list_active(
+        user_id=user_id,
+        limit=None,
+        db=db,
+    )
     return sum(1 for row in rows if _pending_settlement_metadata(row) is not None)
 
 
@@ -718,6 +866,10 @@ async def reserve_chatpoint_batch(
     requests: list[ChatpointReservationRequest | dict],
     *,
     now: int | None = None,
+    cap_micros: int | None = None,
+    cap_since: int | None = None,
+    cap_media_type: str | None = None,
+    cap_model_prefix: str | None = None,
     db: AsyncSession | None = None,
 ) -> list[ChatpointReservationGrant]:
     """Atomically reserve every fanout item or reject the complete batch."""
@@ -758,6 +910,37 @@ async def reserve_chatpoint_batch(
                 raise ChatpointReservationConflictError('CHATPOINT_RESERVATION_PARTIAL_BATCH_RETRY')
 
             requested_micros = sum(item.amount_micros for item, _ in new_items)
+            if cap_micros is not None and requested_micros:
+                if cap_micros < 0 or cap_since is None or not cap_media_type or not cap_model_prefix:
+                    raise ValueError(
+                        'reservation cap requires a non-negative amount, start, media type, and model prefix'
+                    )
+                usage_result = await session.execute(
+                    select(func.coalesce(func.sum(SubscriptionUsage.cost_micros), 0)).where(
+                        SubscriptionUsage.user_id == user_id,
+                        SubscriptionUsage.usage_type == cap_media_type,
+                        SubscriptionUsage.created_at >= cap_since,
+                    )
+                )
+                active_result = await session.execute(
+                    select(func.coalesce(func.sum(SubscriptionReservation.reserved_micros), 0)).where(
+                        SubscriptionReservation.user_id == user_id,
+                        SubscriptionReservation.status == 'active',
+                        or_(
+                            SubscriptionReservation.model_id.like(f'{cap_model_prefix}%'),
+                            SubscriptionReservation.meta.contains(
+                                {'media_billing': True, 'media_type': cap_media_type}
+                            ),
+                        ),
+                    )
+                )
+                committed_micros = int(usage_result.scalar_one() or 0) + int(active_result.scalar_one() or 0)
+                if committed_micros + requested_micros > cap_micros:
+                    raise ChatpointReservationCapExceededError(
+                        requested_micros=requested_micros,
+                        committed_micros=committed_micros,
+                        cap_micros=cap_micros,
+                    )
             available_micros = subscription.plan_balance_micros + subscription.check_balance_micros
             if requested_micros > available_micros:
                 raise ChatpointReservationInsufficientError(
@@ -826,6 +1009,10 @@ async def reserve_chatpoints(
     expires_at: int | None = None,
     metadata: dict | None = None,
     now: int | None = None,
+    cap_micros: int | None = None,
+    cap_since: int | None = None,
+    cap_media_type: str | None = None,
+    cap_model_prefix: str | None = None,
     db: AsyncSession | None = None,
 ) -> ChatpointReservationGrant:
     reservations = await reserve_chatpoint_batch(
@@ -840,6 +1027,10 @@ async def reserve_chatpoints(
             )
         ],
         now=now,
+        cap_micros=cap_micros,
+        cap_since=cap_since,
+        cap_media_type=cap_media_type,
+        cap_model_prefix=cap_model_prefix,
         db=db,
     )
     return reservations[0]
@@ -1003,6 +1194,7 @@ async def extend_chatpoint_reservation(
                 raise ChatpointReservationConflictError('CHATPOINT_RESERVATION_NOT_FOUND')
             if reservation.status != 'active':
                 raise ChatpointReservationConflictError('CHATPOINT_RESERVATION_NOT_ACTIVE')
+
             if reservation.expires_at is not None and reservation.expires_at <= current_time:
                 raise ChatpointReservationConflictError('CHATPOINT_RESERVATION_EXPIRED')
 
@@ -1152,6 +1344,8 @@ async def settle_chatpoint_reservation(
             if reservation.status != 'active':
                 raise ChatpointReservationConflictError('CHATPOINT_RESERVATION_NOT_ACTIVE')
 
+            pending_marker = _pending_settlement_metadata(reservation)
+
             base_paid_micros = min(actual_cost_micros, reservation.reserved_micros)
             base_plan_micros = min(reservation.reserved_plan_micros, base_paid_micros)
             base_check_micros = base_paid_micros - base_plan_micros
@@ -1177,7 +1371,7 @@ async def settle_chatpoint_reservation(
             settled_plan_micros = base_plan_micros + overage.plan_cost_micros
             settled_check_micros = base_check_micros + overage.check_cost_micros
             status = 'partially_settled' if overage.unpaid_cost_micros else 'settled'
-            await UserSubscriptions.adjust_balances(
+            subscription = await UserSubscriptions.adjust_balances(
                 reservation.user_id,
                 plan_delta_micros=refunded_plan_micros - overage.plan_cost_micros,
                 check_delta_micros=refunded_check_micros - overage.check_cost_micros,
@@ -1193,6 +1387,15 @@ async def settle_chatpoint_reservation(
                 commit=False,
                 db=session,
             )
+            settlement_metadata = dict(reservation.metadata or {})
+            if pending_marker is not None:
+                subscription = await _decrement_pending_settlement_count(
+                    reservation.user_id,
+                    subscription,
+                    now=current_time,
+                    db=session,
+                )
+                settlement_metadata.pop(PENDING_SETTLEMENT_KEY, None)
             settled = await SubscriptionReservations.update_state(
                 reservation.id,
                 values={
@@ -1204,6 +1407,7 @@ async def settle_chatpoint_reservation(
                     'refunded_check_micros': refunded_check_micros,
                     'forfeited_plan_micros': forfeited_plan_micros,
                     'unpaid_cost_micros': overage.unpaid_cost_micros,
+                    'meta': settlement_metadata or None,
                     'settled_at': current_time,
                     'updated_at': current_time,
                 },
@@ -1254,10 +1458,18 @@ async def release_chatpoint_reservation(
             if expired and (reservation.expires_at is None or reservation.expires_at > current_time):
                 raise ChatpointReservationConflictError('CHATPOINT_RESERVATION_NOT_EXPIRED')
 
+            pending_marker = _pending_settlement_metadata(reservation)
+            if expired and pending_marker is not None:
+                # Pending rows are owned by the durable settlement worker. A
+                # cleanup pass must never turn a recoverable job terminal.
+                if commit:
+                    await session.commit()
+                return reservation
+
             same_period = reservation.period_start_at == subscription.period_start_at
             refunded_plan_micros = reservation.reserved_plan_micros if same_period else 0
             forfeited_plan_micros = reservation.reserved_plan_micros - refunded_plan_micros
-            await UserSubscriptions.adjust_balances(
+            subscription = await UserSubscriptions.adjust_balances(
                 reservation.user_id,
                 plan_delta_micros=refunded_plan_micros,
                 check_delta_micros=reservation.reserved_check_micros,
@@ -1270,6 +1482,15 @@ async def release_chatpoint_reservation(
                 commit=False,
                 db=session,
             )
+            release_metadata = dict(reservation.metadata or {})
+            if pending_marker is not None:
+                subscription = await _decrement_pending_settlement_count(
+                    reservation.user_id,
+                    subscription,
+                    now=current_time,
+                    db=session,
+                )
+                release_metadata.pop(PENDING_SETTLEMENT_KEY, None)
             released = await SubscriptionReservations.update_state(
                 reservation.id,
                 values={
@@ -1278,6 +1499,7 @@ async def release_chatpoint_reservation(
                     'refunded_check_micros': reservation.reserved_check_micros,
                     'forfeited_plan_micros': forfeited_plan_micros,
                     'release_reason': reason,
+                    'meta': release_metadata or None,
                     'released_at': current_time,
                     'updated_at': current_time,
                 },
@@ -1307,6 +1529,9 @@ async def release_expired_chatpoint_reservations(
     released = []
     for reservation_id in reservation_ids:
         try:
+            reservation = await SubscriptionReservations.get_by_id(reservation_id, db=db)
+            if reservation is None or _pending_settlement_metadata(reservation) is not None:
+                continue
             released.append(
                 await release_chatpoint_reservation(
                     reservation_id,

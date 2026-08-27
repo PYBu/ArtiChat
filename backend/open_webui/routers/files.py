@@ -834,6 +834,8 @@ async def get_file_content_by_id(
                     if content_type == 'application/pdf' or filename.lower().endswith('.pdf'):
                         headers['Content-Disposition'] = f"inline; filename*=UTF-8''{encoded_filename}"
                         content_type = 'application/pdf'
+                    elif content_type and content_type.split('/', 1)[0] in {'image', 'audio', 'video'}:
+                        headers['Content-Disposition'] = f"inline; filename*=UTF-8''{encoded_filename}"
                     elif content_type != 'text/plain':
                         headers['Content-Disposition'] = f"attachment; filename*=UTF-8''{encoded_filename}"
 

@@ -305,6 +305,51 @@ async def test_admin_usage_filters_by_status(db_session):
 
 
 @pytest.mark.asyncio
+async def test_usage_summary_filters_by_media_type_and_unit(db_session):
+    for index, (usage_type, media_unit, media_units) in enumerate(
+        [('image', 'image', 2), ('video', 'second', 8), ('chat', None, None)]
+    ):
+        await SubscriptionUsages.insert(
+            user_id='media-filter-user',
+            chat_id=None,
+            message_id=None,
+            model_id=f'media-model-{index}',
+            usage_type=usage_type,
+            media_unit=media_unit,
+            media_units=media_units,
+            media_unit_price_micros=1 if media_units is not None else None,
+            tier='free',
+            quota_mode='metered',
+            usage_multiplier='1',
+            input_tokens=0,
+            output_tokens=0,
+            total_tokens=0,
+            cost_micros=media_units or 0,
+            plan_cost_micros=media_units or 0,
+            check_cost_micros=0,
+            plan_balance_after_micros=0,
+            check_balance_after_micros=0,
+            status='billed',
+            metadata={},
+            created_at=1_720_000_000 + index,
+            db=db_session,
+        )
+
+    video = await SubscriptionUsages.get_usage_summary(
+        user_id='media-filter-user', usage_type='video', db=db_session
+    )
+    seconds = await SubscriptionUsages.get_usage_summary(
+        user_id='media-filter-user', media_unit='second', db=db_session
+    )
+
+    assert [item.usage_type for item in video['items']] == ['video']
+    assert video['media_totals'] == [
+        {'usage_type': 'video', 'media_unit': 'second', 'units': 8, 'cost_micros': 8}
+    ]
+    assert [item.model_id for item in seconds['items']] == ['media-model-1']
+
+
+@pytest.mark.asyncio
 async def test_usage_totals_cover_full_filter_when_items_are_paginated(db_session):
     for index in range(2):
         await SubscriptionUsages.insert(

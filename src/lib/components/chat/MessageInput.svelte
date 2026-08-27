@@ -85,6 +85,7 @@
 	import XMark from '../icons/XMark.svelte';
 	import GlobeAlt from '../icons/GlobeAlt.svelte';
 	import Photo from '../icons/Photo.svelte';
+	import Play from '../icons/Play.svelte';
 	import Wrench from '../icons/Wrench.svelte';
 	import Cube from '../icons/Cube.svelte';
 	import Sparkles from '../icons/Sparkles.svelte';
@@ -164,6 +165,7 @@
 	export let selectedFilterIds = [];
 
 	export let imageGenerationEnabled = false;
+	export let videoGenerationEnabled = false;
 	export let webSearchEnabled = false;
 	export let codeInterpreterEnabled = false;
 
@@ -217,6 +219,7 @@
 		selectedSkillIds,
 		selectedFilterIds,
 		imageGenerationEnabled,
+		videoGenerationEnabled,
 		webSearchEnabled,
 		codeInterpreterEnabled
 	});
@@ -622,6 +625,7 @@
 		| 'file_upload'
 		| 'web_search'
 		| 'image_generation'
+		| 'video_generation'
 		| 'code_interpreter'
 		| 'terminal';
 	type ModelCapabilitiesById = Record<string, Partial<Record<ModelCapability, boolean>>>;
@@ -661,6 +665,13 @@
 		modelCapabilitiesById
 	);
 
+	let videoGenerationCapableModels = [];
+	$: videoGenerationCapableModels = getCapableModelIds(
+		selectedModelIds,
+		'video_generation',
+		modelCapabilitiesById
+	);
+
 	let codeInterpreterCapableModels = [];
 	$: codeInterpreterCapableModels = getCapableModelIds(
 		selectedModelIds,
@@ -697,6 +708,12 @@
 		selectedModelIds.length === imageGenerationCapableModels.length &&
 		$config?.features?.enable_image_generation &&
 		($_user.role === 'admin' || $_user?.permissions?.features?.image_generation);
+
+	let showVideoGenerationButton = false;
+	$: showVideoGenerationButton =
+		selectedModelIds.length === videoGenerationCapableModels.length &&
+		$config?.features?.enable_video_generation &&
+		($_user.role === 'admin' || $_user?.permissions?.features?.video_generation);
 
 	let showCodeInterpreterButton = false;
 	$: showCodeInterpreterButton =
@@ -1986,25 +2003,27 @@
 										</button>
 									</InputMenu>
 
-									{#if showWebSearchButton || showImageGenerationButton || showCodeInterpreterButton || showToolsButton || showSkillsButton || (toggleFilters && toggleFilters.length > 0)}
+									{#if showWebSearchButton || showImageGenerationButton || showVideoGenerationButton || showCodeInterpreterButton || showToolsButton || showSkillsButton || (toggleFilters && toggleFilters.length > 0)}
 										<div
 											class="flex self-center w-[1px] h-4 mx-1 bg-gray-200/50 dark:bg-gray-800/50 shrink-0"
 										/>
 									{/if}
 
 									<div class="flex flex-1 items-center min-w-0 overflow-x-auto scrollbar-none">
-										{#if showWebSearchButton || showImageGenerationButton || showCodeInterpreterButton || showToolsButton || showSkillsButton || (toggleFilters && toggleFilters.length > 0)}
+										{#if showWebSearchButton || showImageGenerationButton || showVideoGenerationButton || showCodeInterpreterButton || showToolsButton || showSkillsButton || (toggleFilters && toggleFilters.length > 0)}
 											<IntegrationsMenu
 												selectedModels={selectedModelIds}
 												{toggleFilters}
 												{showWebSearchButton}
 												{showImageGenerationButton}
+												{showVideoGenerationButton}
 												{showCodeInterpreterButton}
 												bind:selectedToolIds
 												bind:selectedSkillIds
 												bind:selectedFilterIds
 												bind:webSearchEnabled
 												bind:imageGenerationEnabled
+												bind:videoGenerationEnabled
 												bind:codeInterpreterEnabled
 												{onWebSearchToggle}
 												closeOnOutsideClick={integrationsMenuCloseOnOutsideClick}
@@ -2197,6 +2216,24 @@
 															: 'bg-transparent text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 '}"
 													>
 														<Photo className="size-4" strokeWidth="1.75" />
+														<div class="hidden group-hover:block">
+															<XMark className="size-4" strokeWidth="1.75" />
+														</div>
+													</button>
+												</Tooltip>
+											{/if}
+
+											{#if videoGenerationEnabled}
+							<Tooltip content={$i18n.t('视频')} placement="top">
+													<button
+														on:click|preventDefault={() =>
+															(videoGenerationEnabled = !videoGenerationEnabled)}
+														type="button"
+														class="group p-[6px] flex gap-1.5 items-center text-sm rounded-full transition-colors duration-300 focus:outline-hidden max-w-full overflow-hidden {videoGenerationEnabled
+															? ' text-sky-500 dark:text-sky-300 bg-sky-50 hover:bg-sky-100 dark:bg-sky-400/10 dark:hover:bg-sky-700/10 border border-sky-200/40 dark:border-sky-500/20'
+															: 'bg-transparent text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 '}"
+													>
+														<Play className="size-4" strokeWidth="1.75" />
 														<div class="hidden group-hover:block">
 															<XMark className="size-4" strokeWidth="1.75" />
 														</div>

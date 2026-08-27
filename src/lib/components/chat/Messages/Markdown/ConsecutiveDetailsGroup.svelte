@@ -12,7 +12,8 @@
 	import CheckCircle from '$lib/components/icons/CheckCircle.svelte';
 	import FullHeightIframe from '$lib/components/common/FullHeightIframe.svelte';
 
-	import { settings } from '$lib/stores';
+	import { config, settings } from '$lib/stores';
+	import { resolveOperationStatus } from '$lib/utils/operationStatus';
 
 	const i18n = getContext('i18n');
 
@@ -107,7 +108,14 @@
 		return detail;
 	})();
 
-	$: prefixText = hasPending ? $i18n.t('Exploring') : $i18n.t('Explored');
+	$: activityStatus = resolveOperationStatus(
+		{ status_id: hasPending ? 'activity.exploring' : 'activity.explored' },
+		$config?.ui?.operation_status
+	);
+	$: prefixText = activityStatus.hidden
+		? ''
+		: activityStatus.display_description ||
+			(hasPending ? $i18n.t('Exploring') : $i18n.t('Explored'));
 </script>
 
 <div {id} class="w-full">
@@ -140,9 +148,11 @@
 
 			<!-- Summary text -->
 			<div class="flex-1 line-clamp-1">
-				<span class="text-gray-600 dark:text-gray-300 {hasPending ? 'shimmer' : ''}"
-					>{prefixText}</span
-				>
+				{#if prefixText}
+					<span class="text-gray-600 dark:text-gray-300 {hasPending ? 'shimmer' : ''}"
+						>{prefixText}</span
+					>
+				{/if}
 				{#if summaryText}
 					<span class="text-gray-400 dark:text-gray-500">{summaryText}</span>
 				{/if}

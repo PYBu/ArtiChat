@@ -13,7 +13,7 @@ from sqlalchemy import inspect, text
 from sqlalchemy.engine import Connection, Engine
 from sqlalchemy.engine.reflection import Inspector
 
-EXPECTED_ALEMBIC_HEADS = frozenset({'c3d4e5f6a7b8'})
+EXPECTED_ALEMBIC_HEADS = frozenset({'f0a1b2c3d4e5'})
 
 # Every application-owned durable table that must survive a 0.1.7 -> 0.2.1
 # upgrade. Alembic head validation alone cannot detect a manually stamped or
@@ -77,6 +77,7 @@ REQUIRED_DURABLE_TABLES = frozenset(
         'tool',
         'user',
         'user_subscription',
+        'video_generation_job',
     }
 )
 
@@ -107,7 +108,27 @@ REQUIRED_SCHEMA: dict[str, frozenset[str]] = {
             'plan_balance_micros',
             'check_balance_micros',
             'balance_version',
+            'pending_settlement_count',
             'next_reset_at',
+        }
+    ),
+    'video_generation_job': frozenset(
+        {
+            'id',
+            'user_id',
+            'provider',
+            'provider_task_id',
+            'billing_reservation_id',
+            'billing_unit_count',
+            'billing_unit_price_micros',
+            'billing_status',
+            'prompt',
+            'request_payload',
+            'status',
+            'progress',
+            'output_file_id',
+            'next_poll_at',
+            'lease_until',
         }
     ),
     'subscription_ledger': frozenset(
@@ -127,6 +148,10 @@ REQUIRED_SCHEMA: dict[str, frozenset[str]] = {
             'request_id',
             'idempotency_key',
             'reservation_id',
+            'usage_type',
+            'media_unit',
+            'media_units',
+            'media_unit_price_micros',
             'input_tokens',
             'output_tokens',
             'cost_micros',

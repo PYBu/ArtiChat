@@ -1315,6 +1315,12 @@ IMAGE_GENERATION_ENGINE = os.getenv('IMAGE_GENERATION_ENGINE', 'openai')
 
 IMAGE_GENERATION_MODEL = os.getenv('IMAGE_GENERATION_MODEL', '')
 
+# Media billing rates are expressed in Chatpoints. A zero value keeps the
+# operation free while still recording successful media usage.
+IMAGE_GENERATION_CHATPOINTS_PER_IMAGE = os.getenv('IMAGE_GENERATION_CHATPOINTS_PER_IMAGE', '1')
+IMAGE_GENERATION_REQUIRE_CONFIRMATION = os.getenv('IMAGE_GENERATION_REQUIRE_CONFIRMATION', 'true').lower() == 'true'
+IMAGE_GENERATION_DAILY_MAX_CHATPOINTS = os.getenv('IMAGE_GENERATION_DAILY_MAX_CHATPOINTS', '0')
+
 # Regex pattern for models that support IMAGE_SIZE = "auto".
 IMAGE_AUTO_SIZE_MODELS_REGEX_PATTERN = os.getenv('IMAGE_AUTO_SIZE_MODELS_REGEX_PATTERN', '^gpt-image')
 
@@ -1518,6 +1524,32 @@ except json.JSONDecodeError:
     images_edit_comfyui_workflow_nodes = []
 
 IMAGES_EDIT_COMFYUI_WORKFLOW_NODES = images_edit_comfyui_workflow_nodes
+
+####################################
+# Video generation
+####################################
+
+ENABLE_VIDEO_GENERATION = os.getenv('ENABLE_VIDEO_GENERATION', '').lower() == 'true'
+VIDEO_GENERATION_PROVIDER = os.getenv('VIDEO_GENERATION_PROVIDER', 'minimax').lower()
+VIDEO_GENERATION_BASE_URL = os.getenv('VIDEO_GENERATION_BASE_URL', '')
+VIDEO_GENERATION_API_KEY = os.getenv('VIDEO_GENERATION_API_KEY', '')
+VIDEO_GENERATION_API_VERSION = os.getenv('VIDEO_GENERATION_API_VERSION', 'v2')
+VIDEO_GENERATION_MODEL = os.getenv('VIDEO_GENERATION_MODEL', '')
+VIDEO_GENERATION_REGION = os.getenv('VIDEO_GENERATION_REGION', 'cn-beijing')
+VIDEO_GENERATION_RESOLUTION = os.getenv('VIDEO_GENERATION_RESOLUTION', '768P')
+VIDEO_GENERATION_DURATION = int(os.getenv('VIDEO_GENERATION_DURATION', '5'))
+VIDEO_GENERATION_RATIO = os.getenv('VIDEO_GENERATION_RATIO', '16:9')
+VIDEO_GENERATION_POLL_INTERVAL = float(os.getenv('VIDEO_GENERATION_POLL_INTERVAL', '10'))
+VIDEO_GENERATION_MAX_CONCURRENCY = int(os.getenv('VIDEO_GENERATION_MAX_CONCURRENCY', '2'))
+VIDEO_GENERATION_MAX_OUTPUT_MB = int(os.getenv('VIDEO_GENERATION_MAX_OUTPUT_MB', '200'))
+VIDEO_GENERATION_MAX_ATTEMPTS = int(os.getenv('VIDEO_GENERATION_MAX_ATTEMPTS', '5'))
+VIDEO_GENERATION_ADMIN_ONLY = os.getenv('VIDEO_GENERATION_ADMIN_ONLY', 'true').lower() == 'true'
+VIDEO_GENERATION_WATERMARK = os.getenv('VIDEO_GENERATION_WATERMARK', 'false').lower() == 'true'
+VIDEO_GENERATION_PROMPT_ENABLE = os.getenv('VIDEO_GENERATION_PROMPT_ENABLE', 'true').lower() == 'true'
+VIDEO_GENERATION_PROMPT_TEMPLATE = os.getenv('VIDEO_GENERATION_PROMPT_TEMPLATE', '')
+VIDEO_GENERATION_CHATPOINTS_PER_SECOND = os.getenv('VIDEO_GENERATION_CHATPOINTS_PER_SECOND', '1')
+VIDEO_GENERATION_REQUIRE_CONFIRMATION = os.getenv('VIDEO_GENERATION_REQUIRE_CONFIRMATION', 'true').lower() == 'true'
+VIDEO_GENERATION_DAILY_MAX_CHATPOINTS = os.getenv('VIDEO_GENERATION_DAILY_MAX_CHATPOINTS', '0')
 
 ####################################
 # Audio
@@ -1896,6 +1928,10 @@ USER_PERMISSIONS_FEATURES_IMAGE_GENERATION = (
     os.getenv('USER_PERMISSIONS_FEATURES_IMAGE_GENERATION', 'True').lower() == 'true'
 )
 
+USER_PERMISSIONS_FEATURES_VIDEO_GENERATION = (
+    os.getenv('USER_PERMISSIONS_FEATURES_VIDEO_GENERATION', 'False').lower() == 'true'
+)
+
 USER_PERMISSIONS_FEATURES_CODE_INTERPRETER = (
     os.getenv('USER_PERMISSIONS_FEATURES_CODE_INTERPRETER', 'True').lower() == 'true'
 )
@@ -1993,6 +2029,7 @@ DEFAULT_USER_PERMISSIONS = {
         # Chat features
         'web_search': USER_PERMISSIONS_FEATURES_WEB_SEARCH,
         'image_generation': USER_PERMISSIONS_FEATURES_IMAGE_GENERATION,
+        'video_generation': USER_PERMISSIONS_FEATURES_VIDEO_GENERATION,
         'code_interpreter': USER_PERMISSIONS_FEATURES_CODE_INTERPRETER,
         'memories': USER_PERMISSIONS_FEATURES_MEMORIES,
         'automations': USER_PERMISSIONS_FEATURES_AUTOMATIONS,
@@ -2031,6 +2068,14 @@ AUTOMATION_MAX_COUNT = os.getenv('AUTOMATION_MAX_COUNT', '')
 AUTOMATION_MIN_INTERVAL = os.getenv('AUTOMATION_MIN_INTERVAL', '')
 
 AUTOMATION_AUTH_TOKEN_EXPIRES_IN = os.getenv('AUTOMATION_AUTH_TOKEN_EXPIRES_IN', '1h')
+
+try:
+    BILLING_MAX_PENDING_SETTLEMENTS_PER_USER = min(
+        max(int(os.getenv('BILLING_MAX_PENDING_SETTLEMENTS_PER_USER', '3')), 0),
+        100,
+    )
+except ValueError:
+    BILLING_MAX_PENDING_SETTLEMENTS_PER_USER = 3
 
 ENABLE_NOTES = os.getenv('ENABLE_NOTES', 'True').lower() == 'true'
 
@@ -2244,6 +2289,17 @@ Strictly return in JSON format:
 <chat_history>
 {{MESSAGES:END:6}}
 </chat_history>"""
+
+DEFAULT_VIDEO_GENERATION_PROMPT_TEMPLATE = """### 视频生成指导
+根据下面的用户请求创建连贯的短视频。
+- 保持主体在各帧中的身份、服装、几何结构和光照一致。
+- 按时间顺序描述可见动作，确保运动符合物理规律。
+- 只有在确实有帮助时才加入镜头运动、构图和转场。
+- 保持片段开头和结尾稳定，避免突然剪切、多余肢体、不可读文字或无解释的物体。
+- 遵循用户的语言和意图，不要虚构敏感的个人属性。
+
+用户请求：
+{{PROMPT}}"""
 
 
 FOLLOW_UP_GENERATION_PROMPT_TEMPLATE = os.getenv('FOLLOW_UP_GENERATION_PROMPT_TEMPLATE', '')
@@ -2788,6 +2844,44 @@ ENABLE_LDAP_GROUP_CREATION = os.getenv('ENABLE_LDAP_GROUP_CREATION', 'False').lo
 
 LDAP_ATTRIBUTE_FOR_GROUPS = os.getenv('LDAP_ATTRIBUTE_FOR_GROUPS', 'memberOf')
 
+DEFAULT_OPERATION_STATUS_CONFIG = {
+    'enabled': True,
+    'deduplicate': True,
+    'entries': {
+        # Video progress is delivered as a file event plus the final response.
+        # Keep intermediate and success entries hidden by default; failures stay visible.
+        'video.queued': {'visible': False, 'text': ''},
+        'video.submitting': {'visible': False, 'text': ''},
+        'video.running': {'visible': False, 'text': ''},
+        'video.retrying': {'visible': False, 'text': ''},
+        'video.succeeded': {'visible': False, 'text': ''},
+        'video.failed': {'visible': True, 'text': ''},
+        'image.creating': {'visible': True, 'text': ''},
+        'image.succeeded': {'visible': True, 'text': ''},
+        'image.failed': {'visible': True, 'text': ''},
+        'web_search.started': {'visible': True, 'text': ''},
+        'web_search.no_query': {'visible': True, 'text': ''},
+        'web_search.queries_generated': {'visible': True, 'text': ''},
+        'web_search.succeeded': {'visible': True, 'text': ''},
+        'web_search.no_results': {'visible': True, 'text': ''},
+        'web_search.failed': {'visible': True, 'text': ''},
+        'retrieval.queries_generated': {'visible': True, 'text': ''},
+        'retrieval.sources_retrieved': {'visible': True, 'text': ''},
+        'knowledge.searching': {'visible': True, 'text': ''},
+        'tool.executing': {'visible': True, 'text': 'Executing {{NAME}}...'},
+        'tool.completed': {'visible': True, 'text': 'View Result from {{NAME}}'},
+        'activity.exploring': {'visible': True, 'text': 'Exploring'},
+        'activity.explored': {'visible': True, 'text': 'Explored'},
+        'code.analyzing': {'visible': True, 'text': 'Analyzing...'},
+        'code.analyzed': {'visible': True, 'text': 'Analyzed'},
+        'reasoning.thinking': {'visible': True, 'text': 'Thinking...'},
+        'reasoning.thought': {'visible': True, 'text': 'Thought'},
+        'reasoning.thought_short': {'visible': True, 'text': 'Thought for less than a second'},
+        'reasoning.thought_seconds': {'visible': True, 'text': 'Thought for {{DURATION}} seconds'},
+        'reasoning.thought_human': {'visible': True, 'text': 'Thought for {{DURATION}}'},
+    },
+}
+
 DEFAULT_CONFIG = {
     'direct.enable': ENABLE_DIRECT_CONNECTIONS,
     'ollama.enable': ENABLE_OLLAMA_API,
@@ -2982,6 +3076,9 @@ DEFAULT_CONFIG = {
     'image_generation.enable': ENABLE_IMAGE_GENERATION,
     'image_generation.engine': IMAGE_GENERATION_ENGINE,
     'image_generation.model': IMAGE_GENERATION_MODEL,
+    'billing.media.image_chatpoints_per_image': IMAGE_GENERATION_CHATPOINTS_PER_IMAGE,
+    'billing.media.image_require_confirmation': IMAGE_GENERATION_REQUIRE_CONFIRMATION,
+    'billing.media.image_daily_max_chatpoints': IMAGE_GENERATION_DAILY_MAX_CHATPOINTS,
     'image_generation.size': IMAGE_SIZE,
     'image_generation.steps': IMAGE_STEPS,
     'image_generation.prompt.enable': ENABLE_IMAGE_PROMPT_GENERATION,
@@ -2999,6 +3096,27 @@ DEFAULT_CONFIG = {
     'image_generation.gemini.api_base_url': IMAGES_GEMINI_API_BASE_URL,
     'image_generation.gemini.api_key': IMAGES_GEMINI_API_KEY,
     'image_generation.gemini.endpoint_method': IMAGES_GEMINI_ENDPOINT_METHOD,
+    'video_generation.enable': ENABLE_VIDEO_GENERATION,
+    'video_generation.provider': VIDEO_GENERATION_PROVIDER,
+    'video_generation.base_url': VIDEO_GENERATION_BASE_URL,
+    'video_generation.api_key': VIDEO_GENERATION_API_KEY,
+    'video_generation.api_version': VIDEO_GENERATION_API_VERSION,
+    'video_generation.model': VIDEO_GENERATION_MODEL,
+    'video_generation.region': VIDEO_GENERATION_REGION,
+    'video_generation.resolution': VIDEO_GENERATION_RESOLUTION,
+    'video_generation.duration': VIDEO_GENERATION_DURATION,
+    'video_generation.ratio': VIDEO_GENERATION_RATIO,
+    'video_generation.poll_interval': VIDEO_GENERATION_POLL_INTERVAL,
+    'video_generation.max_concurrency': VIDEO_GENERATION_MAX_CONCURRENCY,
+    'video_generation.max_output_mb': VIDEO_GENERATION_MAX_OUTPUT_MB,
+    'video_generation.max_attempts': VIDEO_GENERATION_MAX_ATTEMPTS,
+    'video_generation.admin_only': VIDEO_GENERATION_ADMIN_ONLY,
+    'video_generation.watermark': VIDEO_GENERATION_WATERMARK,
+    'video_generation.prompt.enable': VIDEO_GENERATION_PROMPT_ENABLE,
+    'video_generation.prompt.template': VIDEO_GENERATION_PROMPT_TEMPLATE,
+    'billing.media.video_chatpoints_per_second': VIDEO_GENERATION_CHATPOINTS_PER_SECOND,
+    'billing.media.video_require_confirmation': VIDEO_GENERATION_REQUIRE_CONFIRMATION,
+    'billing.media.video_daily_max_chatpoints': VIDEO_GENERATION_DAILY_MAX_CHATPOINTS,
     'images.output_url_format': IMAGE_OUTPUT_URL_FORMAT,
     'images.edit.enable': ENABLE_IMAGE_EDIT,
     'images.edit.engine': IMAGE_EDIT_ENGINE,
@@ -3061,6 +3179,7 @@ DEFAULT_CONFIG = {
     'registration.email_code_login_enabled': False,
     'registration.sensitive_action_verification_enabled': False,
     'ui.enable_signup': ENABLE_SIGNUP,
+    'ui.operation_status': DEFAULT_OPERATION_STATUS_CONFIG,
     'ui.enable_login_form': ENABLE_LOGIN_FORM,
     'ui.enable_password_change_form': ENABLE_PASSWORD_CHANGE_FORM,
     'ui.default_locale': DEFAULT_LOCALE,
@@ -3092,6 +3211,7 @@ DEFAULT_CONFIG = {
     'automations.max_count': AUTOMATION_MAX_COUNT,
     'automations.min_interval': AUTOMATION_MIN_INTERVAL,
     'automations.auth_token_expires_in': AUTOMATION_AUTH_TOKEN_EXPIRES_IN,
+    'billing.max_pending_settlements_per_user': BILLING_MAX_PENDING_SETTLEMENTS_PER_USER,
     'notes.enable': ENABLE_NOTES,
     'users.enable_status': ENABLE_USER_STATUS,
     'evaluation.arena.enable': ENABLE_EVALUATION_ARENA_MODELS,

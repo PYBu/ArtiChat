@@ -38,6 +38,7 @@ from open_webui.routers.images import (
     image_edits,
     image_generations,
 )
+from open_webui.utils.video_generation import create_video_job, wait_for_video_job
 from open_webui.routers.memories import (
     AddMemoryForm,
     ListMemoryPathsForm,
@@ -357,6 +358,7 @@ async def fetch_url(
 
 async def generate_image(
     prompt: str,
+    confirm_cost: bool = False,
     __request__: Request = None,
     __user__: dict = None,
     __event_emitter__: callable = None,
@@ -367,6 +369,7 @@ async def generate_image(
     Generate an image based on a text prompt.
 
     :param prompt: A detailed description of the image to generate
+    :param confirm_cost: Set true only after the user explicitly confirms the displayed estimated Chatpoint cost.
     :return: Confirmation that the image was generated, or an error message
     """
     if __request__ is None:
@@ -377,7 +380,7 @@ async def generate_image(
 
         images = await image_generations(
             request=__request__,
-            form_data=CreateImageForm(prompt=prompt),
+            form_data=CreateImageForm(prompt=prompt, confirm_cost=confirm_cost),
             user=user,
         )
 
@@ -422,14 +425,116 @@ async def generate_image(
             )
 
         return json.dumps({'status': 'success', 'images': images}, ensure_ascii=False)
+    except HTTPException as e:
+        detail = e.detail
+        if isinstance(detail, dict):
+            return json.dumps({'error': detail.get('code', 'IMAGE_GENERATION_REQUEST_FAILED'), **detail}, ensure_ascii=False)
+        return json.dumps({'error': str(detail or e)}, ensure_ascii=False)
     except Exception as e:
         log.exception(f'generate_image error: {e}')
         return json.dumps({'error': str(e)})
 
 
+async def generate_video(
+    prompt: str,
+    duration: int | None = None,
+    ratio: str | None = None,
+    resolution: str | None = None,
+    first_frame_url: str | None = None,
+    confirm_cost: bool = False,
+    __request__: Request = None,
+    __user__: dict = None,
+    __event_emitter__: callable = None,
+    __chat_id__: str = None,
+    __message_id__: str = None,
+    __files__: list[dict] = None,
+) -> str:
+    """Generate a video and return only after the attached file reaches a terminal state.
+
+    :param prompt: A detailed description of the scene, action, camera movement, and style.
+    :param duration: Video duration in seconds, from 4 to 15 when supported by the provider.
+    :param ratio: Output aspect ratio for text-to-video generation.
+    :param resolution: Output resolution such as 768P or 2K.
+    :param first_frame_url: Optional ArtiChat image file ID, data URL, or HTTP(S) image URL for first-frame generation.
+    :param confirm_cost: Set true only after the user explicitly confirms the displayed estimated Chatpoint cost.
+    :return: The generated video result or a provider error.
+    """
+    if __request__ is None or not __user__:
+        return json.dumps({'error': 'Request context not available'})
+    try:
+        user = UserModel(**__user__)
+        if not first_frame_url:
+            for file in __files__ or []:
+                if not isinstance(file, dict):
+                    continue
+                content_type = str(file.get('content_type') or '')
+                if file.get('type') == 'image' or content_type.startswith('image/'):
+                    first_frame_url = file.get('id') or file.get('url')
+                    break
+        job = await create_video_job(
+            __request__,
+            prompt=prompt,
+            first_frame_url=first_frame_url,
+            model=None,
+            options={
+                key: value
+                for key, value in {
+                    'duration': duration,
+                    'ratio': ratio,
+                    'resolution': resolution,
+                }.items()
+                if value is not None
+            },
+            confirm_cost=confirm_cost,
+            user=user,
+            chat_id=__chat_id__,
+            message_id=__message_id__,
+        )
+        if __event_emitter__:
+            await __event_emitter__(
+                {
+                    'type': 'status',
+                    'data': {
+                        'status_id': 'video.queued',
+                        'description': '视频生成任务已排队',
+                        'done': False,
+                        'job_id': job.id,
+                    },
+                }
+            )
+        completed = await wait_for_video_job(job.id, user.id)
+        if completed.status == 'succeeded':
+            return json.dumps(
+                {
+                    'status': 'success',
+                    'job_id': job.id,
+                    'file_id': completed.output_file_id,
+                    'message': 'The generated video is attached to this response.',
+                },
+                ensure_ascii=False,
+            )
+        return json.dumps(
+            {
+                'status': completed.status,
+                'job_id': job.id,
+                'error': completed.error_message or 'Video generation failed',
+            },
+            ensure_ascii=False,
+        )
+    except HTTPException as e:
+        detail = e.detail
+        if isinstance(detail, dict):
+            return json.dumps({'error': detail.get('code', 'VIDEO_GENERATION_REQUEST_FAILED'), **detail}, ensure_ascii=False)
+        return json.dumps({'error': str(detail or e)}, ensure_ascii=False)
+    except Exception as e:
+        log.exception(f'generate_video error: {e}')
+        return json.dumps({'error': str(e)}, ensure_ascii=False)
+
+
 async def edit_image(
     prompt: str,
     image_urls: list[str] | None = None,
+    confirm_cost: bool = False,
     __request__: Request = None,
     __user__: dict = None,
     __event_emitter__: callable = None,
@@ -443,6 +548,7 @@ async def edit_image(
 
     :param prompt: A description of the transformation to apply to the provided images
     :param image_urls: Source image file IDs, ArtiChat file URLs, data URLs, or external HTTP(S) URLs
+    :param confirm_cost: Set true only after the user explicitly confirms the displayed estimated Chatpoint cost.
     :return: Confirmation that the images were edited, or an error message
     """
     if __request__ is None:
@@ -461,7 +567,7 @@ async def edit_image(
 
         images = await image_edits(
             request=__request__,
-            form_data=EditImageForm(prompt=prompt, image=image_references),
+            form_data=EditImageForm(prompt=prompt, image=image_references, confirm_cost=confirm_cost),
             user=user,
         )
 
@@ -506,6 +612,11 @@ async def edit_image(
             )
 
         return json.dumps({'status': 'success', 'images': images}, ensure_ascii=False)
+    except HTTPException as e:
+        detail = e.detail
+        if isinstance(detail, dict):
+            return json.dumps({'error': detail.get('code', 'IMAGE_EDIT_REQUEST_FAILED'), **detail}, ensure_ascii=False)
+        return json.dumps({'error': str(detail or e)}, ensure_ascii=False)
     except Exception as e:
         log.exception(f'edit_image error: {e}')
         return json.dumps({'error': str(e)})

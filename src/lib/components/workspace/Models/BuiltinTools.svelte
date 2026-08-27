@@ -47,6 +47,10 @@
 			label: $i18n.t('Image Generation'),
 			description: $i18n.t('Generate and edit images')
 		},
+		video_generation: {
+			label: $i18n.t('视频生成'),
+			description: $i18n.t('根据文字或首帧图片生成视频')
+		},
 		code_interpreter: {
 			label: $i18n.t('Code Interpreter'),
 			description: $i18n.t('Execute code')

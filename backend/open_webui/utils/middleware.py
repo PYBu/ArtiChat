@@ -128,9 +128,8 @@ from open_webui.utils.response import merge_usage, normalize_usage
 from open_webui.utils.sanitize import sanitize_code
 from open_webui.utils.subscriptions import (
     bill_model_usage,
-    count_pending_chatpoint_settlements,
     defer_chatpoint_reservation_settlement,
-    MAX_PENDING_SETTLEMENTS_PER_USER,
+    get_max_pending_settlements_per_user,
     get_request_client_ip,
     stream_event_has_content,
 )
@@ -139,6 +138,7 @@ from open_webui.utils.task import (
     rag_template,
     tools_function_calling_generation_template,
 )
+from open_webui.utils.video_generation import create_video_job, wait_for_video_job
 from open_webui.utils.tools import (
     build_tool_server_headers,
     get_attached_knowledge,
@@ -1376,6 +1376,7 @@ async def chat_web_search_handler(request: Request, form_data: dict, extra_param
             'type': 'status',
             'data': {
                 'action': 'web_search',
+                'status_id': 'web_search.started',
                 'description': 'Searching the web',
                 'done': False,
             },
@@ -1444,6 +1445,7 @@ async def chat_web_search_handler(request: Request, form_data: dict, extra_param
                 'type': 'status',
                 'data': {
                     'action': 'web_search',
+                    'status_id': 'web_search.no_query',
                     'description': 'No search query generated',
                     'done': True,
                 },
@@ -1456,6 +1458,7 @@ async def chat_web_search_handler(request: Request, form_data: dict, extra_param
             'type': 'status',
             'data': {
                 'action': 'web_search_queries_generated',
+                'status_id': 'web_search.queries_generated',
                 'queries': queries,
                 'done': False,
             },
@@ -1503,6 +1506,7 @@ async def chat_web_search_handler(request: Request, form_data: dict, extra_param
                     'type': 'status',
                     'data': {
                         'action': 'web_search',
+                        'status_id': 'web_search.succeeded',
                         'description': 'Searched {{count}} sites',
                         'urls': results['filenames'],
                         'items': results.get('items', []),
@@ -1516,6 +1520,7 @@ async def chat_web_search_handler(request: Request, form_data: dict, extra_param
                     'type': 'status',
                     'data': {
                         'action': 'web_search',
+                        'status_id': 'web_search.no_results',
                         'description': 'No search results found',
                         'done': True,
                         'error': True,
@@ -1531,6 +1536,7 @@ async def chat_web_search_handler(request: Request, form_data: dict, extra_param
                 'type': 'status',
                 'data': {
                     'action': 'web_search',
+                    'status_id': 'web_search.failed',
                     'description': (str(detail) if detail else 'An error occurred while searching the web'),
                     'queries': queries,
                     'done': True,
@@ -1650,7 +1656,7 @@ async def chat_image_generation_handler(request: Request, form_data: dict, extra
         await __event_emitter__(
             {
                 'type': 'status',
-                'data': {'description': 'Creating image', 'done': False},
+                'data': {'status_id': 'image.creating', 'description': 'Creating image', 'done': False},
             }
         )
 
@@ -1690,7 +1696,7 @@ async def chat_image_generation_handler(request: Request, form_data: dict, extra
             await __event_emitter__(
                 {
                     'type': 'status',
-                    'data': {'description': 'Image created', 'done': True},
+                    'data': {'status_id': 'image.succeeded', 'description': 'Image created', 'done': True},
                 }
             )
 
@@ -1724,6 +1730,7 @@ async def chat_image_generation_handler(request: Request, form_data: dict, extra
                 {
                     'type': 'status',
                     'data': {
+                        'status_id': 'image.failed',
                         'description': f'An error occurred while generating an image',
                         'done': True,
                     },
@@ -1788,7 +1795,7 @@ async def chat_image_generation_handler(request: Request, form_data: dict, extra
             await __event_emitter__(
                 {
                     'type': 'status',
-                    'data': {'description': 'Image created', 'done': True},
+                    'data': {'status_id': 'image.succeeded', 'description': 'Image created', 'done': True},
                 }
             )
 
@@ -1822,6 +1829,7 @@ async def chat_image_generation_handler(request: Request, form_data: dict, extra
                 {
                     'type': 'status',
                     'data': {
+                        'status_id': 'image.failed',
                         'description': f'An error occurred while generating an image',
                         'done': True,
                     },
@@ -1833,6 +1841,70 @@ async def chat_image_generation_handler(request: Request, form_data: dict, extra
     if system_message_content:
         form_data['messages'] = add_or_update_system_message(system_message_content, form_data['messages'])
 
+    return form_data
+
+
+async def chat_video_generation_handler(request: Request, form_data: dict, extra_params: dict, user):
+    """Legacy function-calling equivalent of the asynchronous video tool."""
+    metadata = extra_params.get('__metadata__', {})
+    emitter = extra_params.get('__event_emitter__')
+    chat_id = metadata.get('chat_id')
+    if not chat_id or not emitter:
+        return form_data
+
+    if is_saved_chat_id(chat_id):
+        chat = await Chats.get_chat_by_id_and_user_id(chat_id, user.id)
+        messages_map = chat.chat.get('history', {}).get('messages', {}) if chat else {}
+        current_id = chat.chat.get('history', {}).get('currentId') if chat else None
+        message_list = get_message_list(messages_map, current_id)
+    else:
+        message_list = form_data.get('messages', [])
+
+    prompt = get_last_user_message(message_list)
+    first_frame_url = None
+    for image_set in get_images_from_messages(message_list):
+        if image_set:
+            first_frame_url = image_set[0]
+            break
+
+    try:
+        await emitter({'type': 'status', 'data': {'status_id': 'video.queued', 'description': '视频生成任务已排队', 'done': False}})
+        job = await create_video_job(
+            request,
+            prompt=prompt,
+            first_frame_url=first_frame_url,
+            model=None,
+            options={},
+            user=user,
+            chat_id=metadata.get('chat_id'),
+            message_id=metadata.get('message_id'),
+        )
+        await emitter(
+            {
+                'type': 'status',
+                'data': {'status_id': 'video.queued', 'description': '视频生成任务已排队', 'done': False, 'job_id': job.id},
+            }
+        )
+        completed = await wait_for_video_job(job.id, user.id)
+        if completed.status == 'succeeded':
+            system_message = '<context>The requested video has been generated successfully and is attached to this response. Respond concisely without describing the background progress.</context>'
+        else:
+            error_message = completed.error_message or 'Video generation failed'
+            system_message = f'<context>The requested video could not be generated. Tell the user that the video generation failed with this error: {error_message}</context>'
+        form_data['messages'] = add_or_update_system_message(system_message, form_data['messages'])
+    except Exception as exc:
+        detail = exc.detail if isinstance(exc, HTTPException) else None
+        error_message = detail.get('message') if isinstance(detail, dict) else str(detail or exc)
+        await emitter(
+            {
+                'type': 'status',
+                'data': {'status_id': 'video.failed', 'description': f'视频生成失败：{error_message}', 'done': True, 'error': error_message},
+            }
+        )
+        form_data['messages'] = add_or_update_system_message(
+            f'<context>视频生成任务无法排队：{error_message}</context>',
+            form_data['messages'],
+        )
     return form_data
 
 
@@ -1881,8 +1953,9 @@ async def chat_completion_files_handler(
                 {
                     'type': 'status',
                     'data': {
-                        'action': 'queries_generated',
-                        'queries': queries,
+                    'action': 'queries_generated',
+                    'status_id': 'retrieval.queries_generated',
+                    'queries': queries,
                         'done': False,
                     },
                 }
@@ -1947,6 +2020,7 @@ async def chat_completion_files_handler(
                 'type': 'status',
                 'data': {
                     'action': 'sources_retrieved',
+                    'status_id': 'retrieval.sources_retrieved',
                     'count': sources_count,
                     'done': True,
                 },
@@ -2462,6 +2536,7 @@ async def process_chat_payload(request, form_data, user, metadata, model):
                 'type': 'status',
                 'data': {
                     'action': 'knowledge_search',
+                    'status_id': 'knowledge.searching',
                     'query': user_message,
                     'done': False,
                 },
@@ -2556,6 +2631,15 @@ async def process_chat_payload(request, form_data, user, metadata, model):
                 # Skip forced image generation when native FC is enabled - model can use generate_image tool
                 if metadata.get('params', {}).get('function_calling') == 'legacy':
                     form_data = await chat_image_generation_handler(request, form_data, extra_params, user)
+
+        if 'video_generation' in features and features['video_generation']:
+            if getattr(user, 'role', None) == 'admin' or await has_permission(
+                getattr(user, 'id', ''),
+                'features.video_generation',
+                await Config.get('user.permissions'),
+            ):
+                if metadata.get('params', {}).get('function_calling') == 'legacy':
+                    form_data = await chat_video_generation_handler(request, form_data, extra_params, user)
 
         if 'code_interpreter' in features and features['code_interpreter']:
             engine = await Config.get('code_interpreter.engine', 'pyodide')
@@ -2960,6 +3044,7 @@ async def process_chat_payload(request, form_data, user, metadata, model):
                 'type': 'status',
                 'data': {
                     'action': 'knowledge_search',
+                    'status_id': 'knowledge.searching',
                     'query': user_message,
                     'done': True,
                     'hidden': True,
@@ -3639,15 +3724,10 @@ async def bill_subscription_usage_once(
     )
     reservation_id = metadata.get('_artichat_chatpoint_reservation_id')
     defer_helper = globals().get('defer_chatpoint_reservation_settlement')
-    pending_count = 0
+    max_pending_settlements = 0
     if defer_settlement and reservation_id and defer_helper is not None:
-        pending_count = await count_pending_chatpoint_settlements(user.id)
-    if (
-        defer_settlement
-        and reservation_id
-        and defer_helper is not None
-        and pending_count < MAX_PENDING_SETTLEMENTS_PER_USER
-    ):
+        max_pending_settlements = await get_max_pending_settlements_per_user()
+    if defer_settlement and reservation_id and defer_helper is not None:
         payload = {
             'user_id': user.id,
             'model_id': model_id,
@@ -3664,15 +3744,20 @@ async def bill_subscription_usage_once(
             'allow_partial_reservation': True,
             'charge_reserved_on_missing_usage': True,
         }
-        await defer_helper(reservation_id, payload)
-        from open_webui.utils.hosted_inference import stop_hosted_inference_reservation_heartbeat
+        deferred = await defer_helper(
+            reservation_id,
+            payload,
+            max_pending_settlements=max_pending_settlements,
+        )
+        if deferred is not None:
+            from open_webui.utils.hosted_inference import stop_hosted_inference_reservation_heartbeat
 
-        await stop_hosted_inference_reservation_heartbeat(reservation_id)
-        ctx['subscription_usage_billed'] = True
-        from open_webui.utils.hosted_inference import clear_hosted_inference_reservation_metadata
+            await stop_hosted_inference_reservation_heartbeat(reservation_id)
+            ctx['subscription_usage_billed'] = True
+            from open_webui.utils.hosted_inference import clear_hosted_inference_reservation_metadata
 
-        clear_hosted_inference_reservation_metadata(metadata)
-        return
+            clear_hosted_inference_reservation_metadata(metadata)
+            return
     billing_started_at = time.perf_counter()
     try:
         await bill_model_usage(

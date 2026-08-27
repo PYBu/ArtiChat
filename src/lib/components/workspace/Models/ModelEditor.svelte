@@ -1021,7 +1021,15 @@
 							{@const availableFeatures = Object.entries(capabilities)
 								.filter(
 									([key, value]) =>
-										value && ['web_search', 'code_interpreter', 'image_generation'].includes(key)
+										value &&
+										(
+											[
+												'web_search',
+												'code_interpreter',
+												'image_generation',
+												'video_generation'
+											] as string[]
+										).includes(key)
 								)
 								.map(([key, value]) => key)}
 

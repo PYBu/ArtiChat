@@ -69,6 +69,7 @@
 	import { AudioQueue } from '$lib/utils/audio';
 	import { createTemporaryChatId, isTemporaryChatId } from '$lib/utils/chatId';
 	import { getOutputText } from './Messages/structuredOutput';
+	import { appendOperationStatus } from '$lib/utils/operationStatus';
 
 	import {
 		archiveChatById,
@@ -146,8 +147,7 @@
 
 	let loading = true;
 	const isQuotaError = (value: unknown) =>
-		value === 'CHATPOINT_BALANCE_EXHAUSTED' ||
-		value === 'CHATPOINT_BALANCE_INSUFFICIENT_FOR_INPUT';
+		value === 'CHATPOINT_BALANCE_EXHAUSTED' || value === 'CHATPOINT_BALANCE_INSUFFICIENT_FOR_INPUT';
 	const quotaErrorMessage = '额度不足支撑下次对话。';
 	$: chatContainerId = embedded ? 'note-chat-container' : 'chat-container';
 	$: messageInputDropzoneId = embedded ? 'note-chat-input-dropzone' : 'chat-pane';
@@ -325,6 +325,7 @@
 	let pendingOAuthTools = [];
 
 	let imageGenerationEnabled = false;
+	let videoGenerationEnabled = false;
 	let webSearchEnabled = false;
 	let codeInterpreterEnabled = false;
 	let webSearchActive = false;
@@ -587,6 +588,7 @@
 		selectedFilterIds = [];
 		webSearchEnabled = false;
 		imageGenerationEnabled = false;
+		videoGenerationEnabled = false;
 
 		const storageChatInput = sessionStorage.getItem(
 			`chat-input${chatIdProp ? `-${chatIdProp}` : ''}`
@@ -626,6 +628,7 @@
 						selectedFilterIds = input.selectedFilterIds;
 						webSearchEnabled = input.webSearchEnabled;
 						imageGenerationEnabled = input.imageGenerationEnabled;
+						videoGenerationEnabled = input.videoGenerationEnabled;
 						codeInterpreterEnabled = input.codeInterpreterEnabled;
 					}
 				} catch (e) {}
@@ -675,6 +678,7 @@
 		selectedFilterIds = [];
 		webSearchEnabled = false;
 		imageGenerationEnabled = false;
+		videoGenerationEnabled = false;
 		codeInterpreterEnabled = false;
 		prompt = '';
 		messageInput?.setText('');
@@ -746,6 +750,7 @@
 		pendingOAuthTools = [];
 		webSearchEnabled = false;
 		imageGenerationEnabled = false;
+		videoGenerationEnabled = false;
 		codeInterpreterEnabled = false;
 
 		if (selectedModelIds.filter((id) => id).length > 0) {
@@ -852,6 +857,14 @@
 						($user?.role === 'admin' || $user?.permissions?.features?.image_generation)
 					) {
 						imageGenerationEnabled = model.info.meta.defaultFeatureIds.includes('image_generation');
+					}
+
+					if (
+						model.info?.meta?.capabilities?.['video_generation'] &&
+						$config?.features?.enable_video_generation &&
+						($user?.role === 'admin' || $user?.permissions?.features?.video_generation)
+					) {
+						videoGenerationEnabled = model.info.meta.defaultFeatureIds.includes('video_generation');
 					}
 
 					if (
@@ -997,10 +1010,12 @@
 				const data = event?.data?.data ?? null;
 
 				if (type === 'status') {
-					if (message?.statusHistory) {
-						message.statusHistory.push(data);
-					} else {
-						message.statusHistory = [data];
+					if (data) {
+						message.statusHistory = appendOperationStatus(
+							message?.statusHistory,
+							data,
+							$config?.ui?.operation_status
+						);
 					}
 				} else if (type === 'context_compaction') {
 					handleContextCompactionStatus(data);
@@ -1386,6 +1401,7 @@
 				selectedFilterIds = [];
 				webSearchEnabled = false;
 				imageGenerationEnabled = false;
+				videoGenerationEnabled = false;
 				codeInterpreterEnabled = false;
 
 				try {
@@ -1399,6 +1415,7 @@
 						selectedFilterIds = input.selectedFilterIds;
 						webSearchEnabled = input.webSearchEnabled;
 						imageGenerationEnabled = input.imageGenerationEnabled;
+						videoGenerationEnabled = input.videoGenerationEnabled;
 						codeInterpreterEnabled = input.codeInterpreterEnabled;
 					}
 				} catch (e) {}
@@ -3043,6 +3060,11 @@
 					($user?.role === 'admin' || $user?.permissions?.features?.image_generation)
 						? imageGenerationEnabled
 						: false,
+				video_generation:
+					$config?.features?.enable_video_generation &&
+					($user?.role === 'admin' || $user?.permissions?.features?.video_generation)
+						? videoGenerationEnabled
+						: false,
 				code_interpreter:
 					$config?.features?.enable_code_interpreter &&
 					($user?.role === 'admin' || $user?.permissions?.features?.code_interpreter)
@@ -3318,9 +3340,7 @@
 				errorMessage = $i18n.t(`Uh-oh! There was an issue with the response.`);
 			}
 
-			toast.error(
-				isQuotaError(errorMessage) ? quotaErrorMessage : `${errorMessage}`
-			);
+			toast.error(isQuotaError(errorMessage) ? quotaErrorMessage : `${errorMessage}`);
 			responseMessage.error = {
 				content: error
 			};
@@ -3384,9 +3404,7 @@
 		console.error(innerError);
 		if ('detail' in innerError) {
 			// FastAPI error
-			toast.error(
-				isQuotaError(innerError.detail) ? quotaErrorMessage : innerError.detail
-			);
+			toast.error(isQuotaError(innerError.detail) ? quotaErrorMessage : innerError.detail);
 			errorMessage = innerError.detail;
 		} else if ('error' in innerError) {
 			// OpenAI error
@@ -4098,6 +4116,7 @@
 										bind:selectedFilterIds
 										bind:reasoningLevel
 										bind:imageGenerationEnabled
+										bind:videoGenerationEnabled
 										bind:codeInterpreterEnabled
 										{pendingOAuthTools}
 										bind:webSearchEnabled
@@ -4228,6 +4247,7 @@
 										bind:selectedFilterIds
 										bind:reasoningLevel
 										bind:imageGenerationEnabled
+										bind:videoGenerationEnabled
 										bind:codeInterpreterEnabled
 										{pendingOAuthTools}
 										bind:webSearchEnabled
@@ -4276,6 +4296,7 @@
 									bind:selectedFilterIds
 									bind:reasoningLevel
 									bind:imageGenerationEnabled
+									bind:videoGenerationEnabled
 									bind:codeInterpreterEnabled
 									bind:webSearchEnabled
 									bind:atSelectedModel

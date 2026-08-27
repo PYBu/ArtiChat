@@ -14,6 +14,7 @@
 	import Pipelines from './Settings/Pipelines.svelte';
 	import Audio from './Settings/Audio.svelte';
 	import Images from './Settings/Images.svelte';
+	import Video from './Settings/Video.svelte';
 	import Interface from './Settings/Interface.svelte';
 	import Models from './Settings/Models.svelte';
 	import Connections from './Settings/Connections.svelte';
@@ -27,6 +28,7 @@
 	import Subagents from './Settings/Subagents.svelte';
 	import Platform from './Settings/Platform.svelte';
 	import Email from './Settings/Email.svelte';
+	import OperationStatus from './Settings/OperationStatus.svelte';
 
 	import Search from '../icons/Search.svelte';
 	import ChevronLeft from '../icons/ChevronLeft.svelte';
@@ -57,6 +59,8 @@
 		'interface',
 		'audio',
 		'images',
+		'video',
+		'operation-status',
 		'pipelines',
 		'db',
 		'email'
@@ -307,6 +311,28 @@
 			]
 		},
 		{
+			id: 'video',
+			title: 'Video',
+			route: '/admin/settings/video',
+			keywords: ['video', 'video generation', 'minimax', 'seedance', 'modelark', 'text to video']
+		},
+		{
+			id: 'operation-status',
+			title: 'Operation Status',
+			route: '/admin/settings/operation-status',
+			keywords: [
+				'operation status',
+				'status text',
+				'progress',
+				'tools',
+				'exploring',
+				'reasoning',
+				'video',
+				'image',
+				'web search'
+			]
+		},
+		{
 			id: 'pipelines',
 			title: 'Pipelines',
 			route: '/admin/settings/pipelines',
@@ -437,6 +463,8 @@
 			<!-- {$i18n.t('Interface')} -->
 			<!-- {$i18n.t('Audio')} -->
 			<!-- {$i18n.t('Images')} -->
+			<!-- {$i18n.t('Video')} -->
+			<!-- {$i18n.t('Operation Status')} -->
 			<!-- {$i18n.t('Pipelines')} -->
 			<!-- {$i18n.t('Database')} -->
 			<!-- {$i18n.t('Email')} -->
@@ -543,6 +571,18 @@
 					/>
 				{:else if selectedTab === 'images'}
 					<Images
+						on:save={() => {
+							toast.success($i18n.t('Settings saved successfully!'));
+						}}
+					/>
+				{:else if selectedTab === 'video'}
+					<Video
+						on:save={() => {
+							toast.success($i18n.t('Settings saved successfully!'));
+						}}
+					/>
+				{:else if selectedTab === 'operation-status'}
+					<OperationStatus
 						on:save={() => {
 							toast.success($i18n.t('Settings saved successfully!'));
 						}}

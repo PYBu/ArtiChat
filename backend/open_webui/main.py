@@ -174,6 +174,7 @@ from open_webui.routers import (
     updates,
     users,
     utils,
+    videos,
 )
 from open_webui.routers.retrieval import (
     get_ef,
@@ -348,11 +349,35 @@ async def reservation_cleanup_loop() -> None:
         await asyncio.sleep(60)
 
 
+def _create_background_task(app: FastAPI, name: str, coroutine) -> asyncio.Task:
+    """Create and retain a lifespan-owned task until shutdown."""
+    task = asyncio.create_task(coroutine, name=f'artichat:{name}')
+    app.state.background_tasks[name] = task
+    return task
+
+
+async def _cancel_background_task(task: asyncio.Task | None, name: str, *, timeout: float = 5) -> None:
+    """Cancel one lifespan task without letting it block other shutdown work."""
+    if task is None:
+        return
+    if not task.done():
+        task.cancel()
+    try:
+        await asyncio.wait_for(task, timeout=timeout)
+    except asyncio.CancelledError:
+        pass
+    except asyncio.TimeoutError:
+        log.warning('Timed out waiting for background task %s to stop', name)
+    except Exception:
+        log.exception('Background task %s failed during shutdown', name)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Store reference to main event loop for sync->async calls (e.g., embedding generation)
     # This allows sync functions to schedule work on the main loop without blocking health checks
     app.state.main_loop = asyncio.get_running_loop()
+    app.state.background_tasks = {}
 
     app.state.instance_id = INSTANCE_ID
     start_logger()
@@ -368,7 +393,11 @@ async def lifespan(app: FastAPI):
 
     license_task = None
     if LICENSE_KEY:
-        license_task = asyncio.create_task(asyncio.to_thread(get_license_data, app, LICENSE_KEY))
+        license_task = _create_background_task(
+            app,
+            'license_data',
+            asyncio.to_thread(get_license_data, app, LICENSE_KEY),
+        )
 
     # Create admin account from env vars if specified and no users exist
     if WEBUI_ADMIN_EMAIL and WEBUI_ADMIN_PASSWORD:
@@ -387,19 +416,27 @@ async def lifespan(app: FastAPI):
     app.state.redis = get_redis_client(async_mode=True)
 
     if app.state.redis is not None:
-        app.state.redis_task_command_listener = asyncio.create_task(redis_task_command_listener(app))
+        app.state.redis_task_command_listener = _create_background_task(
+            app,
+            'redis_task_command_listener',
+            redis_task_command_listener(app),
+        )
 
     if THREAD_POOL_SIZE and THREAD_POOL_SIZE > 0:
         limiter = anyio.to_thread.current_default_thread_limiter()
         limiter.total_tokens = THREAD_POOL_SIZE
 
-    asyncio.create_task(periodic_usage_pool_cleanup())
-    asyncio.create_task(periodic_session_pool_cleanup())
-    reservation_cleanup_task = asyncio.create_task(reservation_cleanup_loop())
+    _create_background_task(app, 'usage_pool_cleanup', periodic_usage_pool_cleanup())
+    _create_background_task(app, 'session_pool_cleanup', periodic_session_pool_cleanup())
+    _create_background_task(app, 'reservation_cleanup', reservation_cleanup_loop())
+
+    from open_webui.utils.video_generation import video_generation_worker
+
+    _create_background_task(app, 'video_generation_worker', video_generation_worker(app))
 
     from open_webui.utils.automations import scheduler_worker_loop
 
-    asyncio.create_task(scheduler_worker_loop(app))
+    _create_background_task(app, 'scheduler_worker', scheduler_worker_loop(app))
 
     if await Config.get('models.base_models_cache'):
         try:
@@ -472,19 +509,14 @@ async def lifespan(app: FastAPI):
 
     await publish_event(app, EVENTS.SYSTEM_SHUTDOWN_STARTED, source='system')
 
+    for name, task in tuple(app.state.background_tasks.items()):
+        await _cancel_background_task(task, name)
+    app.state.background_tasks.clear()
+
     # Shutdown: clean up shared resources
     from open_webui.utils.session_pool import close_session
 
     await close_session()
-
-    if hasattr(app.state, 'redis_task_command_listener'):
-        app.state.redis_task_command_listener.cancel()
-
-    reservation_cleanup_task.cancel()
-    try:
-        await reservation_cleanup_task
-    except asyncio.CancelledError:
-        pass
 
     await publish_event(app, EVENTS.SYSTEM_SHUTDOWN_COMPLETED, source='system')
 
@@ -821,6 +853,7 @@ app.include_router(openai.router, prefix='/openai', tags=['openai'])
 app.include_router(pipelines.router, prefix='/api/v1/pipelines', tags=['pipelines'])
 app.include_router(tasks.router, prefix='/api/v1/tasks', tags=['tasks'])
 app.include_router(images.router, prefix='/api/v1/images', tags=['images'])
+app.include_router(videos.router, prefix='/api/v1/videos', tags=['videos'])
 
 app.include_router(audio.router, prefix='/api/v1/audio', tags=['audio'])
 app.include_router(retrieval.router, prefix='/api/v1/retrieval', tags=['retrieval'])
@@ -2478,6 +2511,7 @@ async def get_app_config(request: Request):
         'code_execution.enable',
         'code_interpreter.enable',
         'image_generation.enable',
+        'video_generation.enable',
         'task.autocomplete.enable',
         'ui.enable_community_sharing',
         'ui.enable_message_rating',
@@ -2502,6 +2536,7 @@ async def get_app_config(request: Request):
         'user.permissions',
         'ui.pending_user_overlay_title',
         'ui.pending_user_overlay_content',
+        'ui.operation_status',
         'ui.watermark',
         'platform.name',
         'platform.about_title',
@@ -2570,6 +2605,7 @@ async def get_app_config(request: Request):
                     'enable_code_execution': config.get('code_execution.enable'),
                     'enable_code_interpreter': config.get('code_interpreter.enable'),
                     'enable_image_generation': config.get('image_generation.enable'),
+                    'enable_video_generation': config.get('video_generation.enable'),
                     'enable_autocomplete_generation': config.get('task.autocomplete.enable'),
                     'enable_community_sharing': config.get('ui.enable_community_sharing'),
                     'enable_message_rating': config.get('ui.enable_message_rating'),
@@ -2636,6 +2672,7 @@ async def get_app_config(request: Request):
                 'ui': {
                     'pending_user_overlay_title': config.get('ui.pending_user_overlay_title'),
                     'pending_user_overlay_content': config.get('ui.pending_user_overlay_content'),
+                    'operation_status': config.get('ui.operation_status'),
                     'response_watermark': config.get('ui.watermark'),
                     'iframe_csp': IFRAME_CSP,
                 },

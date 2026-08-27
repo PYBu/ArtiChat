@@ -30,8 +30,8 @@
 
 	let loading = false;
 
-	let models = null;
-	let config = null;
+	let models: any[] | null = null;
+	let config: Record<string, any> | null = null;
 	const inputClass =
 		'w-full h-7 rounded-lg border border-gray-100/50 bg-gray-50/40 px-2 text-xs text-gray-700 outline-hidden transition-colors placeholder:text-gray-300 focus:border-blue-400 dark:border-white/[0.04] dark:bg-white/[0.03] dark:text-gray-300 dark:placeholder:text-gray-700 dark:focus:border-blue-500';
 	const textareaClass =
@@ -161,7 +161,7 @@
 		return null;
 	};
 
-	const validateJSON = (json) => {
+	const validateJSON = (json: string) => {
 		try {
 			const obj = JSON.parse(json);
 
@@ -341,6 +341,43 @@
 							</button>
 						</div>
 					</AdminSettingRow>
+
+					<AdminSettingField
+						label={$i18n.t('每张图片扣除 Chatpoint')}
+						description={$i18n.t('图片生成成功后按实际生成张数计费，失败不扣费。')}
+					>
+						<input
+							type="number"
+							min="0"
+							step="0.0001"
+							class={inputClass}
+							bind:value={config.IMAGE_GENERATION_CHATPOINTS_PER_IMAGE}
+						/>
+					</AdminSettingField>
+
+					<AdminSettingRow
+						label={$i18n.t('生成前确认费用')}
+						description={$i18n.t('非管理员必须先确认预计费用，模型才会提交图片任务。')}
+						let:labelId
+					>
+						<Switch
+							bind:state={config.IMAGE_GENERATION_REQUIRE_CONFIRMATION}
+							ariaLabelledbyId={labelId}
+						/>
+					</AdminSettingRow>
+
+					<AdminSettingField
+						label={$i18n.t('每日图片费用上限（Chatpoint）')}
+						description={$i18n.t('设置为 0 表示不启用额外日上限；余额与预留仍会照常校验。')}
+					>
+						<input
+							type="number"
+							min="0"
+							step="0.0001"
+							class={inputClass}
+							bind:value={config.IMAGE_GENERATION_DAILY_MAX_CHATPOINTS}
+						/>
+					</AdminSettingField>
 				</AdminSettingSection>
 
 				<AdminSettingSection title={$i18n.t('Create Image')}>
@@ -1009,6 +1046,7 @@
 						</div>
 					{/if}
 				</AdminSettingSection>
+
 			</div>
 		{/if}
 	</div>

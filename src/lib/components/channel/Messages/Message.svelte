@@ -14,6 +14,7 @@
 	const i18n = getContext<Writable<i18nType>>('i18n');
 
 	import { formatDate } from '$lib/utils';
+	import { resolveFileContentUrl } from '$lib/utils/fileUrls';
 
 	import { settings, user, shortCodesToEmojis } from '$lib/stores';
 	import { WEBUI_API_BASE_URL, WEBUI_BASE_URL } from '$lib/constants';
@@ -460,10 +461,7 @@
 							dir={$settings?.chatDirection ?? 'auto'}
 						>
 							{#each message?.data?.files as file}
-								{@const fileUrl =
-									file.url.startsWith('data') || file.url.startsWith('http')
-										? file.url
-										: `${WEBUI_API_BASE_URL}/files/${file.url}${file?.content_type ? '/content' : ''}`}
+							{@const fileUrl = resolveFileContentUrl(file.url)}
 								<div>
 									{#if file.type === 'image' || (file?.content_type ?? '').startsWith('image/')}
 										<Image src={fileUrl} alt={file.name} imageClassName=" max-h-96 rounded-lg" />

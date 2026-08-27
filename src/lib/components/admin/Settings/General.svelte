@@ -216,6 +216,24 @@
 				</AdminSettingField>
 			</AdminSettingSection>
 
+			<AdminSettingSection title={$i18n.t('Billing')}>
+				<AdminSettingField
+					label={$i18n.t('Pending settlement conversation limit')}
+					description={$i18n.t(
+						'Number of conversations a user may start while Chatpoint settlement is pending. Set to 0 to settle synchronously.'
+					)}
+				>
+					<input
+						class={inputClass}
+						type="number"
+						min="0"
+						max="100"
+						step="1"
+						bind:value={adminConfig.MAX_PENDING_SETTLEMENTS_PER_USER}
+					/>
+				</AdminSettingField>
+			</AdminSettingSection>
+
 			<Events />
 
 			<AdminSettingSection title={$i18n.t('UI')}>

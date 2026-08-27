@@ -18,7 +18,9 @@ from open_webui.utils.subscriptions import (
     ensure_subscription_current,
     extend_chatpoint_reservation,
     get_reservation_id,
+    get_max_pending_settlements_per_user,
     release_chatpoint_reservation,
+    release_expired_chatpoint_reservations,
     renew_chatpoint_reservation,
     reserve_chatpoint_batch,
     reserve_chatpoints,
@@ -29,6 +31,21 @@ from open_webui.utils.subscriptions import (
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 NOW = 1_720_000_000
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ('configured', 'expected'),
+    [('8', 8), (0, 0), (-4, 0), (999, 100), ('invalid', 3)],
+)
+async def test_pending_settlement_limit_is_bounded(monkeypatch, configured, expected):
+    async def get_config(*_args, **_kwargs):
+        return configured
+
+    monkeypatch.setattr('open_webui.utils.subscriptions._pending_settlement_limit_cache', None)
+    monkeypatch.setattr('open_webui.utils.subscriptions.Config.get', get_config)
+
+    assert await get_max_pending_settlements_per_user() == expected
 
 
 def test_reservation_id_helper_accepts_public_and_internal_forms():
@@ -96,6 +113,114 @@ async def test_deferred_settlement_restores_hold_and_bills_once(db_session):
     settled = await SubscriptionReservations.get_by_id(reservation_id, db=db_session)
     assert settled.status in {'settled', 'partially_settled'}
     assert await count_pending_chatpoint_settlements('deferred-user', db=db_session) == 0
+    subscription = await UserSubscriptions.get_by_user_id('deferred-user', db=db_session)
+    assert subscription.pending_settlement_count == 0
+
+
+@pytest.mark.asyncio
+async def test_pending_settlement_limit_is_atomic_under_concurrency(db_session):
+    await set_balances(db_session, 'pending-concurrency-user', plan=10)
+    reservations = [
+        (
+            await reserve_chatpoints(
+                'pending-concurrency-user',
+                request_id=f'pending-concurrency-{index}',
+                model_id='model-a',
+                amount_micros=chatpoint_to_micros(1),
+                now=NOW + index + 1,
+                db=db_session,
+            )
+        ).reservation
+        for index in range(5)
+    ]
+    Session = async_sessionmaker(db_session.bind, expire_on_commit=False)
+    barrier = asyncio.Barrier(len(reservations))
+
+    async def defer_once(reservation):
+        await barrier.wait()
+        async with Session() as session:
+            return await defer_chatpoint_reservation_settlement(
+                reservation.id,
+                {'user_id': 'pending-concurrency-user', 'model_id': 'model-a'},
+                max_pending_settlements=3,
+                now=NOW + 10,
+                db=session,
+            )
+
+    results = await asyncio.gather(*(defer_once(reservation) for reservation in reservations))
+    db_session.expire_all()
+    subscription = await UserSubscriptions.get_by_user_id('pending-concurrency-user', db=db_session)
+
+    assert sum(result is not None for result in results) == 3
+    assert await count_pending_chatpoint_settlements('pending-concurrency-user', db=db_session) == 3
+    assert subscription.pending_settlement_count == 3
+
+
+@pytest.mark.asyncio
+async def test_expired_cleanup_preserves_pending_settlement_for_recovery(db_session):
+    await set_balances(db_session, 'pending-expiry-user', plan=10)
+    reservation = (
+        await reserve_chatpoints(
+            'pending-expiry-user',
+            request_id='pending-expiry-request',
+            model_id='model-a',
+            amount_micros=chatpoint_to_micros(5),
+            now=NOW + 1,
+            db=db_session,
+        )
+    ).reservation
+
+    await defer_chatpoint_reservation_settlement(
+        reservation.id,
+        {'user_id': 'pending-expiry-user', 'model_id': 'model-a'},
+        max_pending_settlements=3,
+        now=NOW + 2,
+        db=db_session,
+    )
+
+    released = await release_expired_chatpoint_reservations(
+        now=NOW + 86403,
+        limit=100,
+        db=db_session,
+    )
+    preserved = await SubscriptionReservations.get_by_id(reservation.id, db=db_session)
+
+    assert released == []
+    assert preserved.status == 'active'
+    assert await count_pending_chatpoint_settlements('pending-expiry-user', db=db_session) == 1
+    subscription = await UserSubscriptions.get_by_user_id('pending-expiry-user', db=db_session)
+    assert subscription.pending_settlement_count == 1
+
+
+@pytest.mark.asyncio
+async def test_pending_settlement_limit_zero_keeps_reservation_for_sync_billing(db_session):
+    await set_balances(db_session, 'pending-zero-user', plan=10)
+    reservation = (
+        await reserve_chatpoints(
+            'pending-zero-user',
+            request_id='pending-zero-request',
+            model_id='model-a',
+            amount_micros=chatpoint_to_micros(5),
+            now=NOW + 1,
+            db=db_session,
+        )
+    ).reservation
+
+    deferred = await defer_chatpoint_reservation_settlement(
+        reservation.id,
+        {'user_id': 'pending-zero-user', 'model_id': 'model-a'},
+        max_pending_settlements=0,
+        now=NOW + 2,
+        db=db_session,
+    )
+    unchanged = await SubscriptionReservations.get_by_id(reservation.id, db=db_session)
+    subscription = await UserSubscriptions.get_by_user_id('pending-zero-user', db=db_session)
+
+    assert deferred is None
+    assert unchanged.status == 'active'
+    assert unchanged.reserved_micros == chatpoint_to_micros(5)
+    assert subscription.plan_balance_micros == chatpoint_to_micros(5)
+    assert subscription.pending_settlement_count == 0
 
 
 @pytest.mark.asyncio

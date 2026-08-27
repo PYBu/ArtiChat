@@ -77,3 +77,16 @@ async def test_stop_item_tasks_cancels_every_local_task_when_registry_mutates():
         await asyncio.gather(*created_tasks, return_exceptions=True)
         for task_id in task_ids:
             await task_registry.cleanup_task(None, task_id, item_id)
+
+
+@pytest.mark.asyncio
+async def test_unscoped_tasks_do_not_leak_into_item_index():
+    async def complete_immediately():
+        return None
+
+    task_id, task = await task_registry.create_task(None, complete_immediately(), task_id='unscoped-task')
+    await task
+    await asyncio.sleep(0)
+
+    assert task_id not in task_registry.tasks
+    assert None not in task_registry.item_tasks

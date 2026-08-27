@@ -85,7 +85,7 @@ from open_webui.utils.session_security import revoke_user_sessions
 from open_webui.utils.account_notifications import notify_user
 from open_webui.utils.email_security import claim_email_verification_ticket, validate_email_verification_ticket
 from open_webui.utils.redis import get_redis_client
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -138,6 +138,7 @@ ADMIN_CONFIG_KEYS = {
     'PENDING_USER_OVERLAY_TITLE': 'ui.pending_user_overlay_title',
     'PENDING_USER_OVERLAY_CONTENT': 'ui.pending_user_overlay_content',
     'RESPONSE_WATERMARK': 'ui.watermark',
+    'MAX_PENDING_SETTLEMENTS_PER_USER': 'billing.max_pending_settlements_per_user',
 }
 
 LDAP_SERVER_CONFIG_KEYS = {
@@ -1385,6 +1386,7 @@ class AdminConfig(BaseModel):
     PENDING_USER_OVERLAY_TITLE: str | None = None
     PENDING_USER_OVERLAY_CONTENT: str | None = None
     RESPONSE_WATERMARK: str | None = None
+    MAX_PENDING_SETTLEMENTS_PER_USER: int = Field(default=3, ge=0, le=100)
 
 
 @router.post('/admin/config')
@@ -1395,6 +1397,7 @@ async def update_admin_config(request: Request, form_data: AdminConfig, user=Dep
     updates['automations.min_interval'] = (
         int(form_data.AUTOMATION_MIN_INTERVAL) if form_data.AUTOMATION_MIN_INTERVAL else ''
     )
+    updates['billing.max_pending_settlements_per_user'] = form_data.MAX_PENDING_SETTLEMENTS_PER_USER
 
     if form_data.DEFAULT_USER_ROLE not in ['pending', 'user', 'admin']:
         updates.pop('ui.default_user_role', None)
@@ -1409,6 +1412,9 @@ async def update_admin_config(request: Request, form_data: AdminConfig, user=Dep
         updates.pop('auth.jwt_expiry', None)
 
     await Config.upsert(updates)
+    from open_webui.utils.subscriptions import cache_max_pending_settlements_per_user
+
+    cache_max_pending_settlements_per_user(form_data.MAX_PENDING_SETTLEMENTS_PER_USER)
     return await get_config_values(ADMIN_CONFIG_KEYS)
 
 

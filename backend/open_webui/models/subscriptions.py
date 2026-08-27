@@ -217,6 +217,8 @@ class UserSubscription(Base):
     plan_balance_micros = Column(BigInteger, nullable=False)
     check_balance_micros = Column(BigInteger, nullable=False, default=0)
     balance_version = Column(BigInteger, nullable=False, default=0)
+    # NULL means this legacy row has not yet reconciled its pending markers.
+    pending_settlement_count = Column(Integer, nullable=True)
     starts_at = Column(BigInteger, nullable=False)
     expires_at = Column(BigInteger, nullable=True)
     period_start_at = Column(BigInteger, nullable=False)
@@ -320,6 +322,10 @@ class SubscriptionUsage(Base):
     idempotency_key = Column(String(64), nullable=True)
     reservation_id = Column(Text, nullable=True)
     model_id = Column(Text, nullable=False, index=True)
+    usage_type = Column(Text, nullable=False, default='chat', server_default='chat', index=True)
+    media_unit = Column(Text, nullable=True)
+    media_units = Column(Integer, nullable=True)
+    media_unit_price_micros = Column(BigInteger, nullable=True)
     tier = Column(Text, nullable=False)
     quota_mode = Column(Text, nullable=False)
     usage_multiplier = Column(Text, nullable=False, default='1')
@@ -602,6 +608,7 @@ class UserSubscriptionModel(BaseModel):
     plan_balance_micros: int
     check_balance_micros: int
     balance_version: int
+    pending_settlement_count: int | None = None
     starts_at: int
     expires_at: int | None = None
     period_start_at: int
@@ -811,6 +818,44 @@ class UserSubscriptionsTable:
             )
             return UserSubscriptionModel.model_validate(result.scalar_one())
 
+    async def update_pending_settlement_count(
+        self,
+        user_id: str,
+        count: int,
+        *,
+        now: int | None = None,
+        commit: bool = True,
+        db: AsyncSession | None = None,
+    ) -> UserSubscriptionModel:
+        """Persist the per-user pending settlement slot count.
+
+        Callers must already hold the billing row lock. Keeping this as a
+        direct update avoids creating a monetary ledger entry for bookkeeping.
+        """
+        async with get_subscription_db_context(db) as session:
+            timestamp = now if now is not None else now_ts()
+            result = await session.execute(
+                update(UserSubscription)
+                .where(UserSubscription.user_id == user_id)
+                .values(
+                    pending_settlement_count=max(int(count), 0),
+                    balance_version=UserSubscription.balance_version + 1,
+                    updated_at=timestamp,
+                )
+            )
+            if result.rowcount != 1:
+                raise ValueError(f'user subscription not found: {user_id}')
+            if commit:
+                await session.commit()
+            else:
+                await session.flush()
+            refreshed = await session.execute(
+                select(UserSubscription)
+                .where(UserSubscription.user_id == user_id)
+                .execution_options(populate_existing=True)
+            )
+            return UserSubscriptionModel.model_validate(refreshed.scalar_one())
+
     async def get_summaries_by_user_ids(
         self, user_ids: list[str], db: AsyncSession | None = None
     ) -> dict[str, UserSubscriptionSummaryModel]:
@@ -850,6 +895,7 @@ class UserSubscriptionsTable:
                     id=new_id('sub'),
                     user_id=user_id,
                     balance_version=0,
+                    pending_settlement_count=0,
                     created_at=starts_at,
                 )
                 check_balance = 0
@@ -1990,19 +2036,17 @@ class SubscriptionReservationsTable:
         self,
         *,
         user_id: str | None = None,
-        limit: int = 100,
+        limit: int | None = 100,
         db: AsyncSession | None = None,
     ) -> list[SubscriptionReservationModel]:
         async with get_subscription_db_context(db) as session:
             filters = [SubscriptionReservation.status == 'active']
             if user_id is not None:
                 filters.append(SubscriptionReservation.user_id == user_id)
-            result = await session.execute(
-                select(SubscriptionReservation)
-                .where(*filters)
-                .order_by(SubscriptionReservation.created_at.asc())
-                .limit(max(1, limit))
-            )
+            statement = select(SubscriptionReservation).where(*filters).order_by(SubscriptionReservation.created_at.asc())
+            if limit is not None:
+                statement = statement.limit(max(1, limit))
+            result = await session.execute(statement)
             return [SubscriptionReservationModel.model_validate(row) for row in result.scalars().all()]
 
 
@@ -2020,6 +2064,10 @@ class SubscriptionUsageModel(BaseModel):
     idempotency_key: str | None = None
     reservation_id: str | None = None
     model_id: str
+    usage_type: str = 'chat'
+    media_unit: str | None = None
+    media_units: int | None = None
+    media_unit_price_micros: int | None = None
     tier: str
     quota_mode: str
     usage_multiplier: str
@@ -2052,6 +2100,10 @@ class SubscriptionUsagePublicModel(BaseModel):
 
     id: str
     model_id: str
+    usage_type: str = 'chat'
+    media_unit: str | None = None
+    media_units: int | None = None
+    media_unit_price_micros: int | None = None
     tier: str
     quota_mode: str
     input_tokens: int
@@ -2129,6 +2181,10 @@ class SubscriptionUsagesTable:
         raw_usage: dict | None = None,
         metadata: dict | None,
         created_at: int,
+        usage_type: str = 'chat',
+        media_unit: str | None = None,
+        media_units: int | None = None,
+        media_unit_price_micros: int | None = None,
         commit: bool = True,
         db: AsyncSession | None = None,
     ) -> SubscriptionUsageModel:
@@ -2142,6 +2198,10 @@ class SubscriptionUsagesTable:
                 idempotency_key=idempotency_key,
                 reservation_id=reservation_id,
                 model_id=model_id,
+                usage_type=usage_type,
+                media_unit=media_unit,
+                media_units=media_units,
+                media_unit_price_micros=media_unit_price_micros,
                 tier=tier,
                 quota_mode=quota_mode,
                 usage_multiplier=usage_multiplier,
@@ -2183,6 +2243,8 @@ class SubscriptionUsagesTable:
         user_email: str | None = None,
         model_id: str | None = None,
         status: str | None = None,
+        usage_type: str | None = None,
+        media_unit: str | None = None,
         start_at: int | None = None,
         end_at: int | None = None,
         limit: int | None = 100,
@@ -2201,6 +2263,10 @@ class SubscriptionUsagesTable:
                 filters.append(SubscriptionUsage.model_id == model_id)
             if status:
                 filters.append(SubscriptionUsage.status == status)
+            if usage_type:
+                filters.append(SubscriptionUsage.usage_type == usage_type)
+            if media_unit:
+                filters.append(SubscriptionUsage.media_unit == media_unit)
             if start_at is not None:
                 filters.append(SubscriptionUsage.created_at >= start_at)
             if end_at is not None:
@@ -2273,6 +2339,23 @@ class SubscriptionUsagesTable:
                     .order_by(func.sum(SubscriptionUsage.total_tokens).desc())
                 )
             ).all()
+            media_totals_stmt = select(
+                SubscriptionUsage.usage_type,
+                SubscriptionUsage.media_unit,
+                func.coalesce(func.sum(SubscriptionUsage.media_units), 0),
+                func.coalesce(func.sum(SubscriptionUsage.cost_micros), 0),
+            ).where(*filters)
+            if user_email:
+                media_totals_stmt = media_totals_stmt.select_from(SubscriptionUsage).outerjoin(
+                    User, User.id == SubscriptionUsage.user_id
+                )
+            media_totals = (
+                await session.execute(
+                    media_totals_stmt.where(SubscriptionUsage.media_units.is_not(None))
+                    .group_by(SubscriptionUsage.usage_type, SubscriptionUsage.media_unit)
+                    .order_by(func.sum(SubscriptionUsage.media_units).desc())
+                )
+            ).all()
             return {
                 'items': items,
                 'total_cost_micros': int(totals[0]),
@@ -2286,6 +2369,15 @@ class SubscriptionUsagesTable:
                 'total_tokens': int(totals[8]),
                 'total_item_count': int(totals[9]),
                 'total_request_count': int(totals[10]),
+                'media_totals': [
+                    {
+                        'usage_type': usage_type,
+                        'media_unit': media_unit,
+                        'units': int(units),
+                        'cost_micros': int(cost_micros),
+                    }
+                    for usage_type, media_unit, units, cost_micros in media_totals
+                ],
                 'model_totals': [
                     {
                         'model_id': model_id,
@@ -2328,6 +2420,7 @@ class SubscriptionUsagesTable:
             'total_plan_cost_micros': summary['total_plan_cost_micros'],
             'total_check_cost_micros': summary['total_check_cost_micros'],
             'total_unpaid_cost_micros': summary['total_unpaid_cost_micros'],
+            'media_totals': summary['media_totals'],
             'total_input_tokens': summary['total_input_tokens'],
             'total_output_tokens': summary['total_output_tokens'],
             'total_cache_creation_tokens': summary['total_cache_creation_tokens'],

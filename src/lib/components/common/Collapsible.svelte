@@ -35,6 +35,8 @@
 	import ChevronUp from '../icons/ChevronUp.svelte';
 	import ChevronDown from '../icons/ChevronDown.svelte';
 	import Spinner from './Spinner.svelte';
+	import { config } from '$lib/stores';
+	import { resolveOperationStatus } from '$lib/utils/operationStatus';
 
 	export let open = false;
 
@@ -67,6 +69,36 @@
 	};
 
 	const collapsibleId = uuidv4();
+
+	$: isDetailPending = attributes?.done !== 'true' && !messageDone;
+	$: reasoningDuration = Number(attributes?.duration ?? 0);
+	$: detailStatusId =
+		attributes?.type === 'reasoning'
+			? isDetailPending
+				? 'reasoning.thinking'
+				: attributes?.duration
+					? reasoningDuration < 1
+						? 'reasoning.thought_short'
+						: reasoningDuration < 60
+							? 'reasoning.thought_seconds'
+							: 'reasoning.thought_human'
+					: 'reasoning.thought'
+			: attributes?.type === 'code_interpreter'
+				? isDetailPending
+					? 'code.analyzing'
+					: 'code.analyzed'
+				: null;
+	$: detailStatus = detailStatusId
+		? resolveOperationStatus(
+				{
+					status_id: detailStatusId,
+					duration: attributes?.duration
+				},
+				$config?.ui?.operation_status
+			)
+		: null;
+	$: detailStatusVisible = !detailStatus?.hidden;
+	$: detailStatusText = detailStatusVisible ? detailStatus?.display_description : null;
 </script>
 
 <div {id} class={className}>
@@ -94,7 +126,11 @@
 
 				<div class="">
 					{#if attributes?.type === 'reasoning'}
-						{#if (attributes?.done === 'true' || messageDone) && attributes?.duration}
+						{#if !detailStatusVisible}
+							<span class="sr-only">{$i18n.t('Reasoning')}</span>
+						{:else if detailStatusText}
+							{detailStatusText}
+						{:else if (attributes?.done === 'true' || messageDone) && attributes?.duration}
 							{#if attributes.duration < 1}
 								{$i18n.t('Thought for less than a second')}
 							{:else if attributes.duration < 60}
@@ -112,7 +148,11 @@
 							{$i18n.t('Thinking...')}
 						{/if}
 					{:else if attributes?.type === 'code_interpreter'}
-						{#if attributes?.done === 'true' || messageDone}
+						{#if !detailStatusVisible}
+							<span class="sr-only">{$i18n.t('Code interpreter')}</span>
+						{:else if detailStatusText}
+							{detailStatusText}
+						{:else if attributes?.done === 'true' || messageDone}
 							{$i18n.t('Analyzed')}
 						{:else}
 							{$i18n.t('Analyzing...')}

@@ -13,6 +13,7 @@
 	import { createNewFeedback, getFeedbackById, updateFeedbackById } from '$lib/apis/evaluations';
 	import { getChatById } from '$lib/apis/chats';
 	import { generateTags } from '$lib/apis';
+	import { resolveFileContentUrl } from '$lib/utils/fileUrls';
 
 	import {
 		audioQueue,
@@ -65,6 +66,7 @@
 	import FullHeightIframe from '$lib/components/common/FullHeightIframe.svelte';
 	import OutputEditView from './OutputEditView.svelte';
 	import { getOutputText, replaceOutputMessageText, type OutputItem } from './structuredOutput';
+	import { getVisibleOperationStatusHistory } from '$lib/utils/operationStatus';
 
 	interface MessageType {
 		id: string;
@@ -75,16 +77,30 @@
 		timestamp: number;
 		role: string;
 		statusHistory?: {
-			done: boolean;
-			action: string;
-			description: string;
+			done?: boolean;
+			action?: string;
+			description?: string;
+			status_id?: string;
+			display_description?: string;
+			hidden?: boolean;
+			error?: boolean | string;
+			count?: number;
+			items?: unknown[];
+			queries?: string[];
 			urls?: string[];
 			query?: string;
 		}[];
 		status?: {
-			done: boolean;
-			action: string;
-			description: string;
+			done?: boolean;
+			action?: string;
+			description?: string;
+			status_id?: string;
+			display_description?: string;
+			hidden?: boolean;
+			error?: boolean | string;
+			count?: number;
+			items?: unknown[];
+			queries?: string[];
 			urls?: string[];
 			query?: string;
 		};
@@ -181,10 +197,12 @@
 	$: model = $models.find((m) => m.id === message.model);
 
 	$: statusEntries = message?.statusHistory ?? [...(message?.status ? [message?.status] : [])];
+	$: visibleStatusEntries = getVisibleOperationStatusHistory(
+		statusEntries,
+		$config?.ui?.operation_status
+	);
 	$: hasVisibleStatus =
-		(model?.info?.meta?.capabilities?.status_updates ?? true) &&
-		statusEntries.length > 0 &&
-		!(statusEntries.at(-1)?.hidden ?? false);
+		(model?.info?.meta?.capabilities?.status_updates ?? true) && visibleStatusEntries.length > 0;
 	$: visibleResponseContent =
 		getOutputText(message.output) || removeAllDetails(message.content ?? '');
 	$: hasResponseContent = Boolean((message.content ?? '').trim() || message.output?.length);
@@ -681,18 +699,32 @@
 				<div class="chat-{message.role} w-full min-w-full">
 					<div>
 						{#if model?.info?.meta?.capabilities?.status_updates ?? true}
-							<StatusHistory statusHistory={message?.statusHistory} />
+							<StatusHistory
+								statusHistory={statusEntries}
+								operationStatus={$config?.ui?.operation_status}
+							/>
 						{/if}
 
-						{#if message?.files && message.files?.filter( (f) => ['image', 'file'].includes(f.type) ).length > 0}
+						{#if message?.files && message.files?.filter( (f) => ['image', 'video', 'file'].includes(f.type) ).length > 0}
 							<div
 								class="my-1 w-full flex overflow-x-auto gap-2 flex-wrap"
 								dir={$settings?.chatDirection ?? 'auto'}
 							>
-								{#each message.files.filter((f) => ['image', 'file'].includes(f.type)) as file}
+								{#each message.files.filter( (f) => ['image', 'video', 'file'].includes(f.type) ) as file}
 									<div>
 										{#if file.type === 'image' || (file?.content_type ?? '').startsWith('image/')}
 											<Image src={file.url} alt={message.content} />
+										{:else if file.type === 'video' || (file?.content_type ?? '').startsWith('video/')}
+											{@const fileUrl = resolveFileContentUrl(file.url)}
+											<!-- svelte-ignore a11y-media-has-caption -->
+											<video
+												src={fileUrl}
+												controls
+												preload="metadata"
+												class="max-h-96 max-w-full rounded-lg bg-black"
+											>
+												{$i18n.t('Your browser does not support the video tag.')}
+											</video>
 										{:else}
 											<FileItem
 												item={file}

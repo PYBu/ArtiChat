@@ -27,6 +27,10 @@
 			label: $i18n.t('Image Generation'),
 			description: $i18n.t('Model can generate images based on text prompts')
 		},
+		video_generation: {
+			label: $i18n.t('视频生成'),
+			description: $i18n.t('模型可以根据文字提示词生成视频')
+		},
 		code_interpreter: {
 			label: $i18n.t('Code Interpreter'),
 			description: $i18n.t('Model can execute code and perform calculations')

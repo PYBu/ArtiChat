@@ -55,6 +55,7 @@
 	export let showCommands = false;
 
 	export let imageGenerationEnabled = false;
+	export let videoGenerationEnabled = false;
 	export let codeInterpreterEnabled = false;
 	export let webSearchEnabled = false;
 
@@ -219,6 +220,7 @@
 						bind:selectedFilterIds
 						bind:reasoningLevel
 						bind:imageGenerationEnabled
+						bind:videoGenerationEnabled
 						bind:codeInterpreterEnabled
 						bind:webSearchEnabled
 						bind:atSelectedModel

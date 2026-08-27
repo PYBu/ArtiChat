@@ -93,7 +93,7 @@ async def cleanup_task(redis, task_id: str, id=None):
     tasks.pop(task_id, None)  # Remove the task if it exists
 
     # If an ID is provided, remove the task from the item_tasks dictionary
-    if id and task_id in item_tasks.get(id, []):
+    if id is not None and task_id in item_tasks.get(id, []):
         item_tasks[id].remove(task_id)
         if not item_tasks[id]:  # If no tasks left for this ID, remove the entry
             item_tasks.pop(id, None)
@@ -113,11 +113,10 @@ async def create_task(redis, coroutine, id=None, task_id=None):
     task.add_done_callback(cleanup_done_task)
     tasks[task_id] = task
 
-    # If an ID is provided, associate the task with that ID
-    if item_tasks.get(id):
-        item_tasks[id].append(task_id)
-    else:
-        item_tasks[id] = [task_id]
+    # Only item-scoped tasks belong in the secondary index. Unscoped tasks
+    # would otherwise accumulate under ``None`` and never be removed by cleanup.
+    if id is not None:
+        item_tasks.setdefault(id, []).append(task_id)
 
     if redis:
         try:

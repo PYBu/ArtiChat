@@ -25,6 +25,7 @@ async def db_session(tmp_path):
     import open_webui.models.messages  # noqa: F401
     import open_webui.models.models  # noqa: F401
     import open_webui.models.subscriptions  # noqa: F401
+    import open_webui.models.video_generation  # noqa: F401
     from open_webui.models.access_grants import AccessGrant
 
     db_path = tmp_path / 'subscriptions-test.db'

@@ -229,18 +229,20 @@ async def scheduler_worker_loop(app) -> None:
                 log.exception('Scheduler: timer error')
 
             try:
-                from open_webui.utils.email_delivery import process_email_delivery_queue
-
-                await process_email_delivery_queue(limit=5)
-            except Exception:
-                log.exception('Scheduler: email delivery error')
-
-            try:
                 from open_webui.utils.subscriptions import process_pending_chatpoint_settlements
 
                 await process_pending_chatpoint_settlements(limit=10)
             except Exception:
                 log.exception('Scheduler: deferred Chatpoint settlement error')
+
+            # Keep billing settlement ahead of SMTP work. A slow or blocked mail
+            # server must not delay releasing Chatpoint reservations.
+            try:
+                from open_webui.utils.email_delivery import process_email_delivery_queue
+
+                await process_email_delivery_queue(limit=5)
+            except Exception:
+                log.exception('Scheduler: email delivery error')
 
             if now < next_scheduler_poll:
                 await asyncio.sleep(max(1, TIMER_POLL_INTERVAL))

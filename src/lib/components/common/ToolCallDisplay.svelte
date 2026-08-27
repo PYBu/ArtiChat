@@ -15,7 +15,8 @@
 	import CheckCircle from '../icons/CheckCircle.svelte';
 	import Image from './Image.svelte';
 	import FullHeightIframe from './FullHeightIframe.svelte';
-	import { settings } from '$lib/stores';
+	import { config, settings } from '$lib/stores';
+	import { resolveOperationStatus } from '$lib/utils/operationStatus';
 
 	export let id: string = '';
 	export let attributes: {
@@ -92,6 +93,15 @@
 		open || (Array.isArray(embeds) && embeds.length > 0) ? decode(attributes?.arguments ?? '') : '';
 	$: isDone = attributes?.done === 'true';
 	$: isExecuting = attributes?.done && attributes?.done !== 'true';
+	$: operationStatus = resolveOperationStatus(
+		{
+			status_id: isDone ? 'tool.completed' : 'tool.executing',
+			name: attributes?.name ?? ''
+		},
+		$config?.ui?.operation_status
+	);
+	$: operationLabel = operationStatus.display_description;
+	$: operationStatusVisible = !operationStatus.hidden;
 
 	$: parsedArgs = parseArguments(args);
 	$: parsedResult = parseJSONString(result);
@@ -152,10 +162,13 @@
 					<span class="@md:hidden text-black dark:text-white">{attributes.name}</span>
 					<!-- Full label (md and above) -->
 					<span class="hidden @md:inline font-normal">
-						{#if isDone}
-							{$i18n.t('View Result from {{NAME}}', { NAME: attributes.name })}
+						{#if operationStatusVisible}
+							{operationLabel ||
+								(isDone
+									? $i18n.t('View Result from {{NAME}}', { NAME: attributes.name })
+									: $i18n.t('Executing {{NAME}}...', { NAME: attributes.name }))}
 						{:else}
-							{$i18n.t('Executing {{NAME}}...', { NAME: attributes.name })}
+							{attributes.name}
 						{/if}
 					</span>
 				</div>

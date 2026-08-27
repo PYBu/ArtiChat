@@ -592,6 +592,8 @@ async def get_admin_usage(
     user_email: str | None = None,
     model_id: str | None = None,
     status: str | None = None,
+    usage_type: str | None = None,
+    media_unit: str | None = None,
     start_at: int | None = None,
     end_at: int | None = None,
     limit: int = Query(default=100, ge=1, le=500),
@@ -604,6 +606,8 @@ async def get_admin_usage(
         user_email=user_email,
         model_id=model_id,
         status=status,
+        usage_type=usage_type,
+        media_unit=media_unit,
         start_at=start_at,
         end_at=end_at,
         limit=limit,
@@ -627,6 +631,8 @@ async def export_admin_usage(
     user_id: str | None = None,
     model_id: str | None = None,
     status: str | None = None,
+    usage_type: str | None = None,
+    media_unit: str | None = None,
     start_at: int | None = None,
     end_at: int | None = None,
     user=Depends(get_admin_subscription_user),
@@ -639,6 +645,8 @@ async def export_admin_usage(
             user_id=user_id,
             model_id=model_id,
             status=status,
+            usage_type=usage_type,
+            media_unit=media_unit,
             start_at=start_at,
             end_at=end_at,
             limit=None,
@@ -647,6 +655,9 @@ async def export_admin_usage(
         )
         writer.writerow(
             [
+                'media_type',
+                'media_unit',
+                'media_units',
                 '时间',
                 '用户',
                 '邮箱',
@@ -666,6 +677,9 @@ async def export_admin_usage(
             item_user = item.get('user') or {}
             writer.writerow(
                 [
+                    item.get('usage_type') or 'chat',
+                    item.get('media_unit') or '',
+                    item.get('media_units') if item.get('media_units') is not None else '',
                     datetime.fromtimestamp(item['created_at'], UTC).isoformat(),
                     item_user.get('name') or item_user.get('username') or item['user_id'],
                     item_user.get('email') or '',

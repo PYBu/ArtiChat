@@ -120,6 +120,10 @@ export type SubscriptionUsage = {
 	user_id?: string;
 	user?: UserSummary | null;
 	request_id?: string | null;
+	usage_type?: 'chat' | 'image' | 'video' | string;
+	media_unit?: 'image' | 'second' | string | null;
+	media_units?: number | null;
+	media_unit_price_micros?: number | null;
 	model_id: string;
 	tier: string;
 	quota_mode: string;
@@ -152,6 +156,12 @@ export type SubscriptionUsageSummary = {
 	total_check_cost_micros: number;
 	total_tokens: number;
 	total_request_count: number;
+	media_totals: Array<{
+		usage_type: string;
+		media_unit: string | null;
+		units: number;
+		cost_micros: number;
+	}>;
 	model_totals: Array<{
 		model_id: string;
 		total_tokens: number;
@@ -194,6 +204,8 @@ export type AdminUsageFilters = {
 	userEmail?: string;
 	modelId?: string;
 	status?: string;
+	usageType?: 'chat' | 'image' | 'video' | string;
+	mediaUnit?: 'image' | 'second' | string;
 	startAt?: number;
 	endAt?: number;
 	limit?: number;
@@ -464,6 +476,8 @@ export const getAdminSubscriptionUsage = async (token: string, filters: AdminUsa
 	if (filters.userEmail) params.set('user_email', filters.userEmail);
 	if (filters.modelId) params.set('model_id', filters.modelId);
 	if (filters.status) params.set('status', filters.status);
+	if (filters.usageType) params.set('usage_type', filters.usageType);
+	if (filters.mediaUnit) params.set('media_unit', filters.mediaUnit);
 	if (filters.startAt !== undefined) params.set('start_at', String(filters.startAt));
 	if (filters.endAt !== undefined) params.set('end_at', String(filters.endAt));
 	if (filters.limit !== undefined) params.set('limit', String(filters.limit));
@@ -511,6 +525,8 @@ export const exportAdminSubscriptionUsage = async (
 	if (filters.userId) params.set('user_id', filters.userId);
 	if (filters.modelId && kind === 'requests') params.set('model_id', filters.modelId);
 	if (filters.status && kind === 'requests') params.set('status', filters.status);
+	if (filters.usageType && kind === 'requests') params.set('usage_type', filters.usageType);
+	if (filters.mediaUnit && kind === 'requests') params.set('media_unit', filters.mediaUnit);
 	if (filters.startAt !== undefined) params.set('start_at', String(filters.startAt));
 	if (filters.endAt !== undefined) params.set('end_at', String(filters.endAt));
 	const response = await fetch(

@@ -3,10 +3,10 @@
 	const i18n = getContext('i18n');
 	import WebSearchResults from '../WebSearchResults.svelte';
 	import Search from '$lib/components/icons/Search.svelte';
-	import { t } from 'i18next';
 
 	export let status = null;
 	export let done = false;
+	$: customDescription = status?.display_description;
 </script>
 
 {#if !status?.hidden}
@@ -22,7 +22,9 @@
 						<!-- $i18n.t("Generating search query") -->
 						<!-- $i18n.t("No search query generated") -->
 						<!-- $i18n.t('Searched {{count}} sites') -->
-						{#if status?.description?.includes('{{count}}')}
+						{#if customDescription}
+							{customDescription}
+						{:else if status?.description?.includes('{{count}}')}
 							{$i18n.t(status?.description, {
 								count: (status?.urls || status?.items).length
 							})}
@@ -43,9 +45,10 @@
 						? 'shimmer'
 						: ''} text-gray-500 dark:text-gray-500 text-[0.9375rem] line-clamp-1 text-wrap"
 				>
-					{$i18n.t(`Searching Knowledge for "{{searchQuery}}"`, {
-						searchQuery: status.query
-					})}
+					{customDescription ||
+						$i18n.t(`Searching Knowledge for "{{searchQuery}}"`, {
+							searchQuery: status.query
+						})}
 				</div>
 			</div>
 		{:else if status?.action === 'web_search_queries_generated' && status?.queries}
@@ -55,7 +58,7 @@
 						? 'shimmer'
 						: ''} text-gray-500 dark:text-gray-500 text-[0.9375rem] line-clamp-1 text-wrap"
 				>
-					{$i18n.t(`Searching`)}
+					{customDescription || $i18n.t(`Searching`)}
 				</div>
 
 				<div class=" flex gap-1 flex-wrap mt-2">
@@ -81,7 +84,7 @@
 						? 'shimmer'
 						: ''} text-gray-500 dark:text-gray-500 text-[0.9375rem] line-clamp-1 text-wrap"
 				>
-					{$i18n.t(`Querying`)}
+					{customDescription || $i18n.t(`Querying`)}
 				</div>
 
 				<div class=" flex gap-1 flex-wrap mt-2">
@@ -107,7 +110,9 @@
 						? 'shimmer'
 						: ''} text-gray-500 dark:text-gray-500 text-[0.9375rem] line-clamp-1 text-wrap"
 				>
-					{#if status.count === 0}
+					{#if customDescription}
+						{customDescription}
+					{:else if status.count === 0}
 						{$i18n.t('No sources found')}
 					{:else if status.count === 1}
 						{$i18n.t('Retrieved 1 source')}
@@ -130,7 +135,9 @@
 						: ''} text-gray-500 dark:text-gray-500 text-[0.9375rem] line-clamp-1 text-wrap"
 				>
 					<!-- $i18n.t(`Searching "{{searchQuery}}"`) -->
-					{#if status?.description?.includes('{{searchQuery}}')}
+					{#if customDescription}
+						{customDescription}
+					{:else if status?.description?.includes('{{searchQuery}}')}
 						{$i18n.t(status?.description, {
 							searchQuery: status?.query
 						})}

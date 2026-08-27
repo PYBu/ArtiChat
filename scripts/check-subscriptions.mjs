@@ -573,6 +573,23 @@ for (const marker of [
 	if (!mainSource.includes(marker))
 		failures.push(`Main chat reservation lifecycle missing ${marker}`);
 }
+const authsSource = read('backend/open_webui/routers/auths.py');
+for (const marker of [
+	"'MAX_PENDING_SETTLEMENTS_PER_USER': 'billing.max_pending_settlements_per_user'",
+	'MAX_PENDING_SETTLEMENTS_PER_USER: int = Field(default=3, ge=0, le=100)'
+]) {
+	if (!authsSource.includes(marker)) failures.push(`Admin billing continuation setting missing ${marker}`);
+}
+const adminGeneralSettings = read('src/lib/components/admin/Settings/General.svelte');
+for (const marker of ['Pending settlement conversation limit', 'MAX_PENDING_SETTLEMENTS_PER_USER']) {
+	if (!adminGeneralSettings.includes(marker)) failures.push(`Admin General billing setting missing ${marker}`);
+}
+const schedulerSource = read('backend/open_webui/utils/automations.py');
+const settlementIndex = schedulerSource.indexOf('process_pending_chatpoint_settlements');
+const emailIndex = schedulerSource.indexOf('process_email_delivery_queue');
+if (settlementIndex === -1 || emailIndex === -1 || settlementIndex > emailIndex) {
+	failures.push('Chatpoint settlement must be scheduled before email delivery');
+}
 const chatSource = read('backend/open_webui/utils/chat.py');
 for (const marker of [
 	'_artichat_chatpoint_reservation_id',

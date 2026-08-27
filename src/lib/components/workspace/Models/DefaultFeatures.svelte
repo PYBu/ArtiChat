@@ -6,7 +6,7 @@
 
 	const i18n = getContext('i18n');
 
-	const featureLabels = {
+	const featureLabels: Record<string, { label: string; description: string }> = {
 		web_search: {
 			label: $i18n.t('Web Search'),
 			description: $i18n.t('Model can search the web for information')
@@ -15,14 +15,23 @@
 			label: $i18n.t('Image Generation'),
 			description: $i18n.t('Model can generate images based on text prompts')
 		},
+		video_generation: {
+			label: $i18n.t('视频生成'),
+			description: $i18n.t('模型可以根据文字提示词生成视频')
+		},
 		code_interpreter: {
 			label: $i18n.t('Code Interpreter'),
 			description: $i18n.t('Model can execute code and perform calculations')
 		}
 	};
 
-	export let availableFeatures = ['web_search', 'image_generation', 'code_interpreter'];
-	export let featureIds = [];
+	export let availableFeatures: string[] = [
+		'web_search',
+		'image_generation',
+		'video_generation',
+		'code_interpreter'
+	];
+	export let featureIds: string[] = [];
 </script>
 
 <div>
