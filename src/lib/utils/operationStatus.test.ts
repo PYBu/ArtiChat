@@ -70,6 +70,15 @@ describe('operation status configuration', () => {
 		).toBe('Video generated');
 	});
 
+	it('preserves custom media labels exactly', () => {
+		const config = getDefaultOperationStatusConfig();
+		config.entries['image.creating'].text = '正 在创建图像';
+
+		expect(
+			resolveOperationStatus({ status_id: 'image.creating' }, config).display_description
+		).toBe('正 在创建图像');
+	});
+
 	it('honors global and per-status visibility switches', () => {
 		const defaults = getDefaultOperationStatusConfig();
 		const hiddenEntry = {
