@@ -235,12 +235,13 @@
 										loading="lazy"
 									/>
 								{:else if asset.category === 'video'}
+									<!-- svelte-ignore a11y-media-has-caption -->
 									<video
 										src={absoluteAssetUrl(asset.preview_url)}
 										controls
 										preload="metadata"
 										class="size-full object-contain"
-									/>
+									></video>
 								{:else}
 									<ArchiveBox
 										className="size-10 text-gray-300 dark:text-gray-700"
