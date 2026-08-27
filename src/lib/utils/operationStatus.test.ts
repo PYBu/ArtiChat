@@ -4,6 +4,7 @@ import {
 	appendOperationStatus,
 	getDefaultOperationStatusConfig,
 	getVisibleOperationStatusHistory,
+	getToolCallOperationStatusId,
 	resolveOperationStatus
 } from './operationStatus';
 
@@ -31,6 +32,13 @@ describe('operation status configuration', () => {
 			resolveOperationStatus({ status_id: 'tool.completed', name: 'search_web' }, config)
 				.display_description
 		).toBe('Finished search_web');
+	});
+
+	it('uses image statuses for image-generation tool calls', () => {
+		expect(getToolCallOperationStatusId('generate_image', false)).toBe('image.creating');
+		expect(getToolCallOperationStatusId('generate_image', true)).toBe('image.succeeded');
+		expect(getToolCallOperationStatusId('edit_image', true)).toBe('image.succeeded');
+		expect(getToolCallOperationStatusId('search_web', true)).toBe('tool.completed');
 	});
 
 	it('honors global and per-status visibility switches', () => {

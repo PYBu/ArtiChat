@@ -16,7 +16,7 @@
 	import Image from './Image.svelte';
 	import FullHeightIframe from './FullHeightIframe.svelte';
 	import { config, settings } from '$lib/stores';
-	import { resolveOperationStatus } from '$lib/utils/operationStatus';
+	import { getToolCallOperationStatusId, resolveOperationStatus } from '$lib/utils/operationStatus';
 
 	export let id: string = '';
 	export let attributes: {
@@ -95,7 +95,7 @@
 	$: isExecuting = attributes?.done && attributes?.done !== 'true';
 	$: operationStatus = resolveOperationStatus(
 		{
-			status_id: isDone ? 'tool.completed' : 'tool.executing',
+			status_id: getToolCallOperationStatusId(attributes?.name, isDone),
 			name: attributes?.name ?? ''
 		},
 		$config?.ui?.operation_status

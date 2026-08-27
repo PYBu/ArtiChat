@@ -247,6 +247,17 @@ export const getOperationStatusId = (status: OperationStatus | null | undefined)
 	return status.action ? null : null;
 };
 
+export const getToolCallOperationStatusId = (
+	name: string | null | undefined,
+	done: boolean
+): string => {
+	const normalizedName = name?.trim().toLowerCase();
+	if (normalizedName === 'generate_image' || normalizedName === 'edit_image') {
+		return done ? 'image.succeeded' : 'image.creating';
+	}
+	return done ? 'tool.completed' : 'tool.executing';
+};
+
 const interpolate = (template: string, status: OperationStatus): string => {
 	const duration = Number(status.duration ?? 0);
 	const values: Record<string, unknown> = {
