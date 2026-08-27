@@ -2870,6 +2870,7 @@ DEFAULT_OPERATION_STATUS_CONFIG = {
         'knowledge.searching': {'visible': True, 'text': ''},
         'tool.executing': {'visible': True, 'text': 'Executing {{NAME}}...'},
         'tool.completed': {'visible': True, 'text': 'View Result from {{NAME}}'},
+        'tool.failed': {'visible': True, 'text': 'Tool failed'},
         'activity.exploring': {'visible': True, 'text': 'Exploring'},
         'activity.explored': {'visible': True, 'text': 'Explored'},
         'code.analyzing': {'visible': True, 'text': 'Analyzing...'},

@@ -3028,6 +3028,8 @@
 	"A tool call is running.": "工具呼叫正在執行。",
 	"Tool completed": "工具已完成",
 	"A tool call completed.": "工具呼叫已完成。",
+	"Tool failed": "工具失敗",
+	"A tool call returned an error.": "工具呼叫回傳了錯誤。",
 	"Exploring": "探索中",
 	"A grouped activity is running.": "分組活動正在執行。",
 	"Explored": "探索完成",

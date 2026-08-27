@@ -84,6 +84,28 @@
 		}
 	}
 
+	function getToolResultError(value: unknown, raw: string): string {
+		if (value && typeof value === 'object' && !Array.isArray(value)) {
+			const record = value as Record<string, unknown>;
+			const detail = record.detail;
+			const detailError =
+				detail && typeof detail === 'object'
+					? (detail as Record<string, unknown>).error
+					: undefined;
+			const error = record.error ?? detailError;
+			if (error) return typeof error === 'string' ? error : JSON.stringify(error);
+
+			const status = String(record.status ?? '').toLowerCase();
+			if (['error', 'failed', 'failure', 'cancelled'].includes(status)) {
+				const message = record.message ?? record.detail ?? status;
+				return typeof message === 'string' ? message : JSON.stringify(message);
+			}
+		}
+
+		const text = raw.trim();
+		return /^\s*(?:\[error\b|error\s*[:：]|failed\s*[:：])/i.test(text) ? text : '';
+	}
+
 	export let resultContent: string = '';
 
 	$: result = resultContent || decode(attributes?.result ?? '');
@@ -93,10 +115,13 @@
 		open || (Array.isArray(embeds) && embeds.length > 0) ? decode(attributes?.arguments ?? '') : '';
 	$: isDone = attributes?.done === 'true';
 	$: isExecuting = attributes?.done && attributes?.done !== 'true';
+	$: parsedResult = parseJSONString(result);
+	$: toolResultError = getToolResultError(parsedResult, result);
 	$: operationStatus = resolveOperationStatus(
 		{
-			status_id: getToolCallOperationStatusId(attributes?.name, isDone),
-			name: attributes?.name ?? ''
+			status_id: getToolCallOperationStatusId(attributes?.name, isDone, Boolean(toolResultError)),
+			name: attributes?.name ?? '',
+			error: toolResultError || undefined
 		},
 		$config?.ui?.operation_status
 	);
@@ -108,7 +133,6 @@
 	$: operationStatusVisible = !operationStatus.hidden;
 
 	$: parsedArgs = parseArguments(args);
-	$: parsedResult = parseJSONString(result);
 </script>
 
 <div {id} class={className}>

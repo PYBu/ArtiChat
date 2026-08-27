@@ -176,6 +176,14 @@ export const OPERATION_STATUS_CATALOG: OperationStatusCatalogItem[] = [
 		'View Result from {{NAME}}'
 	),
 	item(
+		'tool.failed',
+		'Tool failed',
+		'A tool call returned an error.',
+		'Tools',
+		true,
+		'Tool failed'
+	),
+	item(
 		'activity.exploring',
 		'Exploring',
 		'A grouped activity is running.',
@@ -296,13 +304,19 @@ export const getOperationStatusId = (status: OperationStatus | null | undefined)
 
 export const getToolCallOperationStatusId = (
 	name: string | null | undefined,
-	done: boolean
+	done: boolean,
+	failed = false
 ): string => {
 	const normalizedName = name?.trim().toLowerCase();
 	if (normalizedName === 'generate_image' || normalizedName === 'edit_image') {
+		if (failed) return 'image.failed';
 		return done ? 'image.succeeded' : 'image.creating';
 	}
-	if (normalizedName === 'generate_video') return done ? 'video.succeeded' : 'video.running';
+	if (normalizedName === 'generate_video') {
+		if (failed) return 'video.failed';
+		return done ? 'video.succeeded' : 'video.running';
+	}
+	if (failed) return 'tool.failed';
 	return done ? 'tool.completed' : 'tool.executing';
 };
 

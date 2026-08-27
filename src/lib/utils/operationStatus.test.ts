@@ -39,10 +39,13 @@ describe('operation status configuration', () => {
 	it('uses image statuses for image-generation tool calls', () => {
 		expect(getToolCallOperationStatusId('generate_image', false)).toBe('image.creating');
 		expect(getToolCallOperationStatusId('generate_image', true)).toBe('image.succeeded');
+		expect(getToolCallOperationStatusId('generate_image', true, true)).toBe('image.failed');
 		expect(getToolCallOperationStatusId('edit_image', true)).toBe('image.succeeded');
 		expect(getToolCallOperationStatusId('generate_video', true)).toBe('video.succeeded');
 		expect(getToolCallOperationStatusId('generate_video', false)).toBe('video.running');
+		expect(getToolCallOperationStatusId('generate_video', true, true)).toBe('video.failed');
 		expect(getToolCallOperationStatusId('search_web', true)).toBe('tool.completed');
+		expect(getToolCallOperationStatusId('search_web', true, true)).toBe('tool.failed');
 	});
 
 	it('provides built-in terminal labels for media completion states', () => {

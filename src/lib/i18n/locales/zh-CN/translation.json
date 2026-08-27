@@ -3057,6 +3057,8 @@
 	"A tool call is running.": "工具调用正在运行。",
 	"Tool completed": "工具已完成",
 	"A tool call completed.": "工具调用已完成。",
+	"Tool failed": "工具失败",
+	"A tool call returned an error.": "工具调用返回了错误。",
 	"Exploring": "探索中",
 	"A grouped activity is running.": "分组活动正在运行。",
 	"Explored": "探索完成",
