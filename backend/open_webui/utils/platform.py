@@ -30,7 +30,7 @@ PLATFORM_SIDEBAR_ICONS = {
 
 
 def platform_about_defaults(version: str) -> dict[str, str]:
-    normalized_version = str(version or '').strip() or '0.2.4'
+    normalized_version = str(version or '').strip() or '0.3.0'
     return {
         'about_title': f'ArtiChat ProEdition v{normalized_version}',
         'about_content': DEFAULT_PLATFORM_ABOUT_CONTENT,

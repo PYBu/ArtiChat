@@ -485,7 +485,13 @@ async def _download_video(
         raise RuntimeError('Video output is empty')
     extension = mimetypes.guess_extension(content_type) or '.mp4'
     upload = UploadFile(file=io.BytesIO(bytes(chunks)), filename=f'generated-video{extension}', headers={'content-type': content_type})
-    item = await upload_file_handler(request, file=upload, metadata=metadata, process=False, user=user)
+    item = await upload_file_handler(
+        request,
+        file=upload,
+        metadata={**metadata, 'asset_source': 'generated', 'asset_category': 'video'},
+        process=False,
+        user=user,
+    )
     if not item or not item.id:
         raise RuntimeError('Failed to persist generated video')
     return item.id, str(request.app.url_path_for('get_file_content_by_id', id=item.id))

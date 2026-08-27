@@ -16,6 +16,17 @@ log = logging.getLogger(__name__)
 
 MEMORY_CONTEXT_OPEN = '<memory_context>'
 MEMORY_CONTEXT_CLOSE = '</memory_context>'
+MEMORY_AUTO_MAX_OPERATIONS = 4
+MEMORY_AUTO_MAX_CONTENT_LENGTH = 600
+MEMORY_AUTO_MAX_ENTRIES = 200
+MEMORY_SENSITIVE_PATTERNS = (
+    re.compile(
+        r'(?i)\b(?:api[_ -]?key|access[_ -]?key|secret|password|passwd|token|authorization|private[_ -]?key)\b\s*[:=]\s*\S+'
+    ),
+    re.compile(r'(?i)\b(?:bearer|basic)\s+[A-Za-z0-9._~+/=-]{16,}\b'),
+    re.compile(r'(?i)\b(?:sk|pk|rk|ghp|github_pat|xox[baprs]-)[A-Za-z0-9_-]{12,}\b'),
+    re.compile(r'(?<!\d)(?:\d[ -]?){13,19}(?!\d)'),
+)
 
 
 def clean_memory_content(content: str | None) -> str:
@@ -23,6 +34,73 @@ def clean_memory_content(content: str | None) -> str:
     if not value:
         raise HTTPException(status_code=400, detail='Memory content cannot be empty')
     return value
+
+
+def is_sensitive_memory_content(content: str | None) -> bool:
+    value = str(content or '').strip()
+    return any(pattern.search(value) for pattern in MEMORY_SENSITIVE_PATTERNS)
+
+
+def _memory_dedupe_key(content: str, memory_type: str | None, path: str | None) -> tuple[str, str, str]:
+    normalized = re.sub(r'\s+', ' ', content.strip()).casefold()
+    return (normalized, memory_type or 'context', path or '')
+
+
+def sanitize_memory_operations(operations: list[dict] | None, existing_memories: list | None) -> list[dict]:
+    """Keep background-generated writes bounded, private, and tied to real rows."""
+    if not isinstance(operations, list):
+        return []
+
+    existing = list(existing_memories or [])
+    existing_ids = {memory.id for memory in existing if getattr(memory, 'id', None)}
+    pending_keys = {
+        _memory_dedupe_key(memory.content, memory.type, memory.path)
+        for memory in existing
+        if isinstance(getattr(memory, 'content', None), str)
+    }
+    result: list[dict] = []
+
+    for raw in operations:
+        if len(result) >= MEMORY_AUTO_MAX_OPERATIONS or not isinstance(raw, dict):
+            break
+        action = raw.get('action')
+        if action not in {'add', 'replace', 'move', 'remove'}:
+            continue
+        operation = {'action': action}
+        if action in {'replace', 'move', 'remove'}:
+            memory_id = raw.get('id')
+            if not isinstance(memory_id, str) or memory_id not in existing_ids:
+                continue
+            operation['id'] = memory_id
+
+        if action in {'add', 'replace'}:
+            content = raw.get('content')
+            if not isinstance(content, str):
+                continue
+            content = content.strip()
+            if not content or len(content) > MEMORY_AUTO_MAX_CONTENT_LENGTH or is_sensitive_memory_content(content):
+                continue
+            memory_type = raw.get('type') if raw.get('type') in {'user', 'context'} else 'context'
+            try:
+                path = clean_memory_path(raw.get('path') if isinstance(raw.get('path'), str) else None)
+            except HTTPException:
+                continue
+            key = _memory_dedupe_key(content, memory_type, path)
+            if action == 'add' and key in pending_keys:
+                continue
+            operation.update({'content': content, 'type': memory_type, 'path': path})
+            pending_keys.add(key)
+        elif action == 'move':
+            try:
+                operation['path'] = clean_memory_path(raw.get('path') if isinstance(raw.get('path'), str) else None)
+            except HTTPException:
+                continue
+
+        result.append(operation)
+        if len(existing) + sum(item.get('action') == 'add' for item in result) >= MEMORY_AUTO_MAX_ENTRIES:
+            break
+
+    return result
 
 
 def clean_memory_path(path: str | None) -> str | None:
@@ -430,13 +508,16 @@ async def review_memory_after_turn(
         'memories.background_review.enable',
         'memories.review_interval_turns',
     )
-    if not config.get('memories.background_review.enable'):
+    auto_memory = features.get('auto_memory')
+    if auto_memory is None:
+        auto_memory = config.get('memories.background_review.enable', True)
+    if not auto_memory:
         return
 
     try:
-        interval = max(1, int(config.get('memories.review_interval_turns', 10)))
+        interval = 1 if features.get('auto_memory') else max(1, int(config.get('memories.review_interval_turns', 1)))
     except Exception:
-        interval = 10
+        interval = 1
 
     user_turns = len([message for message in messages if message.get('role') == 'user'])
     if user_turns == 0 or user_turns % interval != 0:
@@ -511,6 +592,7 @@ async def _review_memory(
         existing_text='\n'.join(existing_lines) if existing_lines else '(none)',
         transcript='\n\n'.join(transcript_lines),
     )
+    operations = sanitize_memory_operations(operations, existing_memories)
     if operations:
         from open_webui.routers.memories import UpdateMemoriesForm, update_memories
 
@@ -527,6 +609,9 @@ async def _generate_memory_operations(
     transcript: str,
 ) -> list[dict[str, Any]]:
     from open_webui.utils.hosted_inference import generate_billed_chat_completion
+
+    if not isinstance(model_id, str) or not model_id.strip():
+        return []
 
     review_prompt = f"""Review the completed conversation turn and decide whether long-term memory should change.
 

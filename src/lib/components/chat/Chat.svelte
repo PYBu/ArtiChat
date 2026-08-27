@@ -3074,7 +3074,7 @@
 			};
 
 		if ($settings?.memory ?? $config?.features?.enable_memories ?? false) {
-			features = { ...features, memory: true };
+			features = { ...features, memory: true, auto_memory: $settings?.autoMemory ?? true };
 		}
 
 		return features;

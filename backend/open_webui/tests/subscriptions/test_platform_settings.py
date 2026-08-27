@@ -38,7 +38,7 @@ def test_platform_about_defaults_use_current_version_and_product_copy():
         'about_content': DEFAULT_PLATFORM_ABOUT_CONTENT,
     }
     assert platform_about_defaults('') == {
-        'about_title': 'ArtiChat ProEdition v0.2.4',
+        'about_title': 'ArtiChat ProEdition v0.3.0',
         'about_content': DEFAULT_PLATFORM_ABOUT_CONTENT,
     }
 

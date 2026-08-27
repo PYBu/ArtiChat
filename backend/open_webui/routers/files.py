@@ -27,6 +27,7 @@ from open_webui.constants import ERROR_MESSAGES
 from open_webui.events import EVENTS, publish_event
 from open_webui.internal.db import get_async_db_context, get_async_session
 from open_webui.models.access_grants import AccessGrants
+from open_webui.models.assets import AssetShares, normalize_asset_category
 from open_webui.models.channels import Channels
 from open_webui.models.config import Config
 from open_webui.models.chats import Chats
@@ -414,6 +415,11 @@ async def upload_file_handler(
             lambda: hashlib.sha256(contents).hexdigest()
         )
 
+        asset_source = file_metadata.get('asset_source') if file_metadata.get('asset_source') in {'uploaded', 'generated'} else 'uploaded'
+        asset_category = file_metadata.get('asset_category')
+        if asset_category not in {'image', 'video', 'other'}:
+            asset_category = normalize_asset_category(file.content_type, name)
+
         file_item = await Files.insert_new_file(
             user.id,
             FileForm(
@@ -429,6 +435,8 @@ async def upload_file_handler(
                         'content_type': (file.content_type if isinstance(file.content_type, str) else None),
                         'size': len(contents),
                         'file_hash': file_hash,
+                        'asset_source': asset_source,
+                        'asset_category': asset_category,
                         'data': file_metadata,
                     },
                 }
@@ -1043,6 +1051,7 @@ async def delete_file_by_id(
             except Exception as e:
                 log.debug(f'KB embedding cleanup for {knowledge.id}: {e}')
 
+        await AssetShares.revoke_for_file(id, db=db)
         result = await Files.delete_file_by_id(id, db=db)
         if result:
             try:

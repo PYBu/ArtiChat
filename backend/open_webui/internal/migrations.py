@@ -13,7 +13,7 @@ from sqlalchemy import inspect, text
 from sqlalchemy.engine import Connection, Engine
 from sqlalchemy.engine.reflection import Inspector
 
-EXPECTED_ALEMBIC_HEADS = frozenset({'f0a1b2c3d4e5'})
+EXPECTED_ALEMBIC_HEADS = frozenset({'f0a1b2c3d4e6'})
 
 # Every application-owned durable table that must survive a 0.1.7 -> 0.2.1
 # upgrade. Alembic head validation alone cannot detect a manually stamped or
@@ -22,6 +22,7 @@ EXPECTED_ALEMBIC_HEADS = frozenset({'f0a1b2c3d4e5'})
 REQUIRED_DURABLE_TABLES = frozenset(
     {
         'access_grant',
+        'asset_share',
         'alembic_version',
         'announcement',
         'announcement_view',
@@ -89,6 +90,9 @@ REQUIRED_SCHEMA: dict[str, frozenset[str]] = {
     'chat': frozenset({'id', 'user_id', 'chat', 'current_message_id', 'variables'}),
     'chat_message': frozenset({'id', 'chat_id', 'parent_id', 'meta'}),
     'file': frozenset({'id', 'user_id', 'filename', 'path', 'meta'}),
+    'asset_share': frozenset(
+        {'id', 'file_id', 'owner_id', 'token_hash', 'expires_at', 'revoked_at', 'created_at', 'last_access_at'}
+    ),
     'knowledge': frozenset({'id', 'user_id', 'name', 'data'}),
     'knowledge_file': frozenset({'id', 'knowledge_id', 'file_id', 'user_id'}),
     'model': frozenset({'id', 'user_id', 'base_model_id', 'params', 'meta'}),

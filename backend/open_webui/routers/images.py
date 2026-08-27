@@ -718,7 +718,7 @@ async def upload_image(request, image_data, content_type, metadata, user, db=Non
     file_item = await upload_file_handler(
         request,
         file=file,
-        metadata=metadata,
+        metadata={**metadata, 'asset_source': 'generated', 'asset_category': 'image'},
         process=False,
         user=user,
     )

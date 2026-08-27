@@ -30,6 +30,7 @@
 	import KeyIcon from './icons/Key.svelte';
 	import UserIcon from './icons/User.svelte';
 	import WorkspaceIcon from './icons/Workspace.svelte';
+	import ArchiveBoxIcon from '$lib/components/icons/ArchiveBox.svelte';
 	import XMarkIcon from './icons/XMark.svelte';
 	import { updateUserStatus, updateUserSettings } from '$lib/apis/users';
 	import { toast } from 'svelte-sonner';
@@ -164,10 +165,10 @@
 				</div>
 				{#if showQuota}
 					<div class="mt-1 flex justify-end px-1">
-										<SubscriptionQuotaRing
-											on:openUsage={async () => {
-												show = false;
-												await goto('/account/subscription?tab=usage');
+						<SubscriptionQuotaRing
+							on:openUsage={async () => {
+								show = false;
+								await goto('/account/subscription?tab=usage');
 								if ($mobile) {
 									await tick();
 									showSidebar.set(false);
@@ -295,6 +296,29 @@
 							</button>
 						</Tooltip>
 					{/if}
+				</div>
+			{/if}
+
+			{#if $user}
+				<div class="flex items-center w-full">
+					<a
+						href="/assets"
+						draggable="false"
+						class="flex flex-1 h-[1.6875rem] items-center gap-2 rounded-xl px-2 text-[13px] hover:bg-gray-50/40 dark:hover:bg-gray-800/40 transition cursor-pointer select-none"
+						on:click={async (e) => {
+							if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) return;
+							e.preventDefault();
+							show = false;
+							goto('/assets');
+							if ($mobile) {
+								await tick();
+								showSidebar.set(false);
+							}
+						}}
+					>
+						<div class="self-center"><ArchiveBoxIcon className="size-3.5" strokeWidth="1.5" /></div>
+						<div class="self-center truncate">{$i18n.t('Asset Center')}</div>
+					</a>
 				</div>
 			{/if}
 

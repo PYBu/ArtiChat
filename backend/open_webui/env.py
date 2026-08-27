@@ -855,7 +855,7 @@ SCIM_AUTH_PROVIDER = os.getenv('SCIM_AUTH_PROVIDER', '')
 
 if ENABLE_SCIM:
     raise RuntimeError(
-        'SCIM is not supported by ArtiChat 0.2.4 because the experimental upstream implementation '
+        'SCIM is not supported by ArtiChat 0.3.0 because the experimental upstream implementation '
         'does not preserve ArtiChat authentication, session-revocation, subscription, and billing lifecycle '
         'invariants. Remove ENABLE_SCIM/SCIM_ENABLED or set it to false before starting this release.'
     )

@@ -28,6 +28,7 @@
 
 	// Addons
 	let enableMemory = false;
+	let enableAutoMemory = true;
 	let memories: Memory[] = [];
 	let loadingMemories = true;
 
@@ -97,6 +98,7 @@
 
 	onMount(async () => {
 		enableMemory = $settings?.memory ?? $config?.features?.enable_memories ?? false;
+		enableAutoMemory = $settings?.autoMemory ?? true;
 		await loadMemories();
 	});
 </script>
@@ -142,6 +144,22 @@
 					}}
 				/>
 			</UserSettingRow>
+
+			{#if enableMemory}
+				<UserSettingRow
+					description={$i18n.t(
+						'Automatically save durable preferences and facts from your conversations. Sensitive information is filtered.'
+					)}
+				>
+					<span slot="label">{$i18n.t('Automatic memory')}</span>
+					<Switch
+						bind:state={enableAutoMemory}
+						on:change={async () => {
+							saveSettings({ autoMemory: enableAutoMemory });
+						}}
+					/>
+				</UserSettingRow>
+			{/if}
 
 			{#if enableMemory}
 				<div>
