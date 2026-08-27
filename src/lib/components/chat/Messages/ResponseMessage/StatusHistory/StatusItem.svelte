@@ -6,7 +6,18 @@
 
 	export let status = null;
 	export let done = false;
-	$: customDescription = status?.display_description;
+	$: customDescription = status?.display_description_custom
+		? status?.display_description
+		: status?.display_description_template
+			? $i18n.t(status.display_description_template, {
+					NAME: status?.name ?? '',
+					COUNT: status?.count ?? status?.urls?.length ?? status?.items?.length ?? 0,
+					DURATION: status?.duration ?? '',
+					ERROR: typeof status?.error === 'string' ? status.error : (status?.description ?? ''),
+					QUERY: status?.query ?? '',
+					searchQuery: status?.query ?? ''
+				})
+			: status?.display_description;
 </script>
 
 {#if !status?.hidden}

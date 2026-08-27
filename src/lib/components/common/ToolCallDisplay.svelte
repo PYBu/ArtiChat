@@ -100,7 +100,11 @@
 		},
 		$config?.ui?.operation_status
 	);
-	$: operationLabel = operationStatus.display_description;
+	$: operationLabel = operationStatus.display_description_custom
+		? operationStatus.display_description
+		: operationStatus.display_description_template
+			? $i18n.t(operationStatus.display_description_template, { NAME: attributes.name })
+			: operationStatus.display_description;
 	$: operationStatusVisible = !operationStatus.hidden;
 
 	$: parsedArgs = parseArguments(args);

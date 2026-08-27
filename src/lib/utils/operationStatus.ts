@@ -14,6 +14,8 @@ export type OperationStatus = {
 	action?: string;
 	description?: string;
 	display_description?: string;
+	display_description_template?: string;
+	display_description_custom?: boolean;
 	done?: boolean;
 	hidden?: boolean;
 	error?: boolean | string;
@@ -46,33 +48,78 @@ const item = (
 ): OperationStatusCatalogItem => ({ id, label, description, group, visible, defaultText });
 
 export const OPERATION_STATUS_CATALOG: OperationStatusCatalogItem[] = [
-	item('video.queued', 'Video queued', 'The video job is waiting to be processed.', 'Video', false),
+	item(
+		'video.queued',
+		'Video queued',
+		'The video job is waiting to be processed.',
+		'Video',
+		false,
+		'Video queued'
+	),
 	item(
 		'video.submitting',
 		'Submitting video',
 		'The video request is being sent to the provider.',
 		'Video',
-		false
+		false,
+		'Submitting video'
 	),
 	item(
 		'video.running',
 		'Video generating',
 		'The provider is generating the video.',
 		'Video',
-		false
+		false,
+		'Video generating'
 	),
 	item(
 		'video.retrying',
 		'Retrying video',
 		'The video provider request is being retried.',
 		'Video',
-		false
+		false,
+		'Retrying video'
 	),
-	item('video.succeeded', 'Video generated', 'The video file is ready.', 'Video', false),
-	item('video.failed', 'Video failed', 'The video provider reported an error.', 'Video', true),
-	item('image.creating', 'Creating image', 'An image is being generated or edited.', 'Image'),
-	item('image.succeeded', 'Image created', 'The image file is ready.', 'Image'),
-	item('image.failed', 'Image failed', 'The image provider reported an error.', 'Image'),
+	item(
+		'video.succeeded',
+		'Video generated',
+		'The video file is ready.',
+		'Video',
+		true,
+		'Video generated'
+	),
+	item(
+		'video.failed',
+		'Video failed',
+		'The video provider reported an error.',
+		'Video',
+		true,
+		'Video failed'
+	),
+	item(
+		'image.creating',
+		'Creating image',
+		'An image is being generated or edited.',
+		'Image',
+		true,
+		'Creating image'
+	),
+	item(
+		'image.succeeded',
+		'Image created',
+		'The image file is ready.',
+		'Image',
+		true,
+		'Image created'
+	),
+	item(
+		'image.failed',
+		'Image failed',
+		'The image provider reported an error.',
+		'Image',
+		true,
+		'Image failed'
+	),
 	item('web_search.started', 'Searching the web', 'A web search has started.', 'Web Search'),
 	item(
 		'web_search.no_query',
@@ -255,6 +302,7 @@ export const getToolCallOperationStatusId = (
 	if (normalizedName === 'generate_image' || normalizedName === 'edit_image') {
 		return done ? 'image.succeeded' : 'image.creating';
 	}
+	if (normalizedName === 'generate_video') return done ? 'video.succeeded' : 'video.running';
 	return done ? 'tool.completed' : 'tool.executing';
 };
 
@@ -282,12 +330,23 @@ export const resolveOperationStatus = (
 	const id = getOperationStatusId(status);
 	const entry = (id && config?.entries?.[id]) || (id && fallbackEntry(id));
 	const visible = (config?.enabled ?? true) && (entry?.visible ?? true) && status.hidden !== true;
-	const customText = entry?.text?.trim();
+	const catalog = id ? OPERATION_STATUS_CATALOG.find((item) => item.id === id) : undefined;
+	const storedText = entry?.text?.trim();
+	// Treat a persisted English catalog value as the built-in template so it can
+	// still be localized in the user's current language.
+	const customText = storedText && storedText !== catalog?.defaultText ? storedText : '';
+	const displayTemplate = customText || catalog?.defaultText || '';
 	return {
 		...status,
 		status_id: id ?? status.status_id,
 		hidden: !visible,
-		...(customText ? { display_description: interpolate(customText, status) } : {})
+		...(displayTemplate
+			? {
+					display_description: interpolate(displayTemplate, status),
+					display_description_template: displayTemplate,
+					display_description_custom: Boolean(customText)
+				}
+			: {})
 	};
 };
 

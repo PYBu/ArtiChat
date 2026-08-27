@@ -28,17 +28,46 @@ describe('operation status configuration', () => {
 		const config = getDefaultOperationStatusConfig();
 		config.entries['tool.completed'].text = 'Finished {{NAME}}';
 
-		expect(
-			resolveOperationStatus({ status_id: 'tool.completed', name: 'search_web' }, config)
-				.display_description
-		).toBe('Finished search_web');
+		const resolved = resolveOperationStatus(
+			{ status_id: 'tool.completed', name: 'search_web' },
+			config
+		);
+		expect(resolved.display_description).toBe('Finished search_web');
+		expect(resolved.display_description_custom).toBe(true);
 	});
 
 	it('uses image statuses for image-generation tool calls', () => {
 		expect(getToolCallOperationStatusId('generate_image', false)).toBe('image.creating');
 		expect(getToolCallOperationStatusId('generate_image', true)).toBe('image.succeeded');
 		expect(getToolCallOperationStatusId('edit_image', true)).toBe('image.succeeded');
+		expect(getToolCallOperationStatusId('generate_video', true)).toBe('video.succeeded');
+		expect(getToolCallOperationStatusId('generate_video', false)).toBe('video.running');
 		expect(getToolCallOperationStatusId('search_web', true)).toBe('tool.completed');
+	});
+
+	it('provides built-in terminal labels for media completion states', () => {
+		const config = getDefaultOperationStatusConfig();
+		const image = resolveOperationStatus({ status_id: 'image.succeeded' }, config);
+		const video = resolveOperationStatus({ status_id: 'video.succeeded' }, config);
+		expect(image.display_description).toBe('Image created');
+		expect(image.display_description_template).toBe('Image created');
+		expect(image.display_description_custom).toBe(false);
+		expect(video.display_description).toBe('Video generated');
+		expect(video.display_description_template).toBe('Video generated');
+		expect(video.display_description_custom).toBe(false);
+	});
+
+	it('uses built-in labels when custom text is empty', () => {
+		const config = getDefaultOperationStatusConfig();
+		config.entries['image.creating'].text = '';
+		config.entries['video.succeeded'].text = '';
+
+		expect(
+			resolveOperationStatus({ status_id: 'image.creating' }, config).display_description
+		).toBe('Creating image');
+		expect(
+			resolveOperationStatus({ status_id: 'video.succeeded' }, config).display_description
+		).toBe('Video generated');
 	});
 
 	it('honors global and per-status visibility switches', () => {

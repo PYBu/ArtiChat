@@ -2849,16 +2849,16 @@ DEFAULT_OPERATION_STATUS_CONFIG = {
     'deduplicate': True,
     'entries': {
         # Video progress is delivered as a file event plus the final response.
-        # Keep intermediate and success entries hidden by default; failures stay visible.
-        'video.queued': {'visible': False, 'text': ''},
-        'video.submitting': {'visible': False, 'text': ''},
-        'video.running': {'visible': False, 'text': ''},
-        'video.retrying': {'visible': False, 'text': ''},
-        'video.succeeded': {'visible': False, 'text': ''},
-        'video.failed': {'visible': True, 'text': ''},
-        'image.creating': {'visible': True, 'text': ''},
-        'image.succeeded': {'visible': True, 'text': ''},
-        'image.failed': {'visible': True, 'text': ''},
+        # Keep intermediate polling entries hidden by default; terminal states stay visible.
+        'video.queued': {'visible': False, 'text': 'Video queued'},
+        'video.submitting': {'visible': False, 'text': 'Submitting video'},
+        'video.running': {'visible': False, 'text': 'Video generating'},
+        'video.retrying': {'visible': False, 'text': 'Retrying video'},
+        'video.succeeded': {'visible': True, 'text': 'Video generated'},
+        'video.failed': {'visible': True, 'text': 'Video failed'},
+        'image.creating': {'visible': True, 'text': 'Creating image'},
+        'image.succeeded': {'visible': True, 'text': 'Image created'},
+        'image.failed': {'visible': True, 'text': 'Image failed'},
         'web_search.started': {'visible': True, 'text': ''},
         'web_search.no_query': {'visible': True, 'text': ''},
         'web_search.queries_generated': {'visible': True, 'text': ''},
