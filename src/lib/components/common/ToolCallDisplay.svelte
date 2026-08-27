@@ -13,6 +13,7 @@
 	import Spinner from './Spinner.svelte';
 	import WrenchSolid from '../icons/WrenchSolid.svelte';
 	import CheckCircle from '../icons/CheckCircle.svelte';
+	import XMark from '../icons/XMark.svelte';
 	import Image from './Image.svelte';
 	import FullHeightIframe from './FullHeightIframe.svelte';
 	import { config, settings } from '$lib/stores';
@@ -28,6 +29,7 @@
 		files?: string;
 		embeds?: string;
 		done?: string;
+		failed?: string;
 	} = {};
 
 	export let open = false;
@@ -117,9 +119,10 @@
 	$: isExecuting = attributes?.done && attributes?.done !== 'true';
 	$: parsedResult = parseJSONString(result);
 	$: toolResultError = getToolResultError(parsedResult, result);
+	$: isFailed = Boolean(toolResultError) || attributes?.failed === 'true';
 	$: operationStatus = resolveOperationStatus(
 		{
-			status_id: getToolCallOperationStatusId(attributes?.name, isDone, Boolean(toolResultError)),
+			status_id: getToolCallOperationStatusId(attributes?.name, isDone, isFailed),
 			name: attributes?.name ?? '',
 			error: toolResultError || undefined
 		},
@@ -173,6 +176,10 @@
 				{#if isExecuting}
 					<div>
 						<Spinner className="size-4" />
+					</div>
+				{:else if isFailed}
+					<div class="text-red-500 dark:text-red-400">
+						<XMark className="size-4" strokeWidth="2" />
 					</div>
 				{:else if isDone}
 					<div class="text-emerald-500 dark:text-emerald-400">

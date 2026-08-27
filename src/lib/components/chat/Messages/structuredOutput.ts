@@ -38,6 +38,7 @@ export type OutputDetailToken = {
 		files?: string;
 		embeds?: string;
 		output?: string;
+		failed?: string;
 	};
 };
 
@@ -152,7 +153,10 @@ function buildToolCallToken(item: OutputItem, toolOutputByCallId: Record<string,
 			done: isDone ? 'true' : 'false',
 			arguments: stringifyAttribute(item.arguments ?? ''),
 			files: stringifyAttribute(resultItem?.files),
-			embeds: stringifyAttribute(resultItem?.embeds)
+			embeds: stringifyAttribute(resultItem?.embeds),
+			failed: ['failed', 'incomplete', 'cancelled'].includes(resultItem?.status ?? '')
+				? 'true'
+				: 'false'
 		}
 	};
 }
