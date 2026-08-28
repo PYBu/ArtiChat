@@ -4,16 +4,15 @@
 
 # ArtiChat
 
-[![Version](https://img.shields.io/badge/Artivis%20Studio%20|%20ArtiChat%20ProEdition%20|%200.2+-8A2BE2)](https://github.com/PYBu/ArtiChat/)
+[![Version](https://img.shields.io/badge/Artivis%20Studio%20|%20ArtiChat%20ProEdition%20|%200.3+-8A2BE2)](https://github.com/PYBu/ArtiChat/)
 
 **企业级私有化定制的 AI 对话平台**
 
-<kbd>开箱即用</kbd> &nbsp; <kbd>订阅计费</kbd> &nbsp; <kbd>体验优化</kbd> &nbsp; <kbd>企业适用</kbd> &nbsp; <kbd>原版优化</kbd>
+<kbd>开箱即用</kbd> &nbsp; <kbd>订阅计费</kbd> &nbsp; <kbd>多模态生成</kbd> &nbsp; <kbd>体验优化</kbd> &nbsp; <kbd>企业适用</kbd> &nbsp; <kbd>原版优化</kbd>
 
 <br/>
 
-[![Version](https://img.shields.io/badge/version-0.2.4-6366f1?style=flat-square)](https://github.com/PYBu/ArtiChat/releases)
-[![OpenWebUI](https://img.shields.io/badge/based_on-OpenWebUI_0.11.0-0ea5e9?style=flat-square)](https://github.com/open-webui/open-webui)
+[![Version](https://img.shields.io/badge/version-0.3.0-6366f1?style=flat-square)](https://github.com/PYBu/ArtiChat/releases)
 [![Docker](https://img.shields.io/badge/Docker-ready-2496ED?style=flat-square&logo=docker&logoColor=white)](https://www.docker.com/)
 [![SvelteKit](https://img.shields.io/badge/SvelteKit-frontend-FF3E00?style=flat-square&logo=svelte&logoColor=white)](https://kit.svelte.dev/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-backend-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
@@ -24,13 +23,12 @@
 
 <br/>
 
-> 当前稳定版本为 **ArtiChat ProEdition 0.2.4**。本版本已验证从 0.1.7 直接升级，无需安装中间版本。升级会自动执行数据库迁移；生产环境升级前请先停止服务并备份 `artichat_data`，旧版 0.1.7 不可直接连接已经迁移到 0.2.4 的数据卷。
+> AriChat Dreammaker(0.3+)  ProEdition | 当前稳定版本为 **ArtiChat ProEdition 0.3.0**。本次更新接入视频生成接口、上线资产中心，重构记忆与工具调用状态，并重写了 Chatpoint 与结算系统。已验证从 0.1.7 与 0.2.x 直接升级，无需安装中间版本。升级会自动执行数据库迁移；生产环境升级前请先停止服务并备份 `artichat_data`，旧版本不可直接连接已经迁移到 0.3.0 的数据卷。
 
 ## 简介
 
-ArtiChat 是由 **Artivis Studio** 基于 [OpenWebUI 0.11.0](https://github.com/open-webui/open-webui) 深度定制的私有 AI 对话平台。在保留 OpenWebUI 强大对话能力的基础上，ArtiChat 引入了完整的**订阅计费体系**、**用户权限管理**和**用户体验优化**，帮助团队或 SaaS 产品快速搭建一套自主可控的 AI 服务，适用于绝大多数的大模型分发计费商业化以及企业、团队内部模型的使用。
+ArtiChat 是由 **Artivis Studio** 基于 [OpenWebUI](https://github.com/open-webui/open-webui) 深度定制且重构诸多功能的私有 AI 对话与创作平台。在强大对话能力的基础上，ArtiChat 引入了完整的**订阅计费体系**、**用户权限管理**、**多模态媒体生成**和**用户体验优化**，帮助团队或 SaaS 产品快速搭建一套自主可控的 AI 服务，适用于绝大多数的大模型分发计费商业化以及企业、团队内部模型的使用。
 
-> ⚠️ **商业部署须知** — 超过 50 名用户或用于商业用途，请遵循 [OpenWebUI 许可协议](https://github.com/open-webui/open-webui/blob/main/LICENSE) 并向 OpenWebUI 官方获取授权。
 
 <br/>
 
@@ -44,13 +42,38 @@ ArtiChat 是由 **Artivis Studio** 基于 [OpenWebUI 0.11.0](https://github.com/
 <tr>
 <td width="50%" valign="top">
 
+**🎬 &nbsp;视频生成**
+
+对话中直接产出视频，无需跳出平台：
+
+- 已接入 **MiniMax** · **Seedance** 视频模型接口
+- 模型可在对话中按需调用生成
+- 接口密钥在后台可视化配置，无需改动环境变量
+
+</td>
+<td width="50%" valign="top">
+
+**🗂️ &nbsp;资产中心**
+
+所有文件的统一归宿，上传与生成一处管理：
+
+- 上传的图片、视频与文档集中存放
+- 模型生成的媒体产物自动入库
+- 一键生成分享链接，供他人直接访问
+
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+
 **💳 &nbsp;订阅计费系统**
 
-四类 Token 精细计价，覆盖推理全链路成本：
+Chatpoint 点数体系与结算系统全面重写，覆盖推理与媒体全链路：
 
-- **Input** · **Output** · **Cache Create** · **Cache Read**
+- 四类 Token 精细计价：**Input** · **Output** · **Cache Create** · **Cache Read**
+- 媒体生成独立计价，图片与视频用量单独审计
 - 礼品卡 & 兑换码发放与核销
-- 用量审计，消费明细随时可查
+- 用量审计，Chatpoint 消费明细随时可查
 
 </td>
 <td width="50%" valign="top">
@@ -62,6 +85,30 @@ ArtiChat 是由 **Artivis Studio** 基于 [OpenWebUI 0.11.0](https://github.com/
 - 五档强度：**Low → Balanced → High → Ultra → Max**
 - 专为Claude 与 Codex 系列优化
 - 一键切换，无需修改任何配置
+
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+
+**🧠 &nbsp;主动记忆**
+
+记忆逻辑重构，从被动记录转向主动理解：
+
+- 模型主动捕捉用户的使用习惯与偏好
+- 记忆条目自动审查、去重合并，避免冗余堆积
+- 无需手动录入，对话即沉淀
+
+</td>
+<td width="50%" valign="top">
+
+**🔧 &nbsp;工具调用状态**
+
+工具执行过程可视，状态文案自由定义：
+
+- 调用状态实时呈现在对话流中
+- 每个工具的状态文案支持自定义
+- 执行过程透明，不再是黑盒
 
 </td>
 </tr>
@@ -235,7 +282,7 @@ ArtiChat 是由 **Artivis Studio** 基于 [OpenWebUI 0.11.0](https://github.com/
 
 <br/>
 
-![资产管理](artivis-ass/new/ns1.png)
+![资产中心](artivis-ass/new/ns1.png)
 
 <br/>
 
@@ -281,7 +328,7 @@ ArtiChat 是由 **Artivis Studio** 基于 [OpenWebUI 0.11.0](https://github.com/
 
 ## 💬 &nbsp;参与反馈
 
-ArtiChat 的每一次迭代都来自用户的真实声音。如果你遇到了Bug、有新功能想法，或者只是想聊聊使用体验——欢迎到反馈站告诉我们，我们很期待社区以及用户的声音！本项目历经 0.1 到 0.2 的系统性升级，可能存在不少Bug，但是我依旧会坚持更新（感情牌）！
+ArtiChat 的每一次迭代都来自用户的真实声音。如果你遇到了Bug、有新功能想法，或者只是想聊聊使用体验——欢迎到反馈站告诉我们，我们很期待社区以及用户的声音！本项目历经多版本的迭代，可能存在不少Bug，但是我依旧会坚持更新（感情牌）！
 
 <div align="center">
 
@@ -352,7 +399,7 @@ volumes:
 docker compose -p artichat up -d
 ```
 
-> 💡 `latest` 始终指向最新稳定版。生产环境如需固定版本，把标签换成具体版本号（如 `:0.2.2`）即可，方便回滚。升级只需拉取新标签并重建容器，`artichat_data` 数据卷会自动保留。
+> 💡 `latest` 始终指向最新稳定版。生产环境如需固定版本，把标签换成具体版本号（如 `:0.3.0`）即可，方便回滚。升级只需拉取新标签并重建容器，`artichat_data` 数据卷会自动保留。
 
 <br/>
 
@@ -384,16 +431,16 @@ curl http://localhost:3000/health
 
 <br/>
 
-### 从 0.1.7 升级
+### 从旧版本升级
 
-0.2.2 支持从已发布的 0.1.7 直接升级。无论用哪种方式部署，都请先停止写入并备份命名卷：
+0.3.0 支持从已发布的 0.1.7 与 0.2.x 直接升级，无需安装中间版本。无论用哪种方式部署，都请先停止写入并备份命名卷：
 
 ```bash
 docker compose -p artichat stop artichat
 docker run --rm \
   -v artichat_data:/source:ro \
   -v "$PWD":/backup \
-  alpine sh -c 'tar -C /source -czf /backup/artichat-0.1.7-backup.tar.gz .'
+  alpine sh -c 'tar -C /source -czf /backup/artichat-pre-0.3.0-backup.tar.gz .'
 ```
 
 备份完成后，按部署方式选择对应的升级命令。
@@ -414,7 +461,7 @@ docker compose -p artichat up -d --build artichat
 curl http://localhost:3000/ready
 ```
 
-确认 `/ready` 返回 `{"status":true}` 后再恢复外部流量。需要回滚时，请把升级前归档恢复到一个干净数据卷后再启动 0.1.7；不要让 0.1.7 直接读取已经迁移到 0.2.2 的数据卷。
+确认 `/ready` 返回 `{"status":true}` 后再恢复外部流量。需要回滚时，请把升级前归档恢复到一个干净数据卷后再启动旧版本；不要让旧版本直接读取已经迁移到 0.3.0 的数据卷。
 
 <br/>
 
@@ -438,12 +485,16 @@ curl http://localhost:3000/ready
 ## 🗺️ &nbsp;重要更新节点
 
 ```
+-ArtiChat Basement(0.1+)
 v0.1.3  ✅  完整重建 ArtiChat 内容，最为分支区分于 OpenWebUI 。
+-ArtiChat BasementPlus(0.1.7)
 v0.1.7  ✅  底层适配与修改，加固与 ArtiChat 稳定运行。
+-ArtiChat ProEdition(0.2+)
 v0.2.0  ✅  系统性升级，重建 ArtiChat 组件与 UI，以新功能与用户体验作为优先更新动力。
-v0.2.2  ✅  插件中心（ACPlugin），支持上传或使用Artivis或社区提供的插件。
+-ArtiChat ProEdition Dreammaker(0.3+)
+v0.3.0  ✅  迈入多模态：视频生成接口与资产中心上线，记忆与工具调用状态重构，Chatpoint 与结算系统重写，重构诸多代码以适应ArtiChat功能。
 
-v0.3.0  🔜  ArtiLINK — 本地 MCP 接入，让模型直接操控 PowerShell 与本地系统资源，实现真正意义上的「网页版 Codex」
+v0.4.0  🔜  ArtiChat-LINK — 本地 MCP 接入，让模型直接操控 PowerShell 与本地系统资源，实现真正意义上的「网页版 Codex」
 ```
 
 <br/>
@@ -481,14 +532,14 @@ v0.3.0  🔜  ArtiLINK — 本地 MCP 接入，让模型直接操控 PowerShell 
 
 ## 📄 &nbsp;开源声明
 
-本项目基于 [OpenWebUI](https://github.com/open-webui/open-webui) 进行二次开发，遵循其许可协议。上游版权与许可信息保留在 [`LICENSE`](LICENSE)、[`LICENSE_NOTICE`](LICENSE_NOTICE) 与 [`LICENSE_HISTORY`](LICENSE_HISTORY) 中。**超过 50 名用户的部署或任何商业用途，请直接联系 OpenWebUI 官方获取授权。**
-
+本项目基于 [OpenWebUI](https://github.com/open-webui/open-webui) 进行二次开发，遵循其许可协议。上游版权与许可信息保留在 [`LICENSE`](LICENSE)、[`LICENSE_NOTICE`](LICENSE_NOTICE) 与 [`LICENSE_HISTORY`](LICENSE_HISTORY) 中。
 <br/>
 
+> ⚠️ **商业部署须知** — 超过 50 名用户或用于商业用途，请遵循 [OpenWebUI 许可协议](https://github.com/open-webui/open-webui/blob/main/LICENSE) 并向 OpenWebUI 官方获取授权。
 ---
 
 <div align="center">
 
-Built with ❤️ by &nbsp;<strong>Artivis Studio</strong> | <b>Art</b> W<b>i</b>th <b>Vis</b>ion
+-Built with ❤️ by &nbsp;<strong>Artivis Studio</strong> | <b>Art</b> W<b>i</b>th <b>Vis</b>ion | Design By <b>Minier Buper (PYBu)</b>-
 
 </div>
