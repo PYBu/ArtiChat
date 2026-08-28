@@ -233,6 +233,13 @@ ArtiChat 是由 **Artivis Studio** 基于 [OpenWebUI 0.11.0](https://github.com/
 
 <br/>
 
+<br/>
+
+![资产管理](artivis-ass/new/ns1.png)
+
+<br/>
+
+
 ---
 
 ## 🎨 &nbsp;设计小巧思
