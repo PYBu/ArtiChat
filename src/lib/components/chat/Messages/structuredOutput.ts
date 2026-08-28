@@ -1,3 +1,5 @@
+import { isSilentMemoryTool } from '$lib/utils/operationStatus';
+
 export type OutputContentPart = {
 	type?: string;
 	text?: unknown;
@@ -297,6 +299,9 @@ export function buildOutputDisplayItems(output: OutputItem[] = []): OutputDispla
 
 	output.forEach((item, index) => {
 		if (item?.type === 'function_call_output') {
+			return;
+		}
+		if (item?.type === 'function_call' && isSilentMemoryTool(item.name)) {
 			return;
 		}
 

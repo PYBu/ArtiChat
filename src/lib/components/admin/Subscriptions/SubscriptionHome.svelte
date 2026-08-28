@@ -7,6 +7,7 @@
 	import Component from '$lib/components/icons/Component.svelte';
 	import DocumentChartBar from '$lib/components/icons/DocumentChartBar.svelte';
 	import Grid from '$lib/components/icons/Grid.svelte';
+	import Lock from '$lib/components/icons/Lock.svelte';
 	import Sparkles from '$lib/components/icons/Sparkles.svelte';
 	import {
 		getAdminSubscriptionOverview,
@@ -50,6 +51,12 @@
 			title: '公告',
 			description: '管理登录公告。',
 			icon: ChatBubbles
+		},
+		{
+			href: '/admin/subscriptions/restrictions',
+			title: '限制管理',
+			description: '管理国家限制、IP 黑名单和近期登录记录。',
+			icon: Lock
 		},
 		{
 			href: '/admin/subscriptions/usage',

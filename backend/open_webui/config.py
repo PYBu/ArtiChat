@@ -3179,6 +3179,8 @@ DEFAULT_CONFIG = {
     'registration.verification_enabled': False,
     'registration.email_code_login_enabled': False,
     'registration.sensitive_action_verification_enabled': False,
+    'access_restrictions.enabled': False,
+    'access_restrictions.geoip_failure_mode': 'allow',
     'ui.enable_signup': ENABLE_SIGNUP,
     'ui.operation_status': DEFAULT_OPERATION_STATUS_CONFIG,
     'ui.enable_login_form': ENABLE_LOGIN_FORM,

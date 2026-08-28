@@ -85,6 +85,7 @@ from open_webui.models.groups import GroupForm, GroupModel, Groups, GroupUpdateF
 from open_webui.models.oauth_sessions import OAuthSessions
 from open_webui.models.users import Users
 from open_webui.retrieval.web.utils import get_ssrf_safe_session, validate_url
+from open_webui.utils.access_restrictions import enforce_login_access, record_login_event
 from open_webui.utils.auth import create_user_token, get_password_hash
 from open_webui.utils.groups import apply_default_group_assignment
 from open_webui.utils.misc import parse_duration
@@ -1898,6 +1899,16 @@ class OAuthManager:
                         # Update the user with the new oauth sub
                         await Users.update_user_oauth_by_id(user.id, provider, sub, db=db)
 
+            # Check the request before updating or provisioning the account.
+            # OAuth sign-up is a login-time registration path as well.
+            login_decision = await enforce_login_access(
+                request,
+                user=user,
+                email=email,
+                auth_method='oauth',
+                db=db,
+            )
+
             if user:
                 determined_role = await self.get_user_role(user, user_data)
                 if user.role != determined_role:
@@ -2008,7 +2019,16 @@ class OAuthManager:
             jwt_token = create_user_token(
                 user,
                 expires_delta=parse_duration(auth_config.JWT_EXPIRES_IN),
+                login_ip=login_decision.ip_address if login_decision else None,
             )
+            if login_decision:
+                await record_login_event(
+                    request,
+                    user=user,
+                    auth_method='oauth',
+                    decision=login_decision,
+                    db=db,
+                )
             if auth_config.ENABLE_OAUTH_GROUP_MANAGEMENT:
                 await self.update_user_groups(
                     user=user,
@@ -2030,7 +2050,12 @@ class OAuthManager:
         redirect_url = f'{redirect_base_url}/auth'
 
         if error_message:
-            redirect_url = f'{redirect_url}?error={urllib.parse.quote_plus(error_message)}'
+            if error_message == 'IP_BANNED':
+                redirect_url = f'{redirect_base_url}/auth/restricted?reason=ip'
+            elif error_message == 'IP_RESTRICTED_REGION':
+                redirect_url = f'{redirect_base_url}/auth/restricted?reason=region'
+            else:
+                redirect_url = f'{redirect_url}?error={urllib.parse.quote_plus(error_message)}'
             return RedirectResponse(url=redirect_url, headers=response.headers)
 
         response = RedirectResponse(url=redirect_url, headers=response.headers)

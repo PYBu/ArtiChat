@@ -6,6 +6,7 @@ import {
 	getVisibleOperationStatusHistory,
 	getToolCallFailureReason,
 	getToolCallOperationStatusId,
+	isSilentMemoryTool,
 	resolveOperationStatus
 } from './operationStatus';
 
@@ -47,6 +48,12 @@ describe('operation status configuration', () => {
 		expect(getToolCallOperationStatusId('generate_video', true, true)).toBe('video.failed');
 		expect(getToolCallOperationStatusId('search_web', true)).toBe('tool.completed');
 		expect(getToolCallOperationStatusId('search_web', true, true)).toBe('tool.failed');
+	});
+
+	it('marks memory maintenance tools as silent', () => {
+		expect(isSilentMemoryTool('add_memory')).toBe(true);
+		expect(isSilentMemoryTool(' UPDATE_MEMORY ')).toBe(true);
+		expect(isSilentMemoryTool('search_web')).toBe(false);
 	});
 
 	it('recognizes common tool failure result shapes', () => {

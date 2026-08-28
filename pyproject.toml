@@ -125,6 +125,7 @@ dependencies = [
     "azure-storage-blob==12.29.0",
 
     "ldap3==2.9.1",
+    "maxminddb==3.1.1",
 ]
 readme = "README.md"
 requires-python = ">= 3.11, < 3.13.0a1"

@@ -131,6 +131,7 @@ from open_webui.events import (
 from open_webui.internal.db import engine, get_async_session
 from open_webui.internal.migrations import DatabaseSchemaNotReadyError, assert_database_schema_ready
 from open_webui.models.access_grants import AccessGrants
+from open_webui.models.access_restrictions import LoginEventsTable
 from open_webui.models.channels import Channels
 from open_webui.models.chats import ChatForm, Chats
 from open_webui.models.config import Config
@@ -139,6 +140,7 @@ from open_webui.models.messages import Messages
 from open_webui.models.models import Models
 from open_webui.models.users import Users
 from open_webui.routers import (
+    access_restrictions,
     announcements,
     analytics,
     assets,
@@ -350,6 +352,19 @@ async def reservation_cleanup_loop() -> None:
         await asyncio.sleep(60)
 
 
+async def login_history_cleanup_loop() -> None:
+    while True:
+        try:
+            deleted = await LoginEventsTable.purge()
+            if deleted:
+                log.info('Purged %s expired login history events', deleted)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            log.exception('Failed to purge expired login history events')
+        await asyncio.sleep(60 * 60)
+
+
 def _create_background_task(app: FastAPI, name: str, coroutine) -> asyncio.Task:
     """Create and retain a lifespan-owned task until shutdown."""
     task = asyncio.create_task(coroutine, name=f'artichat:{name}')
@@ -430,6 +445,7 @@ async def lifespan(app: FastAPI):
     _create_background_task(app, 'usage_pool_cleanup', periodic_usage_pool_cleanup())
     _create_background_task(app, 'session_pool_cleanup', periodic_session_pool_cleanup())
     _create_background_task(app, 'reservation_cleanup', reservation_cleanup_loop())
+    _create_background_task(app, 'login_history_cleanup', login_history_cleanup_loop())
 
     from open_webui.utils.video_generation import video_generation_worker
 
@@ -874,6 +890,7 @@ app.include_router(notes.router, prefix='/api/v1/notes', tags=['notes'])
 app.include_router(models.router, prefix='/api/v1/models', tags=['models'])
 app.include_router(notifications.router, prefix='/api/v1/notifications', tags=['notifications'])
 app.include_router(subscriptions.router, prefix='/api/v1/subscriptions', tags=['subscriptions'])
+app.include_router(access_restrictions.router, prefix='/api/v1/access-restrictions', tags=['access-restrictions'])
 app.include_router(announcements.router, prefix='/api/v1/announcements', tags=['announcements'])
 app.include_router(updates.router, prefix='/api/v1/updates', tags=['updates'])
 app.include_router(knowledge.router, prefix='/api/v1/knowledge', tags=['knowledge'])

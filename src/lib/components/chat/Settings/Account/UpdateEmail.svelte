@@ -151,6 +151,12 @@
 			{show ? '收起' : '更改'}
 		</button>
 	</div>
+	<div
+		class="mt-3 flex items-center justify-between border-t border-gray-100 pt-3 text-xs dark:border-gray-850"
+	>
+		<span class="text-gray-500">本次登录 IP</span>
+		<span class="font-mono text-gray-700 dark:text-gray-300">{$user?.login_ip ?? '暂无'}</span>
+	</div>
 	{#if show}
 		<form class="mt-3 flex flex-col gap-2" on:submit|preventDefault={submit}>
 			<input

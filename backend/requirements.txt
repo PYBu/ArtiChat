@@ -148,6 +148,7 @@ pytest-docker~=3.2.5
 
 ## LDAP
 ldap3==2.9.1
+maxminddb==3.1.1
 
 ## Trace
 opentelemetry-api==1.42.1

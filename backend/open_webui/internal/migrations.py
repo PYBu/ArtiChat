@@ -13,7 +13,7 @@ from sqlalchemy import inspect, text
 from sqlalchemy.engine import Connection, Engine
 from sqlalchemy.engine.reflection import Inspector
 
-EXPECTED_ALEMBIC_HEADS = frozenset({'f0a1b2c3d4e6'})
+EXPECTED_ALEMBIC_HEADS = frozenset({'f0a1b2c3d4e7'})
 
 # Every application-owned durable table that must survive a 0.1.7 -> 0.2.1
 # upgrade. Alembic head validation alone cannot detect a manually stamped or
@@ -22,6 +22,8 @@ EXPECTED_ALEMBIC_HEADS = frozenset({'f0a1b2c3d4e6'})
 REQUIRED_DURABLE_TABLES = frozenset(
     {
         'access_grant',
+        'access_restriction_ip_rule',
+        'access_restriction_region_rule',
         'asset_share',
         'alembic_version',
         'announcement',
@@ -56,6 +58,7 @@ REQUIRED_DURABLE_TABLES = frozenset(
         'knowledge',
         'knowledge_directory',
         'knowledge_file',
+        'login_event',
         'memory',
         'message',
         'message_reaction',
@@ -161,6 +164,27 @@ REQUIRED_SCHEMA: dict[str, frozenset[str]] = {
             'cost_micros',
             'unpaid_cost_micros',
             'raw_usage',
+        }
+    ),
+    'access_restriction_ip_rule': frozenset(
+        {'id', 'network', 'enabled', 'created_by', 'created_at', 'updated_at'}
+    ),
+    'access_restriction_region_rule': frozenset(
+        {'id', 'country_code', 'enabled', 'created_by', 'created_at', 'updated_at'}
+    ),
+    'login_event': frozenset(
+        {
+            'id',
+            'user_id',
+            'user_email',
+            'user_name',
+            'ip_address',
+            'country_code',
+            'auth_method',
+            'result',
+            'reason',
+            'rule_id',
+            'created_at',
         }
     ),
     'subscription_reservation': frozenset(

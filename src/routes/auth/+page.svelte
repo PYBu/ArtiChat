@@ -68,6 +68,25 @@
 		verificationExpiresAt = 0;
 	};
 
+	const restrictionReason = (error: unknown) => {
+		const value =
+			error && typeof error === 'object' && 'detail' in error
+				? (error as { detail?: unknown }).detail
+				: error;
+		if (String(value) === 'IP_BANNED') return 'ip';
+		if (String(value) === 'IP_RESTRICTED_REGION') return 'region';
+		return null;
+	};
+
+	const handleAuthError = (error: unknown) => {
+		const reason = restrictionReason(error);
+		if (reason) {
+			void goto(`/auth/restricted?reason=${reason}`);
+			return;
+		}
+		toast.error(emailErrorMessage(error));
+	};
+
 	const setSessionUser = async (sessionUser: any, redirectPath: string | null = null) => {
 		if (sessionUser) {
 			console.log(sessionUser);
@@ -96,7 +115,7 @@
 
 	const signInHandler = async () => {
 		const sessionUser = await userSignIn(email, password).catch((error) => {
-			toast.error(emailErrorMessage(error));
+			handleAuthError(error);
 			return null;
 		});
 
@@ -139,7 +158,7 @@
 			verificationToken === null && ($config?.onboarding ?? false)
 				? await userSignUp(name, normalizedEmail, password, generateInitialsImage(name)).catch(
 						(error) => {
-							toast.error(emailErrorMessage(error));
+							handleAuthError(error);
 							return null;
 						}
 					)
@@ -150,7 +169,7 @@
 						generateInitialsImage(name),
 						verificationToken
 					).catch((error) => {
-						toast.error(emailErrorMessage(error));
+						handleAuthError(error);
 						return null;
 					});
 
@@ -185,7 +204,7 @@
 			verificationPurpose,
 			event.detail.code
 		).catch((error) => {
-			toast.error(emailErrorMessage(error));
+			handleAuthError(error);
 			return null;
 		});
 
@@ -198,7 +217,7 @@
 					verificationEmail,
 					result.verification_token
 				).catch((error) => {
-					toast.error(emailErrorMessage(error));
+					handleAuthError(error);
 					return null;
 				});
 				if (sessionUser) {
@@ -218,7 +237,7 @@
 
 	const ldapSignInHandler = async () => {
 		const sessionUser = await ldapUserSignIn(ldapUsername, password).catch((error) => {
-			toast.error(`${error}`);
+			handleAuthError(error);
 			return null;
 		});
 		await setSessionUser(sessionUser);

@@ -21,6 +21,7 @@
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import Download from '$lib/components/icons/Download.svelte';
 	import ConsecutiveDetailsGroup from './ConsecutiveDetailsGroup.svelte';
+	import { isSilentMemoryTool } from '$lib/utils/operationStatus';
 
 	import HtmlToken from './HTMLToken.svelte';
 	import Clipboard from '$lib/components/icons/Clipboard.svelte';
@@ -58,7 +59,11 @@
 	const GROUPABLE_DETAIL_TYPES = new Set(['tool_calls', 'reasoning', 'code_interpreter']);
 
 	const isGroupableDetailToken = (token: Token & { attributes?: { type?: string } }) => {
-		return token?.type === 'details' && GROUPABLE_DETAIL_TYPES.has(token?.attributes?.type ?? '');
+		return (
+			token?.type === 'details' &&
+			GROUPABLE_DETAIL_TYPES.has(token?.attributes?.type ?? '') &&
+			!(token?.attributes?.type === 'tool_calls' && isSilentMemoryTool(token?.attributes?.name))
+		);
 	};
 
 	const getDisplayTokens = (tokenList: Token[] = []) => {
@@ -79,6 +84,13 @@
 		};
 
 		for (const token of tokenList) {
+			if (
+				token?.type === 'details' &&
+				token?.attributes?.type === 'tool_calls' &&
+				isSilentMemoryTool(token?.attributes?.name)
+			) {
+				continue;
+			}
 			if (isGroupableDetailToken(token)) {
 				detailGroup.push(token);
 			} else {

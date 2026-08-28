@@ -1802,17 +1802,23 @@
 									<div class=" self-center font-normal truncate">{$user?.name}</div>
 								</button>
 							</UserMenu>
-							<div class="shrink-0">
-								<SubscriptionQuotaRing
-									on:openUsage={async () => {
-										await goto('/account/subscription?tab=usage');
-										if ($mobile) {
-											await tick();
-											showSidebar.set(false);
-										}
-									}}
-								/>
-							</div>
+							{#if $user?.role === 'admin'}
+								<div class="shrink-0 px-2 text-[11px] font-medium text-gray-500 dark:text-gray-400">
+									管理员
+								</div>
+							{:else}
+								<div class="shrink-0">
+									<SubscriptionQuotaRing
+										on:openUsage={async () => {
+											await goto('/account/subscription?tab=usage');
+											if ($mobile) {
+												await tick();
+												showSidebar.set(false);
+											}
+										}}
+									/>
+								</div>
+							{/if}
 						</div>
 					{/if}
 				</div>

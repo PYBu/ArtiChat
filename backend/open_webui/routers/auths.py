@@ -63,6 +63,7 @@ from open_webui.models.users import (
     UserStatus,
 )
 from open_webui.utils.access_control import get_permissions, has_permission
+from open_webui.utils.access_restrictions import enforce_login_access, record_login_event
 from open_webui.utils.auth import (
     create_api_key,
     create_user_token,
@@ -189,6 +190,14 @@ async def create_session_response(
         response: FastAPI response object (required if set_cookie is True)
         set_cookie: Whether to set the auth cookie on the response
     """
+    decision = await enforce_login_access(
+        request,
+        user=user,
+        email=getattr(user, 'email', None),
+        auth_method=source,
+        db=db,
+    )
+
     expires_delta = parse_duration(await Config.get('auth.jwt_expiry'))
     expires_at = None
     if expires_delta:
@@ -197,6 +206,7 @@ async def create_session_response(
     token = create_user_token(
         user,
         expires_delta=expires_delta,
+        login_ip=decision.ip_address,
     )
 
     if set_cookie and response:
@@ -220,7 +230,18 @@ async def create_session_response(
         subject_id=user.id,
         subject_type='user',
         source=source,
-        data={'auth_method': source},
+        data={
+            'auth_method': source,
+            'client_ip': decision.ip_address,
+            'country_code': decision.country_code,
+        },
+    )
+    await record_login_event(
+        request,
+        user=user,
+        auth_method=source,
+        decision=decision,
+        db=db,
     )
 
     return {
@@ -233,6 +254,7 @@ async def create_session_response(
         'role': user.role,
         'profile_image_url': f'/api/v1/users/{user.id}/profile/image',
         'permissions': user_permissions,
+        'login_ip': decision.ip_address,
     }
 
 
@@ -312,6 +334,7 @@ async def get_session_user(
         'status_message': user.status_message,
         'status_expires_at': user.status_expires_at,
         'permissions': user_permissions,
+        'login_ip': data.get('login_ip') if data else None,
     }
 
     return response_data
@@ -378,6 +401,16 @@ async def signin_with_email_code(
     user = await Auths.authenticate_user_by_email(email, db=db)
     if user is None:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=ERROR_MESSAGES.INVALID_CRED)
+
+    # Check access before consuming the one-time ticket. A blocked login can
+    # therefore be retried after an administrator changes the policy.
+    await enforce_login_access(
+        request,
+        user=user,
+        email=email,
+        auth_method='email_code',
+        db=db,
+    )
 
     try:
         await claim_email_verification_ticket(
@@ -776,6 +809,13 @@ async def ldap_auth(
                 raise HTTPException(400, 'Authentication failed.')
 
             user = await Users.get_user_by_email(email, db=db)
+            await enforce_login_access(
+                request,
+                user=user,
+                email=email,
+                auth_method='ldap',
+                db=db,
+            )
             if not user:
                 try:
                     # Insert with default role first to avoid TOCTOU race on
@@ -835,6 +875,8 @@ async def ldap_auth(
                 raise HTTPException(400, detail=ERROR_MESSAGES.INVALID_CRED)
         else:
             raise HTTPException(400, 'User record mismatch.')
+    except HTTPException:
+        raise
     except Exception as e:
         log.error(f'LDAP authentication error: {str(e)}')
         raise HTTPException(400, detail='LDAP authentication failed.')
@@ -875,7 +917,14 @@ async def signin(
             except Exception as e:
                 pass
 
-        if not await Users.get_user_by_email(email.lower(), db=db):
+        existing_user = await Users.get_user_by_email(email.lower(), db=db)
+        if not existing_user:
+            await enforce_login_access(
+                request,
+                email=email,
+                auth_method='trusted_header',
+                db=db,
+            )
             try:
                 await signup_handler(
                     request,
@@ -1044,6 +1093,15 @@ async def signup(
 
     if await Users.get_user_by_email(form_data.email.lower(), db=db):
         raise HTTPException(400, detail=ERROR_MESSAGES.EMAIL_TAKEN)
+
+    # Apply the same policy to registration before any verification ticket is
+    # claimed or user row is inserted.
+    await enforce_login_access(
+        request,
+        email=form_data.email,
+        auth_method='signup',
+        db=db,
+    )
 
     registration_values = await Config.get_many(
         'registration.allowed_domains',

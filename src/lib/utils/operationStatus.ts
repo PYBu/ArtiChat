@@ -38,6 +38,22 @@ export type OperationStatusCatalogItem = {
 	visible: boolean;
 };
 
+// Memory maintenance is an internal side effect. It should not create a
+// user-facing tool disclosure, while remaining present in the model output.
+export const SILENT_MEMORY_TOOLS = new Set([
+	'add_memory',
+	'update_memory',
+	'replace_memory_content',
+	'delete_memory',
+	'list_memories',
+	'search_memories',
+	'list_memory_paths',
+	'read_memory_path'
+]);
+
+export const isSilentMemoryTool = (name: string | null | undefined): boolean =>
+	SILENT_MEMORY_TOOLS.has(name?.trim().toLowerCase() ?? '');
+
 const item = (
 	id: string,
 	label: string,

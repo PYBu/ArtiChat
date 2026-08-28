@@ -48,6 +48,7 @@ class Token(BaseModel):
 
     token: str
     token_type: str
+    login_ip: str | None = None
 
 
 class ApiKey(BaseModel):

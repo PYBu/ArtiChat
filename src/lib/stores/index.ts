@@ -373,4 +373,5 @@ export type SessionUser = {
 	name: string;
 	role: string;
 	profile_image_url: string;
+	login_ip?: string | null;
 };
