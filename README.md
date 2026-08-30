@@ -524,7 +524,6 @@ v0.4.0  🔜  ArtiChat-LINK — 本地 MCP 接入，让模型直接操控 PowerS
 
 [**OpenWebUI**](https://github.com/open-webui/open-webui) — ArtiChat 的基础平台，提供了强大的对话界面与工程底座
 
-[**Linux.Do 社区**](https://linux.do) — 感谢社区成员的反馈、讨论与持续支持
 
 <br/>
 
