@@ -25,6 +25,18 @@
 
 > AriChat Dreammaker(0.3+)  ProEdition | 当前稳定版本为 **ArtiChat ProEdition 0.3.0**。本次更新接入视频生成接口、上线资产中心，重构记忆与工具调用状态，并重写了 Chatpoint 与结算系统。已验证从 0.1.7 与 0.2.x 直接升级，无需安装中间版本。升级会自动执行数据库迁移；生产环境升级前请先停止服务并备份 `artichat_data`，旧版本不可直接连接已经迁移到 0.3.0 的数据卷。
 
+## 📚 &nbsp;文档导航
+
+<div align="center">
+
+[![接口文档](https://img.shields.io/badge/📖_接口文档-API_使用指南-0ea5e9?style=for-the-badge)](apiuse.md)
+&nbsp;&nbsp;
+[![English](https://img.shields.io/badge/🌏_English-README-10b981?style=for-the-badge)](readme-en.md)
+
+</div>
+
+<br/>
+
 ## 简介
 
 ArtiChat 是由 **Artivis Studio** 基于 [OpenWebUI](https://github.com/open-webui/open-webui) 深度定制且重构诸多功能的私有 AI 对话与创作平台。在强大对话能力的基础上，ArtiChat 引入了完整的**订阅计费体系**、**用户权限管理**、**多模态媒体生成**和**用户体验优化**，帮助团队或 SaaS 产品快速搭建一套自主可控的 AI 服务，适用于绝大多数的大模型分发计费商业化以及企业、团队内部模型的使用。
