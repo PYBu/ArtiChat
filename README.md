@@ -17,7 +17,7 @@
 [![SvelteKit](https://img.shields.io/badge/SvelteKit-frontend-FF3E00?style=flat-square&logo=svelte&logoColor=white)](https://kit.svelte.dev/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-backend-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 
-[![官网](https://img.shields.io/badge/官网-chat.artivis.cc-22c55e?style=flat-square&logo=safari&logoColor=white)](https://ac.artivis.cc)
+[![官网](https://img.shields.io/badge/官网-ac.artivis.cc-22c55e?style=flat-square&logo=safari&logoColor=white)](https://ac.artivis.cc)
 
 </div>
 
