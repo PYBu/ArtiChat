@@ -12,7 +12,7 @@
 
 <br/>
 
-[![Version](https://img.shields.io/badge/version-0.3.0-6366f1?style=flat-square)](https://github.com/PYBu/ArtiChat/releases)
+[![Version](https://img.shields.io/badge/version-0.3.1-6366f1?style=flat-square)](https://github.com/PYBu/ArtiChat/releases)
 [![Docker](https://img.shields.io/badge/Docker-ready-2496ED?style=flat-square&logo=docker&logoColor=white)](https://www.docker.com/)
 [![SvelteKit](https://img.shields.io/badge/SvelteKit-frontend-FF3E00?style=flat-square&logo=svelte&logoColor=white)](https://kit.svelte.dev/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-backend-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
@@ -24,6 +24,8 @@
 <br/>
 
 > AriChat Dreammaker(0.3+)  ProEdition | 当前稳定版本为 **ArtiChat ProEdition 0.3.0**。本次更新接入视频生成接口、上线资产中心，重构记忆与工具调用状态，并重写了 Chatpoint 与结算系统。已验证从 0.1.7 与 0.2.x 直接升级，无需安装中间版本。升级会自动执行数据库迁移；生产环境升级前请先停止服务并备份 `artichat_data`，旧版本不可直接连接已经迁移到 0.3.0 的数据卷。
+
+> 0.3.1 更新，建议升级。重大更新：Design ：ArtiChat UI重构，精致的小组件、图片生成小卡片、侧边栏重建。 优化：频道/文件夹查询性能优化、知识库、SSRF、OAuth/SCIM、终端预览等安全修复、图片、编辑图片、视频生成生命周期、图片提供商测试与密钥保护。细节优化对齐 OWUI 0.11.3/重写并非直接取用。
 
 ## 📚 &nbsp;文档导航
 
