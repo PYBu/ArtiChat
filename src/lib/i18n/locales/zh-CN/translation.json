@@ -2774,6 +2774,7 @@
 	"Updated": "已更新",
 	"Updated at": "更新于",
 	"Updated At": "更新于",
+	"Upgrade": "升级",
 	"Upgrade to a licensed plan for enhanced capabilities, including custom theming and branding, and dedicated support.": "升级到授权套餐以获得增强功能，包括自定义主题、品牌推广以及专属支持",
 	"Upload": "上传",
 	"Upload a GGUF model": "上传一个 GGUF 模型",
@@ -3108,5 +3109,6 @@
 	"Share revoked": "分享已撤销",
 	"Revoke share": "撤销分享",
 	"Automatic memory": "自动记忆",
-	"Automatically save durable preferences and facts from your conversations. Sensitive information is filtered.": "自动保存对话中的长期偏好和事实，并过滤敏感信息。"
+	"Automatically save durable preferences and facts from your conversations. Sensitive information is filtered.": "自动保存对话中的长期偏好和事实，并过滤敏感信息。",
+	"External Links": "外部链接"
 }

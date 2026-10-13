@@ -45,6 +45,12 @@ router = APIRouter()
 from open_webui.utils.access_control.folders import has_folder_access as _has_folder_access
 
 
+def validate_folder_parent_id(folder_id: str, parent_id: Optional[str], subtree_ids: set[str] | list[str]) -> None:
+    """Reject self-parenting and moves into a folder's existing subtree."""
+    if parent_id and (parent_id == folder_id or parent_id in subtree_ids):
+        raise ValueError('A folder cannot be moved into its own subtree')
+
+
 async def get_folder_unread_counts(user_id: str, db: AsyncSession | None = None) -> dict[str, int]:
     folders = await Folders.get_folders_by_user_id(user_id, db=db)
     parent_by_id = {folder.id: folder.parent_id for folder in folders}
@@ -389,6 +395,21 @@ async def update_folder_parent_id_by_id(
     await check_folders_permission(request, user, db=db)
     folder = await Folders.get_folder_by_id_and_user_id(id, user.id, db=db)
     if folder:
+        if form_data.parent_id:
+            parent = await Folders.get_folder_by_id(form_data.parent_id, db=db)
+            if not parent or parent.user_id != user.id:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=ERROR_MESSAGES.DEFAULT('Invalid folder parent'),
+                )
+            subtree_ids = await Folders.get_folder_ids_by_id_and_user_id_in_subtree(id, user.id, db=db)
+            try:
+                validate_folder_parent_id(id, form_data.parent_id, subtree_ids)
+            except ValueError as e:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=ERROR_MESSAGES.DEFAULT(str(e)),
+                ) from e
         existing_folder = await Folders.get_folder_by_parent_id_and_user_id_and_name(
             form_data.parent_id, user.id, folder.name, db=db
         )

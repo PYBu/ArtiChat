@@ -11,7 +11,8 @@
 		updateImageGenerationConfig,
 		getConfig,
 		updateConfig,
-		verifyConfigUrl
+		verifyConfigUrl,
+		testImageConfig
 	} from '$lib/apis/images';
 	import Spinner from '$lib/components/common/Spinner.svelte';
 	import SensitiveInput from '$lib/components/common/SensitiveInput.svelte';
@@ -29,6 +30,7 @@
 	const i18n: any = getContext('i18n');
 
 	let loading = false;
+	let testingOperation: 'generate' | 'edit' | null = null;
 
 	let models: any[] | null = null;
 	let config: Record<string, any> | null = null;
@@ -170,6 +172,27 @@
 			}
 		} catch (e) {}
 		return false;
+	};
+
+	const testImageProvider = async (operation: 'generate' | 'edit') => {
+		testingOperation = operation;
+		try {
+			const saved = await updateConfigHandler();
+			if (!saved) {
+				return;
+			}
+
+			const result = await testImageConfig(localStorage.token, operation);
+			if (result?.ok) {
+				toast.success(`${result.message} (${result.elapsed_ms} ms)`);
+			} else {
+				toast.error(result?.message || $i18n.t('Image provider connection test failed.'));
+			}
+		} catch (error) {
+			toast.error(`${error}`);
+		} finally {
+			testingOperation = null;
+		}
 	};
 
 	const saveHandler = async () => {
@@ -473,6 +496,25 @@
 								bind:value={config.IMAGES_OPENAI_API_VERSION}
 							/>
 						</AdminSettingField>
+
+						<AdminSettingRow
+							label={$i18n.t('Test image generation request')}
+							description={$i18n.t(
+								'Sends one minimal request using the saved OpenAI image settings. The upstream provider may charge for it.'
+							)}
+						>
+							<button
+								class="rounded-lg border border-gray-200 px-2.5 py-1 text-xs text-gray-600 transition hover:border-gray-300 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10 dark:text-gray-300 dark:hover:border-white/20 dark:hover:text-white"
+								type="button"
+								disabled={loading || testingOperation !== null}
+								on:click={() => testImageProvider('generate')}
+							>
+								{$i18n.t('Test request')}
+								{#if testingOperation === 'generate'}
+									<span class="ml-1 inline-flex align-middle"><Spinner /></span>
+								{/if}
+							</button>
+						</AdminSettingRow>
 
 						<AdminSettingField
 							label={$i18n.t('Additional Parameters')}
@@ -853,6 +895,25 @@
 								bind:value={config.IMAGES_EDIT_OPENAI_API_VERSION}
 							/>
 						</AdminSettingField>
+
+						<AdminSettingRow
+							label={$i18n.t('Test image edit request')}
+							description={$i18n.t(
+								'Sends one minimal edit request using the saved OpenAI image settings. The upstream provider may charge for it.'
+							)}
+						>
+							<button
+								class="rounded-lg border border-gray-200 px-2.5 py-1 text-xs text-gray-600 transition hover:border-gray-300 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10 dark:text-gray-300 dark:hover:border-white/20 dark:hover:text-white"
+								type="button"
+								disabled={loading || testingOperation !== null}
+								on:click={() => testImageProvider('edit')}
+							>
+								{$i18n.t('Test request')}
+								{#if testingOperation === 'edit'}
+									<span class="ml-1 inline-flex align-middle"><Spinner /></span>
+								{/if}
+							</button>
+						</AdminSettingRow>
 					{:else if config?.IMAGE_EDIT_ENGINE === 'comfyui'}
 						<AdminSettingField
 							label={$i18n.t('Base URL')}
@@ -1046,7 +1107,6 @@
 						</div>
 					{/if}
 				</AdminSettingSection>
-
 			</div>
 		{/if}
 	</div>

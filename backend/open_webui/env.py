@@ -629,6 +629,14 @@ try:
 except (ValueError, TypeError):
     AIOHTTP_CLIENT_TIMEOUT_TOOL_SERVER_DATA = 10
 
+_tool_data_max_length_raw = os.getenv('AIOHTTP_CLIENT_MAX_CONTENT_LENGTH_TOOL_SERVER_DATA', str(10 * 1024 * 1024))
+try:
+    AIOHTTP_CLIENT_MAX_CONTENT_LENGTH_TOOL_SERVER_DATA = int(_tool_data_max_length_raw)
+except (ValueError, TypeError):
+    AIOHTTP_CLIENT_MAX_CONTENT_LENGTH_TOOL_SERVER_DATA = 10 * 1024 * 1024
+if AIOHTTP_CLIENT_MAX_CONTENT_LENGTH_TOOL_SERVER_DATA <= 0:
+    AIOHTTP_CLIENT_MAX_CONTENT_LENGTH_TOOL_SERVER_DATA = 10 * 1024 * 1024
+
 AIOHTTP_FILE_STREAM_CHUNK_SIZE = os.getenv('AIOHTTP_FILE_STREAM_CHUNK_SIZE', str(1024 * 1024))
 try:
     AIOHTTP_FILE_STREAM_CHUNK_SIZE = int(AIOHTTP_FILE_STREAM_CHUNK_SIZE)
@@ -798,6 +806,15 @@ BYPASS_RETRIEVAL_ACCESS_CONTROL = os.getenv('BYPASS_RETRIEVAL_ACCESS_CONTROL', '
 # for non-admin users.  When False (default), unknown collection names are
 # denied — closing the legacy unscoped namespace.
 ENABLE_RETRIEVAL_UNSCOPED_COLLECTIONS = os.getenv('ENABLE_RETRIEVAL_UNSCOPED_COLLECTIONS', 'False').lower() == 'true'
+
+# Bound extracted metadata by the upload size when no explicit limit is set.
+# RAG_FILE_MAX_SIZE is expressed in megabytes; zero/unset keeps legacy behavior.
+RAG_METADATA_MAX_VALUE_CHARS = (
+    int(os.getenv('RAG_METADATA_MAX_VALUE_CHARS'))
+    if os.getenv('RAG_METADATA_MAX_VALUE_CHARS')
+    else ((int(os.getenv('RAG_FILE_MAX_SIZE', '0')) or 0) * 1024 * 1024 or None)
+)
+
 MINERU_MAX_MARKDOWN_BYTES = (
     int(os.getenv('MINERU_MAX_MARKDOWN_BYTES')) if os.getenv('MINERU_MAX_MARKDOWN_BYTES') else None
 )

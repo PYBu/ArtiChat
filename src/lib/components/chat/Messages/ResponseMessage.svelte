@@ -63,17 +63,24 @@
 	import { flyAndScale } from '$lib/utils/transitions';
 	import RegenerateMenu from './ResponseMessage/RegenerateMenu.svelte';
 	import StatusHistory from './ResponseMessage/StatusHistory.svelte';
+	import MediaGenerationCard from './ResponseMessage/MediaGenerationCard.svelte';
+	import { resolveMediaGenerations, type MediaGeneration } from './mediaGenerations';
 	import FullHeightIframe from '$lib/components/common/FullHeightIframe.svelte';
 	import OutputEditView from './OutputEditView.svelte';
 	import { getOutputText, replaceOutputMessageText, type OutputItem } from './structuredOutput';
-	import { getVisibleOperationStatusHistory } from '$lib/utils/operationStatus';
+	import {
+		getOperationStatusId,
+		getVisibleOperationStatusHistory,
+		MEDIA_GENERATION_STATUS_IDS
+	} from '$lib/utils/operationStatus';
 
 	interface MessageType {
 		id: string;
 		model: string;
 		content: string;
 		output?: OutputItem[];
-		files?: { type: string; url: string }[];
+		files?: { type: string; url?: string; id?: string; content_type?: string }[];
+		media?: MediaGeneration[];
 		timestamp: number;
 		role: string;
 		statusHistory?: {
@@ -196,7 +203,19 @@
 	let model = null;
 	$: model = $models.find((m) => m.id === message.model);
 
-	$: statusEntries = message?.statusHistory ?? [...(message?.status ? [message?.status] : [])];
+	$: statusEntries = (
+		message?.statusHistory ?? [...(message?.status ? [message?.status] : [])]
+	).filter((status) => !MEDIA_GENERATION_STATUS_IDS.has(getOperationStatusId(status) ?? ''));
+
+	$: mediaGenerations = resolveMediaGenerations(message?.media, message?.files);
+	$: mediaFileKeys = new Set(
+		mediaGenerations.flatMap((generation) =>
+			(generation.files ?? []).flatMap((file) => [file.id, file.url].filter(Boolean))
+		)
+	);
+	$: displayFiles = (message?.files ?? []).filter(
+		(file) => !mediaFileKeys.has(file.id) && !mediaFileKeys.has(file.url)
+	);
 	$: visibleStatusEntries = getVisibleOperationStatusHistory(
 		statusEntries,
 		$config?.ui?.operation_status
@@ -705,17 +724,24 @@
 							/>
 						{/if}
 
-						{#if message?.files && message.files?.filter( (f) => ['image', 'video', 'file'].includes(f.type) ).length > 0}
+						{#if mediaGenerations.length > 0}
+							<MediaGenerationCard generations={mediaGenerations} alt={message.content} />
+						{/if}
+
+						{#if displayFiles.filter((f) => ['image', 'video', 'file'].includes(f.type)).length > 0}
 							<div
 								class="my-1 w-full flex overflow-x-auto gap-2 flex-wrap"
 								dir={$settings?.chatDirection ?? 'auto'}
 							>
-								{#each message.files.filter( (f) => ['image', 'video', 'file'].includes(f.type) ) as file}
+								{#each displayFiles.filter( (f) => ['image', 'video', 'file'].includes(f.type) ) as file}
 									<div>
 										{#if file.type === 'image' || (file?.content_type ?? '').startsWith('image/')}
-											<Image src={file.url} alt={message.content} />
+											<Image
+												src={resolveFileContentUrl(file.id || file.url || '')}
+												alt={message.content}
+											/>
 										{:else if file.type === 'video' || (file?.content_type ?? '').startsWith('video/')}
-											{@const fileUrl = resolveFileContentUrl(file.url)}
+											{@const fileUrl = resolveFileContentUrl(file.id || file.url || '')}
 											<!-- svelte-ignore a11y-media-has-caption -->
 											<video
 												src={fileUrl}

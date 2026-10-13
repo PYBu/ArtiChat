@@ -54,6 +54,18 @@ export const SILENT_MEMORY_TOOLS = new Set([
 export const isSilentMemoryTool = (name: string | null | undefined): boolean =>
 	SILENT_MEMORY_TOOLS.has(name?.trim().toLowerCase() ?? '');
 
+export const MEDIA_GENERATION_STATUS_IDS = new Set([
+	'image.creating',
+	'image.succeeded',
+	'image.failed',
+	'video.queued',
+	'video.submitting',
+	'video.running',
+	'video.retrying',
+	'video.succeeded',
+	'video.failed'
+]);
+
 const item = (
 	id: string,
 	label: string,

@@ -8,6 +8,7 @@
 	import { getSessionUser, userSignOut } from '$lib/apis/auths';
 
 	import { showSettings, mobile, showSidebar, user, config, settings } from '$lib/stores';
+	import { subscription, subscriptionLoadError } from '$lib/stores/subscriptions';
 
 	import { WEBUI_API_BASE_URL } from '$lib/constants';
 
@@ -29,12 +30,14 @@
 	import Settings from '$lib/components/icons/Settings.svelte';
 	import KeyIcon from './icons/Key.svelte';
 	import UserIcon from './icons/User.svelte';
-	import WorkspaceIcon from './icons/Workspace.svelte';
-	import ArchiveBoxIcon from '$lib/components/icons/ArchiveBox.svelte';
+	import PackageCheckIcon from '@lucide/svelte/icons/package-check';
+	import OrbitIcon from '@lucide/svelte/icons/orbit';
 	import XMarkIcon from './icons/XMark.svelte';
 	import { updateUserStatus, updateUserSettings } from '$lib/apis/users';
 	import { toast } from 'svelte-sonner';
 	import SubscriptionQuotaRing from './SubscriptionQuotaRing.svelte';
+	import ChevronRight from './icons/ChevronRight.svelte';
+	import Sparkles from '$lib/components/icons/Sparkles.svelte';
 
 	const i18n = getContext('i18n');
 
@@ -55,9 +58,23 @@
 
 	const dispatch = createEventDispatcher();
 
-	const DEFAULT_PINNED_ITEMS = ['notes', 'workspace'];
+	const DEFAULT_PINNED_ITEMS = ['assets', 'workspace'];
 
-	$: pinnedItems = $settings?.pinnedMenuItems ?? DEFAULT_PINNED_ITEMS;
+	$: configuredPinnedItems = $settings?.pinnedMenuItems ?? DEFAULT_PINNED_ITEMS;
+	$: pinnedItems = [
+		...new Set(configuredPinnedItems.map((id) => (id === 'notes' ? 'assets' : id)))
+	];
+	$: showUpgradeAction =
+		$user?.role !== 'admin' &&
+		!$subscriptionLoadError &&
+		$subscription?.user_id === $user?.id &&
+		$subscription?.tier === 'free';
+	$: accountLabel =
+		role === 'admin'
+			? $i18n.t('Admin')
+			: $subscription?.tier === 'free'
+				? 'Free'
+				: $subscription?.display_name || $i18n.t('User');
 
 	const isPinned = (id: string) => {
 		return pinnedItems.includes(id);
@@ -113,15 +130,17 @@
 	}}
 />
 
-<Dropdown bind:show onOpenChange={handleDropdownChange} {align}>
+<Dropdown bind:show onOpenChange={handleDropdownChange} {align} visualViewportAware={$mobile}>
 	<slot />
 
 	<div slot="content">
-		<DropdownMenu className="{className} font-sans text-xs">
+		<DropdownMenu
+			className="{className} user-menu-panel max-w-[calc(100vw-2rem)] rounded-2xl! p-2! font-sans text-xs shadow-2xl! border-gray-200/80 dark:border-gray-700/80 [&>div>button]:h-auto! [&>div>button]:min-h-9! [&>div>button]:gap-3! [&>div>button]:px-3! [&>div>a]:h-auto! [&>div>a]:min-h-9! [&>div>a]:gap-3! [&>div>a]:px-3! [&>button]:h-auto! [&>button]:min-h-9! [&>button]:gap-3! [&>button]:px-3! [&>a]:h-auto! [&>a]:min-h-9! [&>a]:gap-3! [&>a]:px-3!"
+		>
 			{#if $user}
-				<div>
+				<div class="px-0.5">
 					<button
-						class="flex h-[1.6875rem] items-center gap-2 rounded-xl px-2 text-xs w-full hover:bg-gray-50/40 dark:hover:bg-gray-800/40 transition cursor-pointer select-none text-left"
+						class="flex min-h-14! w-full items-center gap-3 rounded-xl! px-2.5! py-2! text-left text-sm transition hover:bg-gray-50/70 dark:hover:bg-gray-800/70 cursor-pointer select-none"
 						type="button"
 						on:click={async () => {
 							show = false;
@@ -133,14 +152,21 @@
 							}
 						}}
 					>
-						<div class="self-center shrink-0 size-4.5 flex items-center justify-center">
+						<div
+							class="self-center flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-800"
+						>
 							<img
 								src={`${WEBUI_API_BASE_URL}/users/${$user.id}/profile/image`}
 								alt=""
-								class="size-4.5 rounded-full object-cover"
+								class="size-8 rounded-lg object-cover"
 							/>
 						</div>
-						<div class="self-center min-w-0 flex-1 truncate">{$user.name}</div>
+						<div class="min-w-0 flex-1 self-center truncate">
+							<div class="truncate font-medium text-gray-900 dark:text-gray-100">{$user.name}</div>
+							<div class="mt-0.5 truncate text-[11px] font-normal text-gray-500 dark:text-gray-400">
+								{accountLabel}
+							</div>
+						</div>
 
 						{#if showActiveUsers && ($config?.features?.enable_public_active_users_count || role === 'admin') && usage?.user_count}
 							<Tooltip
@@ -161,8 +187,30 @@
 								</div>
 							</Tooltip>
 						{/if}
+						<ChevronRight
+							className="size-4 shrink-0 text-gray-400 dark:text-gray-500"
+							strokeWidth="1.75"
+						/>
 					</button>
 				</div>
+
+				{#if showUpgradeAction}
+					<div class="mt-1 px-0.5">
+						<button
+							class="flex min-h-10! w-full items-center gap-3 rounded-xl! px-2.5! text-left text-sm font-medium text-violet-700 transition hover:bg-violet-50/80 dark:text-violet-300 dark:hover:bg-violet-950/30"
+							type="button"
+							on:click={() => {
+								show = false;
+								showSettings.set('subscription');
+							}}
+						>
+							<Sparkles className="size-4 shrink-0" strokeWidth="1.75" />
+							<span class="flex-1 truncate">{$i18n.t('Upgrade')}</span>
+							<ChevronRight className="size-4 shrink-0 opacity-70" strokeWidth="1.75" />
+						</button>
+					</div>
+				{/if}
+
 				{#if showQuota}
 					<div class="mt-1 flex justify-end px-1">
 						<SubscriptionQuotaRing
@@ -252,7 +300,7 @@
 			{/if}
 
 			{#if profile}
-				<hr class="border-gray-50/30 dark:border-gray-800/30 my-0.5 mx-1 p-0" />
+				<hr class="my-2! mx-1 border-gray-200/80 dark:border-gray-700/80 p-0" />
 			{/if}
 
 			{#if $user?.role === 'admin' || $user?.permissions?.workspace?.models || $user?.permissions?.workspace?.knowledge || $user?.permissions?.workspace?.prompts || $user?.permissions?.workspace?.tools || $user?.permissions?.workspace?.skills}
@@ -273,7 +321,7 @@
 						}}
 					>
 						<div class="self-center">
-							<WorkspaceIcon className="size-3.5" strokeWidth="1.5" />
+							<OrbitIcon class="size-3.5" strokeWidth={1.5} />
 						</div>
 						<div class="self-center truncate">{$i18n.t('Workspace')}</div>
 					</a>
@@ -316,7 +364,7 @@
 							}
 						}}
 					>
-						<div class="self-center"><ArchiveBoxIcon className="size-3.5" strokeWidth="1.5" /></div>
+						<div class="self-center"><PackageCheckIcon class="size-3.5" strokeWidth={1.5} /></div>
 						<div class="self-center truncate">{$i18n.t('Asset Center')}</div>
 					</a>
 				</div>
@@ -344,25 +392,6 @@
 						</div>
 						<div class="self-center truncate">{$i18n.t('Notes')}</div>
 					</a>
-					{#if shiftKey}
-						<Tooltip
-							content={isPinned('notes')
-								? $i18n.t('Unpin from Sidebar')
-								: $i18n.t('Pin to Sidebar')}
-						>
-							<button
-								type="button"
-								class="p-1 mr-1 rounded-lg hover:bg-gray-100/60 dark:hover:bg-gray-700/60 transition"
-								on:click|preventDefault|stopPropagation={() => togglePin('notes')}
-							>
-								{#if isPinned('notes')}
-									<PinSlashIcon className="size-3.5" strokeWidth="1.5" />
-								{:else}
-									<PinIcon className="size-3.5" strokeWidth="1.5" />
-								{/if}
-							</button>
-						</Tooltip>
-					{/if}
 				</div>
 			{/if}
 
@@ -559,7 +588,7 @@
 				</button>
 			{/if}
 
-			<hr class="border-gray-50/30 dark:border-gray-800/30 my-0.5 mx-1 p-0" />
+			<hr class="my-2! mx-1 border-gray-200/80 dark:border-gray-700/80 p-0" />
 
 			{#if role === 'admin'}
 				<a

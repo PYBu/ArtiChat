@@ -162,30 +162,37 @@ async def get_channels(
     await check_channels_access(request, user)
 
     channels = await Channels.get_channels_by_user_id(user.id, db=db)
+    channel_ids = [channel.id for channel in channels]
+    last_message_at_by_channel = await Messages.get_last_message_at_by_channel_ids(channel_ids, db=db)
+    unread_counts_by_channel = await Messages.get_unread_message_counts_by_channel_ids(channel_ids, user.id, db=db)
+    dm_channel_ids = [channel.id for channel in channels if channel.type == 'dm']
+    members_by_channel = await Channels.get_members_by_channel_ids(dm_channel_ids, db=db)
+
+    dm_user_ids = {
+        member.user_id
+        for channel in channels
+        if channel.type == 'dm'
+        for member in members_by_channel.get(channel.id, [])
+    }
+    dm_users = await Users.get_users_by_user_ids(list(dm_user_ids), db=db) if dm_user_ids else []
+    dm_users_by_id = {
+        dm_user.id: UserIdNameStatusResponse(**dm_user.model_dump(), is_active=Users.is_active(dm_user))
+        for dm_user in dm_users
+    }
+
     channel_list = []
     for channel in channels:
-        last_message = await Messages.get_last_message_by_channel_id(channel.id, db=db)
-        last_message_at = last_message.created_at if last_message else None
-
-        channel_member = await Channels.get_member_by_channel_and_user_id(channel.id, user.id, db=db)
-        unread_count = (
-            await Messages.get_unread_message_count(channel.id, user.id, channel_member.last_read_at, db=db)
-            if channel_member
-            else 0
-        )
+        last_message_at = last_message_at_by_channel.get(channel.id)
+        unread_count = unread_counts_by_channel.get(channel.id, 0)
 
         user_ids = None
         users = None
         if channel.type == 'dm':
-            user_ids = [member.user_id for member in await Channels.get_members_by_channel_id(channel.id, db=db)]
+            user_ids = [member.user_id for member in members_by_channel.get(channel.id, [])]
             users = [
-                UserIdNameStatusResponse(
-                    **{
-                        **u.model_dump(),
-                        'is_active': Users.is_active(u),
-                    }
-                )
-                for u in await Users.get_users_by_user_ids(user_ids, db=db)
+                dm_users_by_id[user_id]
+                for user_id in dict.fromkeys(user_ids)
+                if user_id in dm_users_by_id
             ]
 
         channel_list.append(

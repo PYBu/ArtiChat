@@ -84,22 +84,22 @@
 	import CalendarIcon from './Sidebar/icons/Calendar.svelte';
 	import ClockIcon from './Sidebar/icons/Clock.svelte';
 	import CodeIcon from './Sidebar/icons/Code.svelte';
-	import EditPencilIcon from './Sidebar/icons/EditPencil.svelte';
-	import NotesIcon from './Sidebar/icons/Notes.svelte';
+	import PencilIcon from '@lucide/svelte/icons/pencil';
 	import SearchIcon from './Sidebar/icons/Search.svelte';
 	import Sidebar from '../icons/Sidebar.svelte';
-	import WorkspaceIcon from './Sidebar/icons/Workspace.svelte';
+	import PackageCheckIcon from '@lucide/svelte/icons/package-check';
+	import OrbitIcon from '@lucide/svelte/icons/orbit';
 	import { slide } from 'svelte/transition';
 	import HotkeyHint from '../common/HotkeyHint.svelte';
 	import Dropdown from '../common/Dropdown.svelte';
 	import DropdownMenu from '../common/DropdownMenu.svelte';
 	import CheckIcon from '../icons/Check.svelte';
 	import MoreHorizontalIcon from './Sidebar/icons/MoreHorizontal.svelte';
-	import Grid from '../icons/Grid.svelte';
+	import BlocksIcon from '@lucide/svelte/icons/blocks';
 	import SidebarLinkIcon from './Sidebar/SidebarLinkIcon.svelte';
 
 	const BREAKPOINT = 768;
-	const DEFAULT_PINNED_ITEMS = ['notes', 'workspace'];
+	const DEFAULT_PINNED_ITEMS = ['assets', 'workspace'];
 
 	let scrollTop = 0;
 
@@ -150,7 +150,10 @@
 
 	let sharedFolders: any[] = [];
 
-	$: pinnedItems = $settings?.pinnedMenuItems ?? DEFAULT_PINNED_ITEMS;
+	$: configuredPinnedItems = $settings?.pinnedMenuItems ?? DEFAULT_PINNED_ITEMS;
+	$: pinnedItems = [
+		...new Set(configuredPinnedItems.map((id) => (id === 'notes' ? 'assets' : id)))
+	];
 	$: customSidebarButtons = (($config as any)?.branding?.sidebar_buttons ?? []) as Array<{
 		name: string;
 		url: string;
@@ -164,6 +167,8 @@
 					($config?.features?.enable_notes ?? false) &&
 					($user?.role === 'admin' || ($user?.permissions?.features?.notes ?? true))
 				);
+			case 'assets':
+				return $user !== undefined && $user !== null;
 			case 'workspace':
 				return (
 					$user?.role === 'admin' ||
@@ -193,6 +198,7 @@
 	const getMenuItemMeta = (id) => {
 		const items = {
 			notes: { label: 'Notes', href: '/notes', iconType: 'note' },
+			assets: { label: 'Asset Center', href: '/assets', iconType: 'assets' },
 			workspace: { label: 'Workspace', href: '/workspace', iconType: 'workspace' },
 			automations: { label: 'Automations', href: '/automations', iconType: 'automations' },
 			calendar: { label: 'Calendar', href: '/calendar', iconType: 'calendar' },
@@ -203,6 +209,7 @@
 
 	const menuItemPathPrefixes = {
 		notes: '/notes',
+		assets: '/assets',
 		workspace: '/workspace',
 		calendar: '/calendar',
 		automations: '/automations',
@@ -991,33 +998,11 @@
 							aria-label={$i18n.t('New Chat')}
 						>
 							<div
-								class=" self-center flex size-[30px] items-center justify-center rounded-lg transition group-hover:bg-gray-50 dark:group-hover:bg-gray-900"
+								class="sidebar-motion-icon sidebar-motion-icon-pencil self-center flex size-[30px] items-center justify-center rounded-lg transition group-hover:bg-gray-50 dark:group-hover:bg-gray-900"
 							>
-								<EditPencilIcon className="size-4" strokeWidth="1.5" />
+								<PencilIcon class="size-4" strokeWidth={1.5} />
 							</div>
 						</a>
-					</Tooltip>
-				</div>
-
-				<div>
-					<Tooltip content={$i18n.t('Search')} placement="right">
-						<button
-							class=" cursor-pointer flex size-8 items-center justify-center transition group"
-							on:click={(e) => {
-								e.stopImmediatePropagation();
-								e.preventDefault();
-
-								showSearch.set(true);
-							}}
-							draggable="false"
-							aria-label={$i18n.t('Search')}
-						>
-							<div
-								class=" self-center flex size-[30px] items-center justify-center rounded-lg transition group-hover:bg-gray-50 dark:group-hover:bg-gray-900"
-							>
-								<SearchIcon className="size-4" strokeWidth="1.5" />
-							</div>
-						</button>
 					</Tooltip>
 				</div>
 
@@ -1039,17 +1024,19 @@
 									aria-label={$i18n.t(meta.label)}
 								>
 									<div
-										class=" self-center flex size-[30px] items-center justify-center rounded-lg transition {itemId ===
+										class="sidebar-motion-icon self-center flex size-[30px] items-center justify-center rounded-lg transition {itemId ===
 										activeMenuItemId
 											? ($settings?.highContrastMode ?? false)
 												? 'bg-black/[0.035] dark:bg-white/[0.06]'
 												: 'bg-black/[0.035] dark:bg-white/[0.045]'
 											: 'group-hover:bg-gray-50 dark:group-hover:bg-gray-900'}"
+										class:sidebar-motion-icon-package-check={itemId === 'assets'}
+										class:sidebar-motion-icon-orbit={itemId === 'workspace'}
 									>
-										{#if itemId === 'notes'}
-											<NotesIcon className="size-4" strokeWidth="1.5" />
+										{#if itemId === 'assets'}
+											<PackageCheckIcon class="size-4" strokeWidth={1.5} />
 										{:else if itemId === 'workspace'}
-											<WorkspaceIcon className="size-4" strokeWidth="1.5" />
+											<OrbitIcon class="size-4" strokeWidth={1.5} />
 										{:else if itemId === 'automations'}
 											<ClockIcon className="size-4" strokeWidth="1.5" />
 										{:else if itemId === 'calendar'}
@@ -1074,9 +1061,9 @@
 							aria-label="模型广场"
 						>
 							<div
-								class="self-center flex size-[30px] items-center justify-center rounded-lg transition group-hover:bg-gray-50 dark:group-hover:bg-gray-900"
+								class="sidebar-motion-icon sidebar-motion-icon-blocks self-center flex size-[30px] items-center justify-center rounded-lg transition group-hover:bg-gray-50 dark:group-hover:bg-gray-900"
 							>
-								<Grid className="size-4" />
+								<BlocksIcon class="size-4" strokeWidth={1.5} />
 							</div>
 						</a>
 					</Tooltip>
@@ -1121,7 +1108,7 @@
 								>
 									<img
 										src={`${WEBUI_API_BASE_URL}/users/${$user?.id}/profile/image`}
-										class="size-5.5 object-cover rounded-full"
+										class="size-5.5 object-cover rounded-md"
 										alt={$i18n.t('Open User Profile Menu')}
 										aria-label={$i18n.t('Open User Profile Menu')}
 									/>
@@ -1190,6 +1177,15 @@
 						{$WEBUI_NAME}
 					</div>
 				</a>
+				<Tooltip content={$i18n.t('Search')} placement="bottom">
+					<button
+						class="flex size-[30px] shrink-0 items-center justify-center rounded-lg hover:bg-gray-50 dark:hover:bg-gray-900 transition"
+						on:click={() => showSearch.set(true)}
+						aria-label={$i18n.t('Search')}
+					>
+						<SearchIcon className="size-4" strokeWidth="1.5" />
+					</button>
+				</Tooltip>
 				<Tooltip
 					content={$showSidebar ? $i18n.t('Close Sidebar') : $i18n.t('Open Sidebar')}
 					placement="bottom"
@@ -1236,8 +1232,10 @@
 							on:click={newChatHandler}
 							aria-label={$i18n.t('New Chat')}
 						>
-							<div class="self-center flex size-4 shrink-0 items-center justify-center">
-								<EditPencilIcon className=" size-4" strokeWidth="1.5" />
+							<div
+								class="sidebar-motion-icon sidebar-motion-icon-pencil self-center flex size-4 shrink-0 items-center justify-center"
+							>
+								<PencilIcon class="size-4" strokeWidth={1.5} />
 							</div>
 
 							<div class="flex flex-1 self-center translate-y-[0.5px]">
@@ -1246,27 +1244,6 @@
 
 							<HotkeyHint name="newChat" className=" group-hover:visible invisible" />
 						</a>
-					</div>
-
-					<div class="px-1 flex justify-center text-gray-700 dark:text-gray-300">
-						<button
-							id="sidebar-search-button"
-							class="group grow flex items-center space-x-2 rounded-xl px-2 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-900 transition outline-none"
-							on:click={() => {
-								showSearch.set(true);
-							}}
-							draggable="false"
-							aria-label={$i18n.t('Search')}
-						>
-							<div class="self-center flex size-4 shrink-0 items-center justify-center">
-								<SearchIcon strokeWidth="1.5" className="size-4" />
-							</div>
-
-							<div class="flex flex-1 self-center translate-y-[0.5px]">
-								<div class=" self-center text-[13px] leading-5">{$i18n.t('Search')}</div>
-							</div>
-							<HotkeyHint name="search" className=" group-hover:visible invisible" />
-						</button>
 					</div>
 
 					<div id="pinned-menu-items-list">
@@ -1290,11 +1267,15 @@
 										draggable="false"
 										aria-label={$i18n.t(meta.label)}
 									>
-										<div class="self-center flex size-4 shrink-0 items-center justify-center">
-											{#if itemId === 'notes'}
-												<NotesIcon className="size-4" strokeWidth="1.5" />
+										<div
+											class="sidebar-motion-icon self-center flex size-4 shrink-0 items-center justify-center"
+											class:sidebar-motion-icon-package-check={itemId === 'assets'}
+											class:sidebar-motion-icon-orbit={itemId === 'workspace'}
+										>
+											{#if itemId === 'assets'}
+												<PackageCheckIcon class="size-4" strokeWidth={1.5} />
 											{:else if itemId === 'workspace'}
-												<WorkspaceIcon className="size-4" strokeWidth="1.5" />
+												<OrbitIcon class="size-4" strokeWidth={1.5} />
 											{:else if itemId === 'automations'}
 												<ClockIcon className="size-4" strokeWidth="1.5" />
 											{:else if itemId === 'calendar'}
@@ -1321,8 +1302,10 @@
 							draggable="false"
 							aria-label="模型广场"
 						>
-							<div class="self-center flex size-4 shrink-0 items-center justify-center">
-								<Grid className="size-4" />
+							<div
+								class="sidebar-motion-icon sidebar-motion-icon-blocks self-center flex size-4 shrink-0 items-center justify-center"
+							>
+								<BlocksIcon class="size-4" strokeWidth={1.5} />
 							</div>
 							<div class="flex min-w-0 flex-1 self-center translate-y-[0.5px]">
 								<div class="truncate self-center text-[13px] leading-5">模型广场</div>
@@ -1782,7 +1765,7 @@
 									<div class=" self-center mr-3 relative flex-shrink-0">
 										<img
 											src={`${WEBUI_API_BASE_URL}/users/${$user?.id}/profile/image`}
-											class="size-5.5 object-cover rounded-full"
+											class="size-5.5 object-cover rounded-md"
 											alt={$i18n.t('Open User Profile Menu')}
 											aria-label={$i18n.t('Open User Profile Menu')}
 										/>
@@ -1839,3 +1822,112 @@
 		</div>
 	{/if}
 {/if}
+
+<style>
+	.sidebar-motion-icon {
+		transform-origin: center;
+	}
+
+	/* Sidebar icon motion is intentionally scoped to these wrappers; UserMenu uses the same
+	 * Lucide components without a wrapper, so its icons remain static. */
+	a:hover .sidebar-motion-icon,
+	a:focus-visible .sidebar-motion-icon {
+		animation: sidebar-icon-breathe 900ms cubic-bezier(0.22, 0.8, 0.32, 1);
+	}
+
+	a:hover .sidebar-motion-icon-pencil :global(svg),
+	a:focus-visible .sidebar-motion-icon-pencil :global(svg) {
+		animation: sidebar-pencil-wiggle 900ms cubic-bezier(0.34, 1.56, 0.64, 1);
+		transform-origin: 31% 72%;
+	}
+
+	a:hover .sidebar-motion-icon-package-check :global(svg path:nth-of-type(2)),
+	a:focus-visible .sidebar-motion-icon-package-check :global(svg path:nth-of-type(2)) {
+		animation: sidebar-check-draw 950ms cubic-bezier(0.22, 0.8, 0.32, 1);
+	}
+
+	a:hover .sidebar-motion-icon-orbit :global(svg),
+	a:focus-visible .sidebar-motion-icon-orbit :global(svg) {
+		animation: sidebar-orbit-spin 1150ms cubic-bezier(0.2, 0.78, 0.28, 1);
+		transform-box: view-box;
+		transform-origin: 50% 50%;
+	}
+
+	a:hover .sidebar-motion-icon-blocks :global(svg rect),
+	a:focus-visible .sidebar-motion-icon-blocks :global(svg rect) {
+		animation: sidebar-block-spin 1000ms cubic-bezier(0.22, 0.8, 0.32, 1);
+		transform-box: fill-box;
+		transform-origin: center;
+	}
+
+	@keyframes sidebar-icon-breathe {
+		0%,
+		100% {
+			transform: scale(1);
+		}
+		32% {
+			transform: scale(1.14);
+		}
+		62% {
+			transform: scale(0.95);
+		}
+	}
+
+	@keyframes sidebar-pencil-wiggle {
+		0%,
+		100% {
+			transform: rotate(0deg);
+		}
+		32% {
+			transform: rotate(-9deg);
+		}
+		66% {
+			transform: rotate(7deg);
+		}
+	}
+
+	@keyframes sidebar-check-draw {
+		0% {
+			stroke-dasharray: 10 10;
+			stroke-dashoffset: 10;
+		}
+		44%,
+		100% {
+			stroke-dasharray: 10 10;
+			stroke-dashoffset: 0;
+		}
+	}
+
+	@keyframes sidebar-orbit-spin {
+		from {
+			transform: rotate(0deg);
+		}
+		to {
+			transform: rotate(360deg);
+		}
+	}
+
+	@keyframes sidebar-block-spin {
+		from {
+			transform: rotate(0deg);
+		}
+		to {
+			transform: rotate(360deg);
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		a:hover .sidebar-motion-icon,
+		a:focus-visible .sidebar-motion-icon,
+		a:hover .sidebar-motion-icon-pencil :global(svg),
+		a:focus-visible .sidebar-motion-icon-pencil :global(svg),
+		a:hover .sidebar-motion-icon-package-check :global(svg path:nth-of-type(2)),
+		a:focus-visible .sidebar-motion-icon-package-check :global(svg path:nth-of-type(2)),
+		a:hover .sidebar-motion-icon-orbit :global(svg),
+		a:focus-visible .sidebar-motion-icon-orbit :global(svg),
+		a:hover .sidebar-motion-icon-blocks :global(svg rect),
+		a:focus-visible .sidebar-motion-icon-blocks :global(svg rect) {
+			animation: none;
+		}
+	}
+</style>

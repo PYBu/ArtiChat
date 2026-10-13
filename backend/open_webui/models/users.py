@@ -27,7 +27,6 @@ from sqlalchemy import (
     select,
     update,
 )
-from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 
 ####################
@@ -367,16 +366,19 @@ class UsersTable:
         sub: str,
         db: AsyncSession | None = None,
     ) -> UserModel | None:
-        """Look up a user by OAuth provider + subject claim (dialect-aware JSON filter)."""
+        """Look up a user by an exact OAuth provider + subject claim."""
         async with get_async_db_context(db) as session:
-            dialect = session.bind.dialect.name
-            query = select(User)
-            if dialect == 'sqlite':
-                oauth_match = User.oauth.contains({provider: {'sub': sub}})
-                query = query.where(oauth_match)
-            elif dialect == 'postgresql':
-                oauth_match = User.oauth[provider].cast(JSONB)['sub'].astext == sub
-                query = query.where(oauth_match)
+            sub = str(sub)
+            sub_expr = User.oauth[provider]['sub'].as_string()
+            query = select(User).where(sub_expr == sub)
+
+            # SQLite may store legacy numeric subjects as JSON numbers. Keep
+            # that compatibility path while avoiding broad JSON containment
+            # matches that can authenticate the wrong account.
+            if session.get_bind().dialect.name == 'sqlite' and sub.isdecimal():
+                sub_int = int(sub)
+                if str(sub_int) == sub and sub_int <= 2**63 - 1:
+                    query = select(User).where(or_(sub_expr == sub, sub_expr == sub_int))
             row = (await session.execute(query)).scalars().first()
             return UserModel.model_validate(row) if row else None
 
@@ -386,16 +388,11 @@ class UsersTable:
         external_id: str,
         db: AsyncSession | None = None,
     ) -> UserModel | None:
-        """Look up a user by SCIM provider + external ID (dialect-aware JSON filter)."""
+        """Look up a user by an exact SCIM provider + external ID."""
         async with get_async_db_context(db) as session:
-            dialect = session.bind.dialect.name
-            query = select(User)
-            if dialect == 'sqlite':
-                scim_match = User.scim.contains({provider: {'external_id': external_id}})
-                query = query.where(scim_match)
-            elif dialect == 'postgresql':
-                scim_match = User.scim[provider].cast(JSONB)['external_id'].astext == external_id
-                query = query.where(scim_match)
+            external_id = str(external_id)
+            external_id_expr = User.scim[provider]['external_id'].as_string()
+            query = select(User).where(external_id_expr == external_id)
             row = (await session.execute(query)).scalars().first()
             return UserModel.model_validate(row) if row else None
 

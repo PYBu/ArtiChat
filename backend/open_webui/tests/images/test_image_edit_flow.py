@@ -100,6 +100,8 @@ def test_generated_assistant_image_is_added_to_model_file_context(monkeypatch):
 
 
 class _ResponseContext:
+    status = 200
+
     async def __aenter__(self):
         return self
 
@@ -149,6 +151,103 @@ def _image_config():
         IMAGES_EDIT_OPENAI_API_VERSION='',
         USER_PERMISSIONS={},
     )
+
+
+def _image_generation_config():
+    return SimpleNamespace(
+        IMAGE_GENERATION_ENGINE='openai',
+        IMAGE_GENERATION_MODEL='dall-e-2',
+        IMAGE_SIZE='512x512',
+        IMAGES_OPENAI_API_KEY='generation-secret',
+        IMAGES_OPENAI_API_BASE_URL='https://images.example/v1/',
+        IMAGES_OPENAI_API_VERSION='',
+        IMAGE_EDIT_ENGINE='openai',
+        IMAGE_EDIT_MODEL='edit-model',
+        IMAGE_EDIT_SIZE='512x512',
+        IMAGES_EDIT_OPENAI_API_KEY='edit-secret',
+        IMAGES_EDIT_OPENAI_API_BASE_URL='https://images.example/v1/',
+        IMAGES_EDIT_OPENAI_API_VERSION='',
+    )
+
+
+def test_image_admin_config_masks_provider_secrets():
+    values = images.mask_image_config_values(
+        {
+            'IMAGES_OPENAI_API_KEY': 'generation-secret',
+            'IMAGES_EDIT_OPENAI_API_KEY': 'edit-secret',
+            'COMFYUI_API_KEY': '',
+            'IMAGE_GENERATION_ENGINE': 'openai',
+        }
+    )
+
+    assert values['IMAGES_OPENAI_API_KEY'] == '********'
+    assert values['IMAGES_EDIT_OPENAI_API_KEY'] == '********'
+    assert values['COMFYUI_API_KEY'] == ''
+    assert values['IMAGE_GENERATION_ENGINE'] == 'openai'
+
+
+def test_openai_generation_config_test_uses_saved_settings_without_persisting_output(monkeypatch):
+    session = _RecordingSession()
+    monkeypatch.setattr(images, 'get_image_config', AsyncMock(return_value=_image_generation_config()))
+    monkeypatch.setattr(images, 'get_session', AsyncMock(return_value=session))
+
+    result = asyncio.run(
+        images.test_config(
+            SimpleNamespace(),
+            images.ImageConfigTestForm(operation='generate'),
+            user=SimpleNamespace(id='admin-1', role='admin'),
+        )
+    )
+
+    assert result.ok is True
+    assert result.status == 200
+    assert result.provider == 'openai'
+    assert result.elapsed_ms >= 0
+    assert session.request['url'] == 'https://images.example/v1/images/generations'
+    assert session.request['headers']['Authorization'] == 'Bearer generation-secret'
+    assert session.request['json']['n'] == 1
+    assert 'response_format' in session.request['json']
+
+
+def test_openai_edit_config_test_sends_only_in_memory_one_pixel_image(monkeypatch):
+    session = _RecordingSession()
+    monkeypatch.setattr(images, 'get_image_config', AsyncMock(return_value=_image_generation_config()))
+    monkeypatch.setattr(images, 'get_session', AsyncMock(return_value=session))
+
+    result = asyncio.run(
+        images.test_config(
+            SimpleNamespace(),
+            images.ImageConfigTestForm(operation='edit'),
+            user=SimpleNamespace(id='admin-1', role='admin'),
+        )
+    )
+
+    assert result.ok is True
+    assert result.status == 200
+    assert session.request['url'] == 'https://images.example/v1/images/edits'
+    multipart = session.request['data']
+    image_fields = [field for field in multipart._fields if field[0].get('name') == 'image']
+    assert len(image_fields) == 1
+    assert image_fields[0][2].getvalue().startswith(b'\x89PNG')
+    assert image_fields[0][0].get('filename') == 'artichat-connection-test.png'
+
+
+def test_openai_config_test_sanitizes_provider_authentication_errors(monkeypatch):
+    monkeypatch.setattr(images, 'get_image_config', AsyncMock(return_value=_image_generation_config()))
+    monkeypatch.setattr(images, 'get_session', AsyncMock(return_value=_UnauthorizedSession()))
+
+    result = asyncio.run(
+        images.test_config(
+            SimpleNamespace(),
+            images.ImageConfigTestForm(operation='generate'),
+            user=SimpleNamespace(id='admin-1', role='admin'),
+        )
+    )
+
+    assert result.ok is False
+    assert result.status == 401
+    assert result.message == 'Image provider authentication failed.'
+    assert 'generation-secret' not in result.message
 
 
 def test_openai_edit_receives_resolved_image_bytes_as_multipart(monkeypatch):

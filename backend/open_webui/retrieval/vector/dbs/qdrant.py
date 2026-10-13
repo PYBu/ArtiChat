@@ -3,7 +3,7 @@ NOTE: This vector database integration is community-supported and maintained on 
 """
 
 import logging
-from typing import Optional
+from typing import Any, Optional
 from urllib.parse import urlparse
 
 from open_webui.config import (
@@ -22,6 +22,7 @@ from open_webui.retrieval.vector.main import (
     VectorDBBase,
     VectorItem,
 )
+from open_webui.retrieval.vector.utils import iter_filter_conditions
 from qdrant_client import QdrantClient as Qclient
 from qdrant_client.http.models import PointStruct
 from qdrant_client.models import models
@@ -29,6 +30,16 @@ from qdrant_client.models import models
 NO_LIMIT = 999999999
 
 log = logging.getLogger(__name__)
+
+
+def _metadata_filter(key: str, op: str, value: Any) -> models.FieldCondition:
+    match = models.MatchAny(any=value) if op == '$in' else models.MatchValue(value=value)
+    return models.FieldCondition(key=f'metadata.{key}', match=match)
+
+
+def _metadata_query_filter(filter: Optional[dict]) -> Optional[models.Filter]:
+    conditions = [_metadata_filter(key, op, value) for key, op, value in iter_filter_conditions(filter)]
+    return models.Filter(must=conditions) if conditions else None
 
 
 class QdrantClient(VectorDBBase):
@@ -156,6 +167,7 @@ class QdrantClient(VectorDBBase):
             collection_name=f'{self.collection_prefix}_{collection_name}',
             query=vectors[0],
             limit=limit,
+            query_filter=_metadata_query_filter(filter),
         )
         get_result = self._result_to_get_result(query_response.points)
         return SearchResult(
@@ -174,15 +186,9 @@ class QdrantClient(VectorDBBase):
             if limit is None:
                 limit = NO_LIMIT  # otherwise qdrant would set limit to 10!
 
-            field_conditions = []
-            for key, value in filter.items():
-                field_conditions.append(
-                    models.FieldCondition(key=f'metadata.{key}', match=models.MatchValue(value=value))
-                )
-
             points = self.client.scroll(
                 collection_name=f'{self.collection_prefix}_{collection_name}',
-                scroll_filter=models.Filter(should=field_conditions),
+                scroll_filter=_metadata_query_filter(filter),
                 limit=limit,
             )
             return self._result_to_get_result(points[0])
@@ -225,19 +231,9 @@ class QdrantClient(VectorDBBase):
                 points_selector=models.PointIdsList(points=ids),
             )
 
-        field_conditions = []
-        if filter:
-            for key, value in filter.items():
-                field_conditions.append(
-                    models.FieldCondition(
-                        key=f'metadata.{key}',
-                        match=models.MatchValue(value=value),
-                    )
-                )
-
         return self.client.delete(
             collection_name=f'{self.collection_prefix}_{collection_name}',
-            points_selector=models.FilterSelector(filter=models.Filter(must=field_conditions)),
+            points_selector=models.FilterSelector(filter=_metadata_query_filter(filter) or models.Filter()),
         )
 
     def reset(self):

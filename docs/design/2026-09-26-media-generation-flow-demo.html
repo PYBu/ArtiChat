@@ -1,0 +1,598 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>ArtiChat 0.3.1 - Media generation flow demo</title>
+		<script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.js"></script>
+		<style>
+			:root {
+				color-scheme: light;
+				--page: #f4f5f7;
+				--surface: #ffffff;
+				--surface-soft: #f8f9fb;
+				--surface-muted: #eef0f3;
+				--line: #e4e7eb;
+				--line-strong: #d4d8df;
+				--text: #20242a;
+				--text-soft: #626a75;
+				--muted: #9198a3;
+				--accent: #635bff;
+				--accent-soft: #eeedff;
+				--success: #17845b;
+				--success-soft: #e7f6ef;
+				--danger: #c34545;
+				--danger-soft: #fff0f0;
+				--generation-surface: #f6f8fc;
+				--generation-caption: #46566e;
+				--generation-progress-bg: rgb(255 255 255 / 92%);
+				--generation-progress-border: rgb(87 113 157 / 25%);
+				--shadow: 0 28px 70px rgb(28 35 47 / 11%), 0 2px 8px rgb(28 35 47 / 5%);
+			}
+
+			html[data-theme='dark'] {
+				color-scheme: dark;
+				--page: #141619;
+				--surface: #1c1f23;
+				--surface-soft: #22262b;
+				--surface-muted: #2a2e34;
+				--line: #30353c;
+				--line-strong: #3a414a;
+				--text: #f1f3f5;
+				--text-soft: #c0c6cf;
+				--muted: #858d98;
+				--accent: #a7a1ff;
+				--accent-soft: #302e50;
+				--success: #67d5a8;
+				--success-soft: #1d3b30;
+				--danger: #ff9797;
+				--danger-soft: #432528;
+				--generation-surface: #22262e;
+				--generation-caption: #f2f5fa;
+				--generation-progress-bg: rgb(35 41 52 / 92%);
+				--generation-progress-border: rgb(137 153 180 / 28%);
+				--shadow: 0 30px 80px rgb(0 0 0 / 34%), 0 2px 10px rgb(0 0 0 / 22%);
+			}
+
+			* { box-sizing: border-box; }
+
+			html, body {
+				margin: 0;
+				min-height: 100%;
+				background: var(--page);
+				color: var(--text);
+				font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+				font-size: 14px;
+				letter-spacing: 0;
+			}
+
+			button { font: inherit; color: inherit; }
+			button, a { -webkit-tap-highlight-color: transparent; }
+			button { border: 0; cursor: pointer; }
+
+			.app-shell { min-height: 100vh; padding: 28px 20px 44px; }
+			.app-frame { width: min(1180px, 100%); margin: 0 auto; }
+
+			.topbar {
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				gap: 16px;
+				margin-bottom: 18px;
+			}
+
+			.brand { display: flex; align-items: center; gap: 11px; }
+			.brand-mark {
+				display: grid;
+				place-items: center;
+				width: 34px;
+				height: 34px;
+				border-radius: 10px;
+				background: var(--text);
+				color: var(--surface);
+			}
+			.brand-mark svg { width: 18px; height: 18px; stroke-width: 1.8; }
+			.brand-title { font-weight: 700; letter-spacing: -.01em; }
+			.brand-subtitle { margin-top: 2px; color: var(--muted); font-size: 12px; }
+
+			.top-actions { display: flex; align-items: center; gap: 8px; }
+			.icon-button {
+				display: grid;
+				place-items: center;
+				width: 34px;
+				height: 34px;
+				border: 1px solid var(--line);
+				border-radius: 10px;
+				background: var(--surface);
+				color: var(--text-soft);
+				transition: border-color .18s ease, color .18s ease, transform .18s ease;
+			}
+			.icon-button:hover { border-color: var(--line-strong); color: var(--text); transform: translateY(-1px); }
+			.icon-button svg { width: 16px; height: 16px; }
+
+			.workspace {
+				display: grid;
+				grid-template-columns: minmax(0, 1fr) 304px;
+				gap: 18px;
+				align-items: start;
+			}
+
+			.chat-panel, .control-panel {
+				border: 1px solid var(--line);
+				background: var(--surface);
+				box-shadow: var(--shadow);
+			}
+			.chat-panel { min-height: 690px; border-radius: 18px; overflow: hidden; }
+			.control-panel { border-radius: 14px; padding: 18px; box-shadow: 0 10px 30px rgb(28 35 47 / 6%); }
+
+			.chat-header {
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				padding: 17px 22px;
+				border-bottom: 1px solid var(--line);
+			}
+			.chat-title { display: flex; align-items: center; gap: 9px; font-weight: 650; }
+			.chat-title svg { width: 16px; height: 16px; color: var(--accent); }
+			.chat-state { display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: 12px; }
+			.state-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); box-shadow: 0 0 0 4px var(--success-soft); }
+
+			.conversation { padding: 30px clamp(18px, 5vw, 66px) 34px; }
+			.user-row { display: flex; justify-content: flex-end; margin-bottom: 27px; }
+			.user-bubble {
+				max-width: min(82%, 530px);
+				padding: 12px 15px;
+				border-radius: 15px 15px 4px 15px;
+				background: var(--text);
+				color: var(--surface);
+				line-height: 1.55;
+			}
+
+			.assistant-row { display: flex; gap: 12px; align-items: flex-start; }
+			.assistant-avatar {
+				display: grid;
+				place-items: center;
+				flex: 0 0 auto;
+				width: 30px;
+				height: 30px;
+				border-radius: 9px;
+				background: var(--accent-soft);
+				color: var(--accent);
+			}
+			.assistant-avatar svg { width: 16px; height: 16px; }
+			.assistant-body { min-width: 0; width: min(100%, 620px); }
+			.assistant-name { margin: 4px 0 11px; color: var(--text-soft); font-size: 12px; font-weight: 650; }
+
+			.media-slot { width: min(100%, 520px); margin-bottom: 15px; }
+			.media-card {
+				position: relative;
+				overflow: hidden;
+				border: 1px solid var(--line);
+				border-radius: 14px;
+				background: var(--surface-soft);
+				animation: card-in .32s ease both;
+			}
+			.media-card.generating { aspect-ratio: 1.38; background: var(--generation-surface); border-color: var(--line); }
+			.media-card.video.generating, .media-card.video.success { aspect-ratio: 1.72; }
+			.media-card.success { background: #101216; }
+			.media-card.failed { animation: card-out .32s ease forwards; }
+
+			.media-skeleton { position: absolute; inset: 0; overflow: hidden; background: var(--generation-surface); }
+			.dot-stage { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+			.generation-caption { position: absolute; top: 7%; left: 5%; color: var(--generation-caption); font-size: 12px; font-weight: 560; letter-spacing: .01em; }
+			.generation-progress { position: absolute; right: 5%; bottom: 5%; display: flex; align-items: center; gap: 8px; min-width: 83px; padding: 7px 10px; border: 1px solid var(--generation-progress-border); border-radius: 999px; background: var(--generation-progress-bg); color: #3f83ee; font-size: 12px; font-variant-numeric: tabular-nums; box-shadow: 0 6px 18px rgb(0 0 0 / 12%); }
+			.generation-progress-value { min-width: 28px; text-align: right; }
+			.generation-progress-track { width: 27px; height: 3px; overflow: hidden; border-radius: 999px; background: rgb(117 142 186 / 24%); }
+			.generation-progress-track i { display: block; width: 56%; height: 100%; border-radius: inherit; background: #4b8df8; box-shadow: 0 0 8px rgb(75 141 248 / 70%); transition: width .25s ease; }
+
+			.media-card img, .media-card video { display: block; width: 100%; height: 100%; object-fit: cover; }
+			.media-card video { background: #101216; }
+			.media-meta { position: absolute; left: 12px; bottom: 11px; display: flex; align-items: center; gap: 7px; padding: 6px 9px; border-radius: 8px; background: rgb(13 15 18 / 68%); color: #fff; font-size: 11px; backdrop-filter: blur(8px); }
+			.media-meta svg { width: 13px; height: 13px; }
+
+			.final-answer { max-width: 570px; color: var(--text); line-height: 1.7; animation: answer-in .4s ease both; }
+			.final-answer strong { font-weight: 680; }
+			.final-answer.error { color: var(--danger); }
+			.final-answer .answer-label { display: block; margin-bottom: 3px; color: var(--muted); font-size: 11px; }
+			.cursor { display: inline-block; width: 2px; height: 14px; margin-left: 3px; vertical-align: -2px; background: var(--accent); animation: blink 1s steps(1) infinite; }
+
+			.composer {
+				display: flex;
+				align-items: center;
+				gap: 10px;
+				margin-top: 42px;
+				padding: 10px 12px 10px 16px;
+				border: 1px solid var(--line);
+				border-radius: 13px;
+				background: var(--surface-soft);
+				color: var(--muted);
+			}
+			.composer span { flex: 1; }
+			.composer button { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 9px; background: var(--text); color: var(--surface); }
+			.composer svg { width: 15px; height: 15px; }
+
+			.panel-eyebrow { margin: 0 0 7px; color: var(--muted); font-size: 10px; font-weight: 750; letter-spacing: .11em; text-transform: uppercase; }
+			.panel-title { margin: 0; font-size: 17px; letter-spacing: -.02em; }
+			.panel-copy { margin: 7px 0 18px; color: var(--text-soft); font-size: 12px; line-height: 1.55; }
+			.mode-switch { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; padding: 4px; margin-bottom: 12px; border-radius: 11px; background: var(--surface-muted); }
+			.mode-switch button { display: flex; align-items: center; justify-content: center; gap: 7px; padding: 8px 6px; border-radius: 8px; color: var(--text-soft); font-size: 12px; }
+			.mode-switch button.active { background: var(--surface); color: var(--text); box-shadow: 0 2px 8px rgb(25 31 40 / 8%); }
+			.mode-switch svg { width: 14px; height: 14px; }
+			.action-stack { display: grid; gap: 8px; }
+			.action-button { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 12px; border-radius: 10px; background: var(--text); color: var(--surface); font-size: 12px; font-weight: 650; transition: opacity .18s ease, transform .18s ease; }
+			.action-button:hover { opacity: .88; transform: translateY(-1px); }
+			.action-button.secondary { border: 1px solid var(--line); background: var(--surface); color: var(--text-soft); }
+			.action-button.danger { border: 1px solid color-mix(in srgb, var(--danger) 30%, var(--line)); background: var(--danger-soft); color: var(--danger); }
+			.action-button svg { width: 15px; height: 15px; }
+
+			.event-divider { height: 1px; margin: 20px 0 16px; background: var(--line); }
+			.event-list { display: grid; gap: 12px; }
+			.event-item { display: grid; grid-template-columns: 18px 1fr auto; gap: 8px; align-items: start; color: var(--text-soft); font-size: 12px; }
+			.event-icon { display: grid; place-items: center; width: 18px; height: 18px; border-radius: 6px; background: var(--surface-muted); color: var(--muted); }
+			.event-icon svg { width: 12px; height: 12px; }
+			.event-item.active .event-icon { background: var(--accent-soft); color: var(--accent); }
+			.event-item.done .event-icon { background: var(--success-soft); color: var(--success); }
+			.event-item.failed .event-icon { background: var(--danger-soft); color: var(--danger); }
+			.event-copy strong { display: block; margin-bottom: 2px; color: var(--text); font-weight: 620; }
+			.event-copy span { color: var(--muted); font-size: 11px; }
+			.event-time { color: var(--muted); font-size: 10px; white-space: nowrap; }
+
+			.legend { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 17px; }
+			.legend span { padding: 5px 7px; border: 1px solid var(--line); border-radius: 7px; color: var(--muted); font-size: 10px; }
+			.note { margin-top: 17px; padding: 10px 11px; border-radius: 10px; background: var(--surface-soft); color: var(--text-soft); font-size: 11px; line-height: 1.55; }
+
+			@keyframes card-in { from { opacity: 0; transform: translateY(7px) scale(.985); } to { opacity: 1; transform: none; } }
+			@keyframes card-out { to { opacity: 0; transform: translateY(-5px) scale(.98); max-height: 0; margin-bottom: 0; } }
+			@keyframes answer-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+			@keyframes blink { 50% { opacity: 0; } }
+
+			@media (max-width: 820px) {
+				.app-shell { padding: 18px 12px 30px; }
+				.workspace { grid-template-columns: 1fr; }
+				.control-panel { order: -1; }
+				.chat-panel { min-height: 650px; }
+				.conversation { padding-inline: 16px; }
+			}
+			@media (max-width: 480px) {
+				.topbar { align-items: flex-start; }
+				.brand-subtitle { max-width: 210px; }
+				.chat-header { padding-inline: 15px; }
+				.chat-state { display: none; }
+				.user-bubble { max-width: 92%; }
+			}
+			@media (prefers-reduced-motion: reduce) {
+				.dot-stage { animation: none; }
+			}
+		</style>
+	</head>
+	<body>
+		<main class="app-shell">
+			<div class="app-frame">
+				<header class="topbar">
+					<div class="brand">
+						<div class="brand-mark"><i data-lucide="sparkles"></i></div>
+						<div>
+							<div class="brand-title">ArtiChat 0.3.1</div>
+							<div class="brand-subtitle">图片与视频生成 · 媒体生命周期体验 Demo</div>
+						</div>
+					</div>
+					<div class="top-actions">
+						<button class="icon-button" id="theme-toggle" aria-label="切换主题" title="切换主题"><i data-lucide="sun-moon"></i></button>
+						<button class="icon-button" id="reset-top" aria-label="重置演示" title="重置演示"><i data-lucide="rotate-ccw"></i></button>
+					</div>
+				</header>
+
+				<section class="workspace">
+					<section class="chat-panel" aria-label="媒体生成聊天预览">
+						<div class="chat-header">
+							<div class="chat-title"><i data-lucide="message-circle"></i><span>新对话</span></div>
+							<div class="chat-state"><span class="state-dot"></span><span id="chat-state">正在生成</span></div>
+						</div>
+						<div class="conversation">
+							<div class="user-row"><div class="user-bubble" id="user-prompt">生成一张雨夜城市的电影感图片，保留霓虹反光和湿润街道。</div></div>
+							<div class="assistant-row">
+								<div class="assistant-avatar"><i data-lucide="sparkles"></i></div>
+								<div class="assistant-body">
+									<div class="assistant-name">ArtiChat</div>
+									<div class="media-slot" id="media-slot"></div>
+									<div id="final-answer"></div>
+								</div>
+							</div>
+							<div class="composer"><span>继续输入消息…</span><button aria-label="发送"><i data-lucide="arrow-up"></i></button></div>
+						</div>
+					</section>
+
+					<aside class="control-panel">
+						<p class="panel-eyebrow">Interactive preview</p>
+						<h1 class="panel-title">媒体生成状态</h1>
+						<p class="panel-copy">占位框只代表正在执行的媒体工具；成功后直接变成媒体，失败时移除并保留模型总结。</p>
+						<div class="mode-switch" role="tablist" aria-label="媒体类型">
+							<button class="active" data-mode="image" role="tab"><i data-lucide="image"></i>图片</button>
+							<button data-mode="edit" role="tab"><i data-lucide="wand-sparkles"></i>编辑图片</button>
+							<button data-mode="video" role="tab"><i data-lucide="video"></i>视频</button>
+						</div>
+						<div class="action-stack">
+							<button class="action-button" id="run-button"><i data-lucide="play"></i><span>重新生成</span></button>
+							<button class="action-button secondary" id="fail-button"><i data-lucide="circle-x"></i><span>模拟失败</span></button>
+							<button class="action-button secondary" id="reset-button"><i data-lucide="rotate-ccw"></i><span>重置状态</span></button>
+						</div>
+						<div class="event-divider"></div>
+						<p class="panel-eyebrow">Event stream</p>
+						<div class="event-list" id="event-list"></div>
+						<div class="legend"><span>tool_call 隐藏</span><span>按 call_id 关联</span><span>最终回答在下方</span></div>
+						<div class="note">这是独立视觉 Demo，不会修改正式聊天组件或 3003 预览。点击“图片 / 编辑图片 / 视频”后可以观察同一套 UI 如何处理不同媒体类型。</div>
+					</aside>
+				</section>
+			</div>
+		</main>
+
+		<script>
+			const imageUrl = 'https://images.unsplash.com/photo-1519608487953-e999c86e7455?auto=format&fit=crop&w=1200&q=85';
+			const videoUrl = 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4';
+			const state = { mode: 'image', phase: 'generating', timer: null, dotFrame: null, typeTimer: null, progress: 8, captionText: '', callId: 'call_media_01', startedAt: performance.now() };
+			const $ = (selector) => document.querySelector(selector);
+			const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+			const generationCaptionSets = {
+				image: ['正在理解需求...', '准备草图...', '正在发送请求...', '正在生成图片...'],
+				edit: ['正在理解图片...', '准备修改...', '正在发送请求...', '正在编辑图片...'],
+				video: ['正在理解需求...', '准备草图...', '正在发送请求...', '正在生成视频...']
+			};
+			const isVideoMode = () => state.mode === 'video';
+			const isEditMode = () => state.mode === 'edit';
+			const mediaLabel = () => (isVideoMode() ? '视频' : isEditMode() ? '编辑图片' : '图片');
+			const typewriter = { index: 0, cursor: 0, phase: 'typing' };
+
+			function icon(name) { return `<i data-lucide="${name}"></i>`; }
+
+			function eventData() {
+				const label = isVideoMode() ? '视频工具' : isEditMode() ? '编辑图片工具' : '图片工具';
+				const prompt = isVideoMode() ? '理解视频需求' : isEditMode() ? '理解图片修改需求' : '理解图片需求';
+				const events = [
+					{ icon: 'sparkles', title: '模型理解请求', detail: prompt, state: 'done', time: '完成' },
+					{ icon: isVideoMode() ? 'video' : isEditMode() ? 'wand-sparkles' : 'image', title: label, detail: state.phase === 'generating' ? '占位框已显示，工具详情已隐藏' : state.phase === 'failed' ? '工具返回失败' : '工具返回成功', state: state.phase === 'generating' ? 'active' : state.phase === 'failed' ? 'failed' : 'done', time: state.phase === 'generating' ? '进行中' : state.phase === 'failed' ? '失败' : '完成' },
+					{ icon: 'message-square', title: '模型最终回答', detail: state.phase === 'generating' ? '等待工具结果' : state.phase === 'failed' ? `${mediaLabel()}生成失败总结` : `${mediaLabel()}结果总结`, state: state.phase === 'generating' ? '' : 'done', time: state.phase === 'generating' ? '等待中' : '完成' }
+				];
+				return events;
+			}
+
+			function renderEvents() {
+				$('#event-list').innerHTML = eventData().map((event) => `
+					<div class="event-item ${event.state}">
+						<div class="event-icon">${icon(event.icon)}</div>
+						<div class="event-copy"><strong>${event.title}</strong><span>${event.detail}</span></div>
+						<div class="event-time">${event.time}</div>
+					</div>
+				`).join('');
+				lucide.createIcons();
+			}
+
+			function renderMedia() {
+				const slot = $('#media-slot');
+				if (state.phase === 'failed' || state.phase === 'idle') {
+					stopDotMatrix();
+					stopTypewriter();
+					slot.innerHTML = '';
+					return;
+				}
+
+				if (state.phase === 'generating') {
+					slot.innerHTML = `
+						<div class="media-card ${state.mode} generating" aria-busy="true">
+							<div class="media-skeleton">
+								<canvas class="dot-stage" aria-hidden="true"></canvas>
+								<span class="generation-caption" aria-live="polite">${state.captionText}</span>
+								<span class="generation-progress" aria-label="生成进度"><span class="generation-progress-value">${Math.round(state.progress)}%</span><span class="generation-progress-track"><i></i></span></span>
+							</div>
+						</div>`;
+					mountDotMatrix(slot.querySelector('.dot-stage'));
+					return;
+				}
+
+				stopDotMatrix();
+
+				if (!isVideoMode()) {
+					slot.innerHTML = `<div class="media-card image success"><img src="${imageUrl}" alt="${mediaLabel()}结果" /><span class="media-meta">${icon('image')} ${isEditMode() ? '已编辑' : '已生成'}</span></div>`;
+				} else {
+					slot.innerHTML = `<div class="media-card video success"><video src="${videoUrl}" poster="${imageUrl}" controls preload="metadata"></video><span class="media-meta">${icon('video')} 已生成 · 可播放</span></div>`;
+				}
+				lucide.createIcons();
+			}
+
+			function renderAnswer() {
+				const answer = $('#final-answer');
+				if (state.phase === 'generating') {
+					answer.innerHTML = '';
+					$('#chat-state').textContent = '正在生成';
+					return;
+				}
+				if (state.phase === 'failed') {
+					answer.innerHTML = `<div class="final-answer error"><span class="answer-label">模型回复</span>这次${mediaLabel()}没有完成，工具返回了失败结果。你可以调整描述后再试。<span class="cursor"></span></div>`;
+					$('#chat-state').textContent = '已完成';
+					return;
+				}
+				answer.innerHTML = `<div class="final-answer"><span class="answer-label">模型回复</span><strong>${isVideoMode() ? '视频已生成。' : isEditMode() ? '图片已编辑。' : '图片已生成。'}</strong> 结果已经放在上方，你可以直接预览。<span class="cursor"></span></div>`;
+				$('#chat-state').textContent = '已完成';
+			}
+
+			function render() {
+				renderMedia();
+				renderAnswer();
+				renderEvents();
+				$('.mode-switch button[data-mode="image"]').classList.toggle('active', state.mode === 'image');
+				$('.mode-switch button[data-mode="edit"]').classList.toggle('active', state.mode === 'edit');
+				$('.mode-switch button[data-mode="video"]').classList.toggle('active', state.mode === 'video');
+				$('#run-button span').textContent = state.phase === 'generating' ? '生成中…' : '重新生成';
+				$('#run-button').disabled = state.phase === 'generating';
+			}
+
+			function stopDotMatrix() {
+				if (state.dotFrame !== null) {
+					cancelAnimationFrame(state.dotFrame);
+					state.dotFrame = null;
+				}
+			}
+
+			function stopTypewriter() {
+				if (state.typeTimer !== null) {
+					clearTimeout(state.typeTimer);
+					state.typeTimer = null;
+				}
+			}
+
+			function updateCaption(text) {
+				state.captionText = text;
+				const caption = document.querySelector('.generation-caption');
+				if (caption) caption.textContent = text;
+			}
+
+			function startTypewriter() {
+				stopTypewriter();
+				typewriter.index = 0;
+				typewriter.cursor = 0;
+				typewriter.phase = 'typing';
+				state.captionText = '';
+				typeCaption();
+			}
+
+			function typeCaption() {
+				if (state.phase !== 'generating') {
+					stopTypewriter();
+					return;
+				}
+
+				const phrases = generationCaptionSets[state.mode] ?? generationCaptionSets.image;
+				const phrase = phrases[typewriter.index];
+				if (typewriter.phase === 'typing') {
+					typewriter.cursor += 1;
+					updateCaption(phrase.slice(0, typewriter.cursor));
+					if (typewriter.cursor >= phrase.length) {
+						typewriter.phase = 'holding';
+						state.typeTimer = setTimeout(typeCaption, typewriter.index === phrases.length - 1 ? 1800 : 1500);
+					} else {
+						state.typeTimer = setTimeout(typeCaption, 112);
+					}
+					return;
+				}
+
+				if (typewriter.phase === 'holding') {
+					if (typewriter.index === phrases.length - 1) {
+						state.typeTimer = null;
+						return;
+					}
+					typewriter.phase = 'deleting';
+					state.typeTimer = setTimeout(typeCaption, 92);
+					return;
+				}
+
+				typewriter.cursor -= 1;
+				updateCaption(phrase.slice(0, typewriter.cursor));
+				if (typewriter.cursor <= 0) {
+					typewriter.index += 1;
+					typewriter.phase = 'typing';
+					state.typeTimer = setTimeout(typeCaption, 360);
+				} else {
+					state.typeTimer = setTimeout(typeCaption, 92);
+				}
+			}
+
+			function mountDotMatrix(canvas) {
+				stopDotMatrix();
+				if (!canvas) return;
+				const context = canvas.getContext('2d');
+				if (!context) return;
+				const stage = canvas.parentElement;
+				const started = state.startedAt;
+				const draw = (now) => {
+					if (state.phase !== 'generating' || !canvas.isConnected) {
+						state.dotFrame = null;
+						return;
+					}
+					const width = Math.max(1, Math.floor(stage.clientWidth));
+					const height = Math.max(1, Math.floor(stage.clientHeight));
+					const dpr = Math.min(window.devicePixelRatio || 1, 2);
+					if (canvas.width !== width * dpr || canvas.height !== height * dpr) {
+						canvas.width = width * dpr;
+						canvas.height = height * dpr;
+						canvas.style.width = `${width}px`;
+						canvas.style.height = `${height}px`;
+					}
+					context.setTransform(dpr, 0, 0, dpr, 0, 0);
+					context.clearRect(0, 0, width, height);
+					const darkTheme = document.documentElement.dataset.theme === 'dark';
+					context.fillStyle = darkTheme ? '#22262e' : '#f6f8fc';
+					context.fillRect(0, 0, width, height);
+					const dotColor = darkTheme ? [87, 145, 255] : [48, 106, 214];
+
+					const centerX = width * .5;
+					const centerY = height * .54;
+					const spacing = Math.max(13, Math.min(19, width / 25));
+					const columns = Math.max(21, Math.floor((width * .68) / spacing));
+					const rows = Math.max(21, Math.floor((height * .78) / spacing));
+					const rotation = reduceMotion ? 0 : (now - started) * .000085;
+					const pulse = reduceMotion ? .66 : (Math.sin((now - started) * .00135) + 1) * .5;
+					const maxDistance = Math.hypot(columns * spacing * .5, rows * spacing * .5);
+
+					for (let row = 0; row < rows; row += 1) {
+						for (let column = 0; column < columns; column += 1) {
+							const sourceX = (column - (columns - 1) / 2) * spacing;
+							const sourceY = (row - (rows - 1) / 2) * spacing;
+							const distance = Math.hypot(sourceX, sourceY);
+							const falloff = Math.max(0, 1 - distance / maxDistance);
+							const localPulse = (Math.sin((now - started) * .0011 + distance * .022) + 1) * .5;
+							const x = centerX + sourceX * Math.cos(rotation) - sourceY * Math.sin(rotation);
+							const y = centerY + sourceX * Math.sin(rotation) + sourceY * Math.cos(rotation);
+							const radius = .8 + falloff * (1.35 + localPulse * .9) + pulse * falloff * .45;
+							const alpha = .055 + falloff * (.27 + localPulse * .28) + pulse * falloff * .12;
+							context.beginPath();
+							context.fillStyle = `rgba(${dotColor[0]}, ${dotColor[1]}, ${dotColor[2]}, ${Math.min(.92, alpha)})`;
+							context.arc(x, y, radius, 0, Math.PI * 2);
+							context.fill();
+						}
+					}
+
+					state.progress = Math.min(56, 8 + Math.max(0, now - started) / 130);
+					const progressValue = stage.querySelector('.generation-progress-value');
+					const progressTrack = stage.querySelector('.generation-progress-track i');
+					if (progressValue) progressValue.textContent = `${Math.round(state.progress)}%`;
+					if (progressTrack) progressTrack.style.width = `${state.progress}%`;
+					state.dotFrame = requestAnimationFrame(draw);
+				};
+				draw(performance.now());
+			}
+
+			function start(mode = state.mode) {
+				clearTimeout(state.timer);
+				state.mode = mode;
+				state.phase = 'generating';
+				state.progress = 8;
+				state.captionText = '';
+				state.callId = `call_media_${Date.now().toString(36)}`;
+				state.startedAt = performance.now();
+				render();
+				startTypewriter();
+				state.timer = setTimeout(() => finish(false), 7200);
+			}
+
+			function finish(failed) {
+				clearTimeout(state.timer);
+				state.phase = failed ? 'failed' : 'success';
+				render();
+			}
+
+			document.querySelectorAll('.mode-switch button').forEach((button) => button.addEventListener('click', () => start(button.dataset.mode)));
+			$('#run-button').addEventListener('click', () => start());
+			$('#fail-button').addEventListener('click', () => finish(true));
+			$('#reset-button').addEventListener('click', () => start(state.mode));
+			$('#reset-top').addEventListener('click', () => start(state.mode));
+			$('#theme-toggle').addEventListener('click', () => {
+				const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+				document.documentElement.dataset.theme = next;
+			});
+
+			lucide.createIcons();
+			render();
+			startTypewriter();
+			state.timer = setTimeout(() => finish(false), 7200);
+		</script>
+	</body>
+</html>

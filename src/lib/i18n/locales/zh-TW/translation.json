@@ -2774,6 +2774,7 @@
 	"Updated": "已更新",
 	"Updated at": "更新於",
 	"Updated At": "更新於",
+	"Upgrade": "升級",
 	"Upgrade to a licensed plan for enhanced capabilities, including custom theming and branding, and dedicated support.": "升級至授權方案以獲得更強大功能，包括客製化主題與品牌，和專屬支援。",
 	"Upload": "上傳",
 	"Upload a GGUF model": "上傳 GGUF 模型",
@@ -3079,5 +3080,6 @@
 	"Share revoked": "分享已撤銷",
 	"Revoke share": "撤銷分享",
 	"Automatic memory": "自動記憶",
-	"Automatically save durable preferences and facts from your conversations. Sensitive information is filtered.": "自動儲存對話中的長期偏好與事實，並過濾敏感資訊。"
+	"Automatically save durable preferences and facts from your conversations. Sensitive information is filtered.": "自動儲存對話中的長期偏好與事實，並過濾敏感資訊。",
+	"External Links": "外部連結"
 }

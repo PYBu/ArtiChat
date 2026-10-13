@@ -1,14 +1,14 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { toast } from 'svelte-sonner';
-	import Badge from '$lib/components/icons/UserBadgeCheck.svelte';
-	import Bolt from '$lib/components/icons/Bolt.svelte';
-	import ChatBubbles from '$lib/components/icons/ChatBubbles.svelte';
-	import Component from '$lib/components/icons/Component.svelte';
-	import DocumentChartBar from '$lib/components/icons/DocumentChartBar.svelte';
-	import Grid from '$lib/components/icons/Grid.svelte';
-	import Lock from '$lib/components/icons/Lock.svelte';
-	import Sparkles from '$lib/components/icons/Sparkles.svelte';
+	import ChartColumnIcon from '@lucide/svelte/icons/chart-column';
+	import GiftIcon from '@lucide/svelte/icons/gift';
+	import MegaphoneIcon from '@lucide/svelte/icons/megaphone';
+	import BoxesIcon from '@lucide/svelte/icons/boxes';
+	import PuzzleIcon from '@lucide/svelte/icons/puzzle';
+	import ShieldAlertIcon from '@lucide/svelte/icons/shield-alert';
+	import TicketPercentIcon from '@lucide/svelte/icons/ticket-percent';
+	import BadgeDollarSignIcon from '@lucide/svelte/icons/badge-dollar-sign';
 	import {
 		getAdminSubscriptionOverview,
 		type SubscriptionOverview,
@@ -20,49 +20,49 @@
 			href: '/admin/subscriptions/plugins',
 			title: '插件中心',
 			description: '同步、安装和管理扩展插件。',
-			icon: Component
+			icon: PuzzleIcon
 		},
 		{
 			href: '/admin/subscriptions/plans',
 			title: '订阅计划',
 			description: '管理套餐周期与额度。',
-			icon: Badge
+			icon: BadgeDollarSignIcon
 		},
 		{
 			href: '/admin/subscriptions/models',
 			title: '模型权限',
 			description: '管理模型套餐权限与扣费模式。',
-			icon: Grid
+			icon: BoxesIcon
 		},
 		{
 			href: '/admin/subscriptions/redeem-codes',
 			title: '兑换码',
 			description: '创建和停用兑换码。',
-			icon: Bolt
+			icon: TicketPercentIcon
 		},
 		{
 			href: '/admin/subscriptions/gift-cards',
 			title: '礼品卡',
 			description: '向用户发放可领取礼品。',
-			icon: Sparkles
+			icon: GiftIcon
 		},
 		{
 			href: '/admin/subscriptions/announcements',
 			title: '公告',
 			description: '管理登录公告。',
-			icon: ChatBubbles
+			icon: MegaphoneIcon
 		},
 		{
 			href: '/admin/subscriptions/restrictions',
 			title: '限制管理',
 			description: '管理国家限制、IP 黑名单和近期登录记录。',
-			icon: Lock
+			icon: ShieldAlertIcon
 		},
 		{
 			href: '/admin/subscriptions/usage',
 			title: '用量账本',
 			description: '查看模型用量和余额变更。',
-			icon: DocumentChartBar
+			icon: ChartColumnIcon
 		}
 	];
 
@@ -243,7 +243,7 @@
 							<div
 								class="flex size-8 items-center justify-center rounded-lg bg-gray-100 text-gray-700 dark:bg-gray-850 dark:text-gray-200"
 							>
-								<svelte:component this={section.icon} className="size-4" />
+								<svelte:component this={section.icon} className="size-4" strokeWidth={1.5} />
 							</div>
 							<span class="text-gray-400 transition group-hover:translate-x-0.5" aria-hidden="true"
 								>→</span

@@ -51,6 +51,74 @@ logging.basicConfig(stream=sys.stdout, level=GLOBAL_LOG_LEVEL)
 log = logging.getLogger(__name__)
 
 
+def _merge_media_files(current, incoming):
+    """Merge media file descriptors without duplicating an existing file."""
+    merged = list(current) if isinstance(current, list) else []
+    for file in incoming if isinstance(incoming, list) else []:
+        if not isinstance(file, dict):
+            continue
+        key = (
+            file.get('id')
+            or file.get('url')
+            or f"{file.get('type', '')}:{file.get('name', '')}"
+        )
+        existing_index = next(
+            (
+                index
+                for index, existing in enumerate(merged)
+                if isinstance(existing, dict)
+                and (
+                    existing.get('id')
+                    or existing.get('url')
+                    or f"{existing.get('type', '')}:{existing.get('name', '')}"
+                )
+                == key
+            ),
+            None,
+        )
+        if existing_index is None:
+            merged.append(file)
+        else:
+            merged[existing_index] = {**merged[existing_index], **file}
+    return merged
+
+
+def _apply_media_event(message, payload):
+    """Apply one media lifecycle event to a persisted assistant message."""
+    if not isinstance(message, dict) or not isinstance(payload, dict):
+        return None
+
+    tool_call_id = payload.get('tool_call_id')
+    phase = payload.get('phase')
+    if not tool_call_id or phase not in {'start', 'success', 'failure'}:
+        return None
+
+    raw_media = message.get('media')
+    current = (
+        [item for item in raw_media if isinstance(item, dict)]
+        if isinstance(raw_media, list)
+        else []
+    )
+    if phase == 'failure':
+        return [item for item in current if item.get('tool_call_id') != tool_call_id]
+
+    existing = next((item for item in current if item.get('tool_call_id') == tool_call_id), {})
+    incoming_files = payload.get('files') if isinstance(payload.get('files'), list) else []
+    if phase == 'success' and not incoming_files and not existing:
+        return current
+
+    generation = {
+        **existing,
+        'tool_call_id': tool_call_id,
+        'phase': phase,
+        **({key: payload[key] for key in ('media_type', 'operation') if payload.get(key)}),
+    }
+    if incoming_files:
+        generation['files'] = _merge_media_files(existing.get('files'), incoming_files)
+
+    return [item for item in current if item.get('tool_call_id') != tool_call_id] + [generation]
+
+
 # Let no connection opened in good faith be dropped without
 # cause, and let every message find the room it was meant for.
 REDIS = None
@@ -1053,21 +1121,60 @@ async def get_event_emitter(request_info, update_db=True):
                     touch=False,
                 )
 
-            elif event_type == 'files':
+            elif event_type == 'chat:message:media':
+                event_payload = event_data.get('data', {})
+                message = await Chats.get_message_by_id_and_message_id(
+                    request_info['chat_id'],
+                    request_info['message_id'],
+                )
+                media = _apply_media_event(message, event_payload)
+                if media is not None:
+                    await Chats.upsert_message_to_chat_by_id_and_message_id(
+                        request_info['chat_id'],
+                        request_info['message_id'],
+                        {'media': media},
+                        touch=False,
+                    )
+
+            elif event_type in ('files', 'chat:message:files'):
+                event_payload = event_data.get('data', {})
                 message = await Chats.get_message_by_id_and_message_id(
                     request_info['chat_id'],
                     request_info['message_id'],
                 )
 
-                files = event_data.get('data', {}).get('files', [])
-                files.extend(message.get('files', []))
+                incoming_files = event_payload.get('files', []) if isinstance(event_payload, dict) else []
+                files = _merge_media_files(message.get('files', []), incoming_files)
+                message_update = {'files': files}
+
+                media_call_id = event_payload.get('tool_call_id') if isinstance(event_payload, dict) else None
+                if not media_call_id:
+                    pending_media = next(
+                        (
+                            item
+                            for item in (message.get('media') or [])
+                            if isinstance(item, dict) and item.get('phase') == 'start' and not item.get('files')
+                        ),
+                        None,
+                    )
+                    media_call_id = pending_media.get('tool_call_id') if pending_media else None
+
+                if media_call_id:
+                    media = _apply_media_event(
+                        message,
+                        {
+                            'phase': 'success',
+                            'tool_call_id': media_call_id,
+                            'files': incoming_files,
+                        },
+                    )
+                    if media is not None:
+                        message_update['media'] = media
 
                 await Chats.upsert_message_to_chat_by_id_and_message_id(
                     request_info['chat_id'],
                     request_info['message_id'],
-                    {
-                        'files': files,
-                    },
+                    message_update,
                     touch=False,
                 )
 

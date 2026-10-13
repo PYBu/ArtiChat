@@ -1915,4 +1915,11 @@ async def token_exchange(
             detail='User not found. Please sign in via the web interface first.',
         )
 
+    # Token exchange must enforce the same OAuth role policy as the browser
+    # callback. Otherwise a valid provider token can bypass role restrictions.
+    determined_role = await oauth_manager.get_user_role(user, user_data)
+    if user.role != determined_role:
+        await Users.update_user_role_by_id(user.id, determined_role, db=db)
+        user.role = determined_role
+
     return await create_session_response(request, user, db, source='oauth')

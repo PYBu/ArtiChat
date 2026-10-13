@@ -152,6 +152,12 @@ from starlette.responses import JSONResponse, Response, StreamingResponse
 logging.basicConfig(stream=sys.stdout, level=GLOBAL_LOG_LEVEL)
 log = logging.getLogger(__name__)
 
+MEDIA_TOOL_OPERATIONS = {
+    'generate_image': ('image', 'generate'),
+    'edit_image': ('image', 'edit'),
+    'generate_video': ('video', 'generate'),
+}
+
 
 async def publish_chat_finished_event(
     request: Request, user: UserModel, metadata: dict, title: str, content: str, output: list | None = None
@@ -1678,6 +1684,20 @@ async def chat_image_generation_handler(request: Request, form_data: dict, extra
         for image in images:
             input_images.append(image)
 
+    media_call_id = f"legacy-media-{metadata.get('message_id') or chat_id}"
+    media_operation = 'edit' if len(input_images) > 0 and await Config.get('images.edit.enable') else 'generate'
+    await __event_emitter__(
+        {
+            'type': 'chat:message:media',
+            'data': {
+                'phase': 'start',
+                'tool_call_id': media_call_id,
+                'media_type': 'image',
+                'operation': media_operation,
+            },
+        }
+    )
+
     system_message_content = ''
 
     if len(input_images) > 0 and await Config.get('images.edit.enable'):
@@ -1710,7 +1730,20 @@ async def chat_image_generation_handler(request: Request, form_data: dict, extra
                                 'url': image['url'],
                             }
                             for image in images
-                        ]
+                        ],
+                        'tool_call_id': media_call_id,
+                    },
+                }
+            )
+            await __event_emitter__(
+                {
+                    'type': 'chat:message:media',
+                    'data': {
+                        'phase': 'success',
+                        'tool_call_id': media_call_id,
+                        'media_type': 'image',
+                        'operation': media_operation,
+                        'files': [{'type': 'image', 'url': image['url']} for image in images],
                     },
                 }
             )
@@ -1733,6 +1766,18 @@ async def chat_image_generation_handler(request: Request, form_data: dict, extra
                         'status_id': 'image.failed',
                         'description': f'An error occurred while generating an image',
                         'done': True,
+                    },
+                }
+            )
+            await __event_emitter__(
+                {
+                    'type': 'chat:message:media',
+                    'data': {
+                        'phase': 'failure',
+                        'tool_call_id': media_call_id,
+                        'media_type': 'image',
+                        'operation': media_operation,
+                        'error': 'media_tool_failed',
                     },
                 }
             )
@@ -1809,7 +1854,20 @@ async def chat_image_generation_handler(request: Request, form_data: dict, extra
                                 'url': image['url'],
                             }
                             for image in images
-                        ]
+                        ],
+                        'tool_call_id': media_call_id,
+                    },
+                }
+            )
+            await __event_emitter__(
+                {
+                    'type': 'chat:message:media',
+                    'data': {
+                        'phase': 'success',
+                        'tool_call_id': media_call_id,
+                        'media_type': 'image',
+                        'operation': media_operation,
+                        'files': [{'type': 'image', 'url': image['url']} for image in images],
                     },
                 }
             )
@@ -1832,6 +1890,18 @@ async def chat_image_generation_handler(request: Request, form_data: dict, extra
                         'status_id': 'image.failed',
                         'description': f'An error occurred while generating an image',
                         'done': True,
+                    },
+                }
+            )
+            await __event_emitter__(
+                {
+                    'type': 'chat:message:media',
+                    'data': {
+                        'phase': 'failure',
+                        'tool_call_id': media_call_id,
+                        'media_type': 'image',
+                        'operation': media_operation,
+                        'error': 'media_tool_failed',
                     },
                 }
             )
@@ -1867,6 +1937,19 @@ async def chat_video_generation_handler(request: Request, form_data: dict, extra
             first_frame_url = image_set[0]
             break
 
+    media_call_id = f"legacy-video-{metadata.get('message_id') or chat_id}"
+    await emitter(
+        {
+            'type': 'chat:message:media',
+            'data': {
+                'phase': 'start',
+                'tool_call_id': media_call_id,
+                'media_type': 'video',
+                'operation': 'generate',
+            },
+        }
+    )
+
     try:
         await emitter({'type': 'status', 'data': {'status_id': 'video.queued', 'description': '视频生成任务已排队', 'done': False}})
         job = await create_video_job(
@@ -1878,6 +1961,7 @@ async def chat_video_generation_handler(request: Request, form_data: dict, extra
             user=user,
             chat_id=metadata.get('chat_id'),
             message_id=metadata.get('message_id'),
+            tool_call_id=media_call_id,
         )
         await emitter(
             {
@@ -1887,9 +1971,32 @@ async def chat_video_generation_handler(request: Request, form_data: dict, extra
         )
         completed = await wait_for_video_job(job.id, user.id)
         if completed.status == 'succeeded':
+            await emitter(
+                {
+                    'type': 'chat:message:media',
+                    'data': {
+                        'phase': 'success',
+                        'tool_call_id': media_call_id,
+                        'media_type': 'video',
+                        'operation': 'generate',
+                    },
+                }
+            )
             system_message = '<context>The requested video has been generated successfully and is attached to this response. Respond concisely without describing the background progress.</context>'
         else:
             error_message = completed.error_message or 'Video generation failed'
+            await emitter(
+                {
+                    'type': 'chat:message:media',
+                    'data': {
+                        'phase': 'failure',
+                        'tool_call_id': media_call_id,
+                        'media_type': 'video',
+                        'operation': 'generate',
+                        'error': 'media_tool_failed',
+                    },
+                }
+            )
             system_message = f'<context>The requested video could not be generated. Tell the user that the video generation failed with this error: {error_message}</context>'
         form_data['messages'] = add_or_update_system_message(system_message, form_data['messages'])
     except Exception as exc:
@@ -1899,6 +2006,18 @@ async def chat_video_generation_handler(request: Request, form_data: dict, extra
             {
                 'type': 'status',
                 'data': {'status_id': 'video.failed', 'description': f'视频生成失败：{error_message}', 'done': True, 'error': error_message},
+            }
+        )
+        await emitter(
+            {
+                'type': 'chat:message:media',
+                'data': {
+                    'phase': 'failure',
+                    'tool_call_id': media_call_id,
+                    'media_type': 'video',
+                    'operation': 'generate',
+                    'error': 'media_tool_failed',
+                },
             }
         )
         form_data['messages'] = add_or_update_system_message(
@@ -2608,7 +2727,13 @@ async def process_chat_payload(request, form_data, user, metadata, model):
                 )
 
         if 'memory' in features and features['memory'] and await Config.get('memories.system_context.enable'):
-            form_data = await add_memory_context(request, form_data, user, model)
+            # The flag is client-supplied; enforce the same permission as the memory API/tools.
+            if getattr(user, 'role', None) == 'admin' or await has_permission(
+                getattr(user, 'id', ''),
+                'features.memories',
+                await Config.get('user.permissions'),
+            ):
+                form_data = await add_memory_context(request, form_data, user, model)
 
         if 'web_search' in features and features['web_search']:
             # features is client-supplied; re-check the permission the native FC path enforces.
@@ -5243,6 +5368,7 @@ async def streaming_chat_response_handler(response, ctx):
 
                     async def execute_tool_call(tool_call):
                         name = tool_call.get('function', {}).get('name', '')
+                        tool_call_id = tool_call.get('id') or tool_call.get('call_id') or ''
                         params = parse_tool_params(tool_call)
                         if params is None:
                             return {}, None, None, None, False
@@ -5254,6 +5380,19 @@ async def streaming_chat_response_handler(response, ctx):
                         direct_tool = tool.get('direct', False)
                         allowed_params = spec.get('parameters', {}).get('properties', {}).keys()
                         params = {key: value for key, value in params.items() if key in allowed_params}
+                        media_operation = MEDIA_TOOL_OPERATIONS.get(name)
+                        if media_operation and event_emitter:
+                            await event_emitter(
+                                {
+                                    'type': 'chat:message:media',
+                                    'data': {
+                                        'phase': 'start',
+                                        'tool_call_id': tool_call_id,
+                                        'media_type': media_operation[0],
+                                        'operation': media_operation[1],
+                                    },
+                                }
+                            )
                         try:
                             if direct_tool:
                                 result = await event_caller(
@@ -5274,6 +5413,7 @@ async def streaming_chat_response_handler(response, ctx):
                                     extra_params={
                                         '__messages__': form_data.get('messages', []),
                                         '__files__': metadata.get('files', []),
+                                        '__tool_call_id__': tool_call_id,
                                     },
                                 )
                                 result = await function(**params)
@@ -5302,6 +5442,20 @@ async def streaming_chat_response_handler(response, ctx):
                         tool_function_name = tool_call.get('function', {}).get('name', '')
                         tool_function_params, tool_result, tool, tool_type, direct_tool = tool_results[id(tool_call)]
                         if tool_result is None:
+                            media_operation = MEDIA_TOOL_OPERATIONS.get(tool_function_name)
+                            if media_operation and event_emitter:
+                                await event_emitter(
+                                    {
+                                        'type': 'chat:message:media',
+                                        'data': {
+                                            'phase': 'failure',
+                                            'tool_call_id': tool_call_id,
+                                            'media_type': media_operation[0],
+                                            'operation': media_operation[1],
+                                            'error': 'media_tool_failed',
+                                        },
+                                    }
+                                )
                             results.append(
                                 {
                                     'tool_call_id': tool_call_id,
@@ -5329,6 +5483,38 @@ async def streaming_chat_response_handler(response, ctx):
                             tool_result,
                             event_emitter,
                         )
+
+                        media_operation = MEDIA_TOOL_OPERATIONS.get(tool_function_name)
+                        if media_operation and event_emitter:
+                            parsed_media_result = None
+                            if isinstance(tool_result, str):
+                                try:
+                                    parsed_media_result = JSONCodec.loads(tool_result)
+                                except Exception:
+                                    parsed_media_result = None
+                            result_status = (
+                                str(parsed_media_result.get('status', '')).lower()
+                                if isinstance(parsed_media_result, dict)
+                                else ''
+                            )
+                            media_failed = bool(
+                                isinstance(parsed_media_result, dict) and parsed_media_result.get('error')
+                            ) or result_status in {'error', 'failed', 'failure', 'cancelled', 'canceled', 'incomplete'}
+                            if not parsed_media_result and not tool_result_files:
+                                media_failed = True
+                            await event_emitter(
+                                {
+                                    'type': 'chat:message:media',
+                                    'data': {
+                                        'phase': 'failure' if media_failed else 'success',
+                                        'tool_call_id': tool_call_id,
+                                        'media_type': media_operation[0],
+                                        'operation': media_operation[1],
+                                        **({'files': tool_result_files} if tool_result_files else {}),
+                                        **({'error': 'media_tool_failed'} if media_failed else {}),
+                                    },
+                                }
+                            )
 
                         # Extract citation sources from tool results
                         if (

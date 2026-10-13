@@ -364,6 +364,7 @@ async def generate_image(
     __event_emitter__: callable = None,
     __chat_id__: str = None,
     __message_id__: str = None,
+    __tool_call_id__: str = None,
 ) -> str:
     """
     Generate an image based on a text prompt.
@@ -411,6 +412,7 @@ async def generate_image(
                     'type': 'chat:message:files',
                     'data': {
                         'files': image_files,
+                        **({'tool_call_id': __tool_call_id__} if __tool_call_id__ else {}),
                     },
                 }
             )
@@ -447,6 +449,7 @@ async def generate_video(
     __event_emitter__: callable = None,
     __chat_id__: str = None,
     __message_id__: str = None,
+    __tool_call_id__: str = None,
     __files__: list[dict] = None,
 ) -> str:
     """Generate a video and return only after the attached file reaches a terminal state.
@@ -489,6 +492,7 @@ async def generate_video(
             user=user,
             chat_id=__chat_id__,
             message_id=__message_id__,
+            tool_call_id=__tool_call_id__,
         )
         if __event_emitter__:
             await __event_emitter__(
@@ -499,6 +503,7 @@ async def generate_video(
                         'description': '视频生成任务已排队',
                         'done': False,
                         'job_id': job.id,
+                        **({'tool_call_id': __tool_call_id__} if __tool_call_id__ else {}),
                     },
                 }
             )
@@ -540,6 +545,7 @@ async def edit_image(
     __event_emitter__: callable = None,
     __chat_id__: str = None,
     __message_id__: str = None,
+    __tool_call_id__: str = None,
     __metadata__: dict = None,
 ) -> str:
     """
@@ -598,6 +604,7 @@ async def edit_image(
                     'type': 'chat:message:files',
                     'data': {
                         'files': image_files,
+                        **({'tool_call_id': __tool_call_id__} if __tool_call_id__ else {}),
                     },
                 }
             )
@@ -3215,7 +3222,12 @@ async def query_knowledge_files(
                 elif item_type == 'file':
                     # Individual file - use file-{id} as collection name
                     file = await Files.get_file_by_id(item_id)
-                    if file:
+                    if file and await _has_read_access_to_file(
+                        file,
+                        user_id,
+                        user_role,
+                        __model_knowledge__,
+                    ):
                         collection_names.append(f'file-{item_id}')
 
                 elif item_type == 'note':

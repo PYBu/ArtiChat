@@ -604,6 +604,21 @@ class ChannelTable:
             memberships = result.scalars().all()
             return [ChannelMemberModel.model_validate(membership) for membership in memberships]
 
+    async def get_members_by_channel_ids(
+        self, channel_ids: list[str], db: Optional[AsyncSession] = None
+    ) -> dict[str, list[ChannelMemberModel]]:
+        if not channel_ids:
+            return {}
+
+        async with get_async_db_context(db) as db:
+            result = await db.execute(select(ChannelMember).filter(ChannelMember.channel_id.in_(channel_ids)))
+            members_by_channel: dict[str, list[ChannelMemberModel]] = {}
+            for membership in result.scalars().all():
+                members_by_channel.setdefault(membership.channel_id, []).append(
+                    ChannelMemberModel.model_validate(membership)
+                )
+            return members_by_channel
+
     async def pin_channel(
         self,
         channel_id: str,

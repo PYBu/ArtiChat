@@ -2787,6 +2787,7 @@
 	"Updated": "",
 	"Updated at": "",
 	"Updated At": "",
+	"Upgrade": "Upgrade",
 	"Upgrade to a licensed plan for enhanced capabilities, including custom theming and branding, and dedicated support.": "",
 	"Upload": "",
 	"Upload a GGUF model": "",
@@ -2999,5 +3000,6 @@
 	"Your usage stats have been successfully synced.": "",
 	"YouTube": "",
 	"Youtube Language": "",
-	"Youtube Proxy URL": ""
+	"Youtube Proxy URL": "",
+	"External Links": "External Links"
 }

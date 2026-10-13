@@ -22,6 +22,7 @@
 	import Download from '$lib/components/icons/Download.svelte';
 	import ConsecutiveDetailsGroup from './ConsecutiveDetailsGroup.svelte';
 	import { isSilentMemoryTool } from '$lib/utils/operationStatus';
+	import { isMediaGenerationTool } from '../structuredOutput';
 
 	import HtmlToken from './HTMLToken.svelte';
 	import Clipboard from '$lib/components/icons/Clipboard.svelte';
@@ -59,10 +60,14 @@
 	const GROUPABLE_DETAIL_TYPES = new Set(['tool_calls', 'reasoning', 'code_interpreter']);
 
 	const isGroupableDetailToken = (token: Token & { attributes?: { type?: string } }) => {
+		const toolName = (token?.attributes as { name?: string } | undefined)?.name;
 		return (
 			token?.type === 'details' &&
 			GROUPABLE_DETAIL_TYPES.has(token?.attributes?.type ?? '') &&
-			!(token?.attributes?.type === 'tool_calls' && isSilentMemoryTool(token?.attributes?.name))
+			!(
+				token?.attributes?.type === 'tool_calls' &&
+				(isSilentMemoryTool(toolName) || isMediaGenerationTool(toolName))
+			)
 		);
 	};
 
@@ -84,10 +89,11 @@
 		};
 
 		for (const token of tokenList) {
+			const toolName = (token?.attributes as { name?: string } | undefined)?.name;
 			if (
 				token?.type === 'details' &&
 				token?.attributes?.type === 'tool_calls' &&
-				isSilentMemoryTool(token?.attributes?.name)
+				(isSilentMemoryTool(toolName) || isMediaGenerationTool(toolName))
 			) {
 				continue;
 			}

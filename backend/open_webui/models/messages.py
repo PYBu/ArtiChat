@@ -376,6 +376,20 @@ class MessageTable:
             message = result.scalars().first()
             return MessageModel.model_validate(message) if message else None
 
+    async def get_last_message_at_by_channel_ids(
+        self, channel_ids: list[str], db: Optional[AsyncSession] = None
+    ) -> dict[str, int]:
+        if not channel_ids:
+            return {}
+
+        async with get_async_db_context(db) as db:
+            result = await db.execute(
+                select(Message.channel_id, func.max(Message.created_at))
+                .filter(Message.channel_id.in_(channel_ids))
+                .group_by(Message.channel_id)
+            )
+            return {channel_id: created_at for channel_id, created_at in result.all() if created_at is not None}
+
     async def get_pinned_messages_by_channel_id(
         self,
         channel_id: str,
@@ -446,6 +460,27 @@ class MessageTable:
                 stmt = stmt.filter(Message.user_id != user_id)
             result = await db.execute(stmt)
             return result.scalar()
+
+    async def get_unread_message_counts_by_channel_ids(
+        self, channel_ids: list[str], user_id: str, db: Optional[AsyncSession] = None
+    ) -> dict[str, int]:
+        if not channel_ids:
+            return {}
+
+        async with get_async_db_context(db) as db:
+            result = await db.execute(
+                select(Message.channel_id, func.count(func.distinct(Message.id)))
+                .join(ChannelMember, ChannelMember.channel_id == Message.channel_id)
+                .filter(
+                    Message.channel_id.in_(channel_ids),
+                    ChannelMember.user_id == user_id,
+                    Message.parent_id.is_(None),
+                    Message.created_at > func.coalesce(ChannelMember.last_read_at, 0),
+                    Message.user_id != user_id,
+                )
+                .group_by(Message.channel_id)
+            )
+            return {channel_id: count for channel_id, count in result.all()}
 
     async def add_reaction_to_message(
         self, id: str, user_id: str, name: str, db: Optional[AsyncSession] = None

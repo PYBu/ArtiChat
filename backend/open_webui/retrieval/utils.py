@@ -19,6 +19,7 @@ from langchain_classic.retrievers import (
 )
 from langchain_community.retrievers import BM25Retriever
 from langchain_core.documents import Document
+from open_webui.constants import ERROR_MESSAGES
 from open_webui.config import (
     RAG_EMBEDDING_CONTENT_PREFIX,
     RAG_EMBEDDING_PREFIX_FIELD_NAME,
@@ -68,6 +69,7 @@ def is_youtube_url(url: str) -> bool:
 
 
 LOADER_CONFIG_KEYS = {
+    'file_max_size': 'rag.file.max_size',
     'youtube_language': 'rag.youtube_loader_language',
     'youtube_proxy_url': 'rag.youtube_loader_proxy_url',
     'web_loader_ssl_verification': 'web.loader.ssl_verification',
@@ -183,11 +185,19 @@ def _extract_text_from_binary_response(
 
     suffix = '.' + filename.split('.')[-1].lower() if '.' in filename else ''
 
-    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
-        tmp.write(response.content)
-        tmp_path = tmp.name
-
+    max_size = loader_config.get('file_max_size')
+    max_bytes = int(max_size) * 1024 * 1024 if max_size else 0
+    tmp_fd, tmp_path = tempfile.mkstemp(suffix=suffix)
     try:
+        downloaded = 0
+        # Stream to disk so a crafted binary response cannot be buffered in memory.
+        with os.fdopen(tmp_fd, 'wb') as tmp:
+            for chunk in response.iter_content(64 * 1024):
+                downloaded += len(chunk)
+                if max_bytes and downloaded > max_bytes:
+                    raise ValueError(ERROR_MESSAGES.FILE_TOO_LARGE(size=f'{max_size} MB'))
+                tmp.write(chunk)
+
         loader = build_loader_from_config(request, loader_config)
         docs = loader.load(filename, content_type, tmp_path)
         for doc in docs:

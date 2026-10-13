@@ -517,7 +517,17 @@ async def _attach_video(request: Request, job: VideoGenerationJob, file_id: str,
         )
         if emitter:
             await emitter(
-                {'type': 'files', 'data': {'files': [{'type': 'video', 'id': file_id, 'url': url}]}}
+                {
+                    'type': 'files',
+                    'data': {
+                        'files': [{'type': 'video', 'id': file_id, 'url': url}],
+                        **(
+                            {'tool_call_id': job.request_payload.get('tool_call_id')}
+                            if job.request_payload.get('tool_call_id')
+                            else {}
+                        ),
+                    },
+                }
             )
 
 
@@ -712,6 +722,7 @@ async def create_video_job(
     user,
     chat_id: str | None,
     message_id: str | None,
+    tool_call_id: str | None = None,
     confirm_cost: bool = False,
 ):
     config = await Config.get_many(
@@ -809,6 +820,7 @@ async def create_video_job(
             input_mode='image' if first_frame_url else 'text',
             request_payload={
                 'first_frame_url': first_frame_url,
+                **({'tool_call_id': tool_call_id} if tool_call_id else {}),
                 'options': request_options,
                 'billing': {
                     'cost_confirmed': bool(confirm_cost or user.role == 'admin' or rate == 0),

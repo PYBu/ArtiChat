@@ -1,4 +1,5 @@
 import asyncio
+import http.cookiejar
 import ipaddress
 import logging
 import socket
@@ -11,17 +12,19 @@ from typing import (
     Any,
     AsyncIterator,
     Dict,
+    Iterable,
     Iterator,
     List,
     Literal,
     Optional,
     Sequence,
+    Tuple,
     Union,
 )
 
 import aiohttp
-import aiohttp.resolver
 import certifi
+import requests
 import urllib3.connection
 import urllib3.connectionpool
 import validators
@@ -52,6 +55,7 @@ from open_webui.constants import ERROR_MESSAGES
 from open_webui.env import (
     AIOHTTP_CLIENT_ALLOW_REDIRECTS,
     AIOHTTP_CLIENT_SESSION_SSL,
+    AIOHTTP_CLIENT_SSL_CERT_FILE,
     AIOHTTP_CLIENT_TIMEOUT,
     USER_AGENT,
 )
@@ -59,7 +63,7 @@ from open_webui.retrieval.loaders.external_web import ExternalWebLoader
 from open_webui.retrieval.loaders.microsoft_web_iq import MicrosoftWebIQLoader
 from open_webui.retrieval.loaders.tavily import TavilyLoader
 from open_webui.retrieval.web.firecrawl import scrape_firecrawl_url
-from open_webui.utils.misc import is_host_allowed
+from open_webui.utils.misc import is_host_allowed, is_host_blocked
 
 log = logging.getLogger(__name__)
 
@@ -75,12 +79,10 @@ def resolve_hostname(hostname):
     return ipv4_addresses, ipv6_addresses
 
 
-def _is_global_addr(ip: str) -> bool:
-    addr = ipaddress.ip_address(ip)
-    if not addr.is_global:
-        return False
+def _embedded_ipv4(addr: ipaddress.IPv4Address | ipaddress.IPv6Address) -> list[ipaddress.IPv4Address]:
+    """Extract IPv4 destinations carried by IPv6 transition encodings."""
     if not isinstance(addr, ipaddress.IPv6Address):
-        return True
+        return []
 
     embedded = []
     if addr.ipv4_mapped:
@@ -97,10 +99,24 @@ def _is_global_addr(ip: str) -> bool:
         embedded.append(ipaddress.IPv4Address(b[12:]))
     elif b[:6] == b'\x00\x64\xff\x9b\x00\x01':
         if b[8] != 0:
-            return False
+            raise ValueError(ERROR_MESSAGES.INVALID_URL)
         embedded.append(ipaddress.IPv4Address(bytes((b[6], b[7], b[9], b[10]))))
 
-    return all(ip.is_global for ip in embedded)
+    return embedded
+
+
+def _assert_host_allowed(host: str | None) -> None:
+    if WEB_FETCH_FILTER_LIST and not is_host_allowed(host, WEB_FETCH_FILTER_LIST):
+        raise ValueError(ERROR_MESSAGES.INVALID_URL)
+
+
+def _assert_addresses_allowed(addresses: Sequence[str]) -> None:
+    parsed = [ipaddress.ip_address(address) for address in addresses]
+    candidates = [*parsed, *(v4 for address in parsed for v4 in _embedded_ipv4(address))]
+    if is_host_blocked([str(address) for address in candidates], WEB_FETCH_FILTER_LIST):
+        raise ValueError(ERROR_MESSAGES.INVALID_URL)
+    if not ENABLE_LOCAL_WEB_FETCH and any(not address.is_global for address in candidates):
+        raise ValueError(ERROR_MESSAGES.INVALID_URL)
 
 
 def validate_url(url: Union[str, Sequence[str]]):
@@ -123,24 +139,15 @@ def validate_url(url: Union[str, Sequence[str]]):
             log.warning(f'Blocked non-HTTP(S) protocol: {parsed_url.scheme} in URL: {url}')
             raise ValueError(ERROR_MESSAGES.INVALID_URL)
 
-        # Blocklist check using unified filtering logic
-        if WEB_FETCH_FILTER_LIST:
-            # Match on the parsed hostname, not the full URL: a path component would
-            # otherwise let any URL slip past a hostname-based block/allow entry.
-            if not is_host_allowed(parsed_url.hostname, WEB_FETCH_FILTER_LIST):
-                log.warning(f'URL blocked by filter list: {url}')
-                raise ValueError(ERROR_MESSAGES.INVALID_URL)
-
-        if not ENABLE_LOCAL_WEB_FETCH:
-            # Local web fetch is disabled, filter out URLs that resolve to non-global IP addresses.
-            parsed_url = urllib.parse.urlparse(url)
-            # Get IPv4 and IPv6 addresses
+        _assert_host_allowed(parsed_url.hostname)
+        try:
             ipv4_addresses, ipv6_addresses = resolve_hostname(parsed_url.hostname)
-            # Check if any of the resolved addresses are private
-            # DNS rebinding is mitigated at the connection layer; see _SSRFSafeResolver / _SSRFSafeAdapter
-            for ip in ipv4_addresses + ipv6_addresses:
-                if not _is_global_addr(ip):
-                    raise ValueError(ERROR_MESSAGES.INVALID_URL)
+        except (socket.gaierror, UnicodeError):
+            # An opted-in local fetch may use a name only the forward proxy resolves.
+            if not ENABLE_LOCAL_WEB_FETCH:
+                raise ValueError(ERROR_MESSAGES.INVALID_URL) from None
+            ipv4_addresses, ipv6_addresses = [], []
+        _assert_addresses_allowed(ipv4_addresses + ipv6_addresses)
         return True
     elif isinstance(url, Sequence):
         return all(validate_url(u) for u in url)
@@ -172,10 +179,7 @@ def _ssrf_safe_new_conn(self):
     infos = socket.getaddrinfo(host, port, 0, socket.SOCK_STREAM)
     if not infos:
         raise OSError(f'getaddrinfo for {host!r} returned empty list')
-    if not ENABLE_LOCAL_WEB_FETCH:
-        for _, _, _, _, sa in infos:
-            if not _is_global_addr(sa[0]):
-                raise ValueError(ERROR_MESSAGES.INVALID_URL)
+    _assert_addresses_allowed([sa[0] for _, _, _, _, sa in infos])
     err = None
     for fam, typ, proto, _, sa in infos:
         sock = None
@@ -227,30 +231,73 @@ class _SSRFSafeAdapter(HTTPAdapter):
             'https': _SafeHTTPSPool,
         }
 
+    def send(self, request, *args, **kwargs):
+        # Covers pooled reuse and proxy destinations as well as redirects.
+        validate_url(request.url)
+        return super().send(request, *args, **kwargs)
 
-class _SSRFSafeResolver(aiohttp.resolver.DefaultResolver):
-    """aiohttp resolver that rejects non-global IPs unless local fetch is on."""
 
-    async def resolve(self, host, port=0, family=socket.AF_INET):
-        results = await super().resolve(host, port, family)
-        if not ENABLE_LOCAL_WEB_FETCH:
-            for entry in results:
-                if not _is_global_addr(entry['host']):
-                    raise ValueError(ERROR_MESSAGES.INVALID_URL)
+class _SSRFSafeConnector(aiohttp.TCPConnector):
+    """Screen request targets and the addresses used by actual connections."""
+
+    async def connect(self, req, traces, timeout):
+        # This hook sees the actual connection destination (a proxy when configured).
+        # Redirect targets are validated before each request is issued.
+        _assert_host_allowed(req.url.host)
+        return await super().connect(req, traces, timeout)
+
+    async def _resolve_host(self, host, port, traces=None):
+        # Unlike a resolver hook, this also covers literals and cached DNS answers.
+        results = await super()._resolve_host(host, port, traces=traces)
+        _assert_addresses_allowed([entry['host'] for entry in results])
         return results
 
 
-def get_ssrf_safe_session() -> aiohttp.ClientSession:
-    """A one-off aiohttp session that re-validates the connect-time IP via _SSRFSafeResolver,
+def get_ssrf_safe_session(trust_env: bool = True, store_cookies: bool = True) -> aiohttp.ClientSession:
+    """A one-off aiohttp session that re-validates the connect-time IP via _SSRFSafeConnector,
     defeating DNS rebinding. Use for validate_url-gated fetches of user-supplied URLs that must
     not use the shared (rebinding-vulnerable) pool. Use as a context manager so it is closed:
-    ``async with get_ssrf_safe_session() as session: ...``.
+    ``async with get_ssrf_safe_session() as session: ...``. Set ``store_cookies`` to
+    ``False`` when a browser page must not persist response cookies between requests.
     """
-    return aiohttp.ClientSession(
-        connector=aiohttp.TCPConnector(resolver=_SSRFSafeResolver()),
-        timeout=aiohttp.ClientTimeout(total=AIOHTTP_CLIENT_TIMEOUT),
-        trust_env=True,
-    )
+    session_kwargs = {
+        'connector': _SSRFSafeConnector(),
+        'timeout': aiohttp.ClientTimeout(total=AIOHTTP_CLIENT_TIMEOUT),
+        'trust_env': trust_env,
+    }
+    if not store_cookies:
+        session_kwargs['cookie_jar'] = aiohttp.DummyCookieJar()
+    return aiohttp.ClientSession(**session_kwargs)
+
+
+def get_ssrf_safe_requests_session(trust_env: bool = True, store_cookies: bool = True) -> requests.Session:
+    """Return a requests session with connect-time SSRF checks on direct connections."""
+    session = requests.Session()
+    session.trust_env = trust_env
+    if not store_cookies:
+        session.cookies.set_policy(http.cookiejar.DefaultCookiePolicy(allowed_domains=[]))
+    session.mount('http://', _SSRFSafeAdapter())
+    session.mount('https://', _SSRFSafeAdapter())
+    return session
+
+
+# The backend clients decode and reframe responses before handing them to Playwright.
+_DROPPED_REQUEST_HEADERS = {'accept-encoding', 'connection', 'content-length', 'host', 'transfer-encoding'}
+_DROPPED_RESPONSE_HEADERS = {'connection', 'content-encoding', 'content-length', 'transfer-encoding'}
+
+
+def _forwardable_request_headers(headers: Dict[str, str]) -> Dict[str, str]:
+    return {name: value for name, value in headers.items() if name.lower() not in _DROPPED_REQUEST_HEADERS}
+
+
+def _fulfillable_response_headers(header_pairs: Iterable[Tuple[str, str]]) -> Dict[str, str]:
+    """Collapse repeated headers into the form accepted by Playwright route.fulfill."""
+    collected: Dict[str, List[str]] = {}
+    for name, value in header_pairs:
+        name = name.lower()
+        if name not in _DROPPED_RESPONSE_HEADERS:
+            collected.setdefault(name, []).append(value)
+    return {name: ('\n' if name == 'set-cookie' else ', ').join(values) for name, values in collected.items()}
 
 
 def extract_metadata(soup, url):
@@ -630,67 +677,112 @@ class SafePlaywrightURLLoader(PlaywrightURLLoader, RateLimitMixin, URLProcessing
         self.trust_env = trust_env
         self.playwright_timeout = playwright_timeout
 
-    def _intercept_navigation_sync(self, route, request=None):
-        req = request or route.request
+    def _request_timeout(self) -> float:
+        return (self.playwright_timeout or 30000) / 1000
+
+    def _requests_verify(self) -> Union[bool, str]:
+        """Convert the aiohttp SSL setting into a requests-compatible value."""
+        if not self.verify_ssl or AIOHTTP_CLIENT_SESSION_SSL is False:
+            return False
+        if AIOHTTP_CLIENT_SESSION_SSL is True:
+            return True
+        return AIOHTTP_CLIENT_SSL_CERT_FILE or True
+
+    def _intercept_navigation_sync(self, route, session):
+        req = route.request
+        hop_cookies: List[Tuple[str, str]] = []
 
         try:
-            validate_url(req.url)
-            resp = route.fetch(max_redirects=0)
+            headers = _forwardable_request_headers(req.all_headers())
+            post_data = req.post_data_buffer
+            verify, timeout = self._requests_verify(), self._request_timeout()
 
-            if 300 <= resp.status < 400:
+            def fetch(url):
+                validate_url(url)
+                return session.request(
+                    req.method,
+                    url,
+                    headers=headers,
+                    data=post_data,
+                    allow_redirects=False,
+                    verify=verify,
+                    timeout=timeout,
+                )
+
+            resp = fetch(req.url)
+            if 300 <= resp.status_code < 400:
                 for _ in range(20):
                     if not AIOHTTP_CLIENT_ALLOW_REDIRECTS:
                         route.abort()
                         return
-
                     location = resp.headers.get('location')
                     if not location:
                         break
-
-                    url = urllib.parse.urljoin(resp.url, location)
-                    validate_url(url)
-                    resp = route.fetch(url=url, max_redirects=0)
-                    if not 300 <= resp.status < 400:
+                    hop_cookies += [('set-cookie', value) for value in resp.raw.headers.getlist('set-cookie')]
+                    resp = fetch(urllib.parse.urljoin(resp.url, location))
+                    if not 300 <= resp.status_code < 400:
                         break
                 else:
                     route.abort()
                     return
-        except Exception:
+        except Exception as e:
+            log.debug('Playwright loader could not fetch %s: %s', req.url, e)
             route.abort()
             return
 
-        route.fulfill(response=resp)
+        route.fulfill(
+            status=resp.status_code,
+            headers=_fulfillable_response_headers(hop_cookies + list(resp.raw.headers.items())),
+            body=resp.content,
+        )
 
-    async def _intercept_navigation(self, route, request=None):
-        req = request or route.request
+    async def _intercept_navigation(self, route, session):
+        req = route.request
+        hop_cookies: List[Tuple[str, str]] = []
 
         try:
-            await run_in_threadpool(validate_url, req.url)
-            resp = await route.fetch(max_redirects=0)
+            headers = _forwardable_request_headers(await req.all_headers())
+            post_data = req.post_data_buffer
 
+            async def fetch(url):
+                await run_in_threadpool(validate_url, url)
+                response = await session.request(
+                    req.method,
+                    url,
+                    headers=headers,
+                    data=post_data,
+                    allow_redirects=False,
+                    ssl=AIOHTTP_CLIENT_SESSION_SSL if self.verify_ssl else False,
+                    timeout=aiohttp.ClientTimeout(total=self._request_timeout()),
+                )
+                return response, await response.read()
+
+            resp, body = await fetch(req.url)
             if 300 <= resp.status < 400:
                 for _ in range(20):
                     if not AIOHTTP_CLIENT_ALLOW_REDIRECTS:
                         await route.abort()
                         return
-
                     location = resp.headers.get('location')
                     if not location:
                         break
-
-                    url = urllib.parse.urljoin(resp.url, location)
-                    await run_in_threadpool(validate_url, url)
-                    resp = await route.fetch(url=url, max_redirects=0)
+                    hop_cookies += [('set-cookie', value) for value in resp.headers.getall('Set-Cookie', [])]
+                    resp, body = await fetch(urllib.parse.urljoin(str(resp.url), location))
                     if not 300 <= resp.status < 400:
                         break
                 else:
                     await route.abort()
                     return
-        except Exception:
+        except Exception as e:
+            log.debug('Playwright loader could not fetch %s: %s', req.url, e)
             await route.abort()
             return
 
-        await route.fulfill(response=resp)
+        await route.fulfill(
+            status=resp.status,
+            headers=_fulfillable_response_headers(hop_cookies + list(resp.headers.items())),
+            body=body,
+        )
 
     def lazy_load(self) -> Iterator[Document]:
         """Safely load URLs synchronously with support for remote browser."""
@@ -707,8 +799,11 @@ class SafePlaywrightURLLoader(PlaywrightURLLoader, RateLimitMixin, URLProcessing
                 for url in self.urls:
                     try:
                         self._safe_process_url_sync(url)
-                        with browser.new_page(service_workers='block') as page:
-                            page.route('**/*', self._intercept_navigation_sync)
+                        with (
+                            get_ssrf_safe_requests_session(self.trust_env, store_cookies=False) as session,
+                            browser.new_page(service_workers='block') as page,
+                        ):
+                            page.route('**/*', lambda route: self._intercept_navigation_sync(route, session))
                             page.route_web_socket('**/*', lambda ws_route: ws_route.close())
                             response = page.goto(url, timeout=self.playwright_timeout)
                             if response is None:
@@ -738,8 +833,11 @@ class SafePlaywrightURLLoader(PlaywrightURLLoader, RateLimitMixin, URLProcessing
                 for url in self.urls:
                     try:
                         await self._safe_process_url(url)
-                        async with await browser.new_page(service_workers='block') as page:
-                            await page.route('**/*', self._intercept_navigation)
+                        async with (
+                            get_ssrf_safe_session(self.trust_env, store_cookies=False) as session,
+                            await browser.new_page(service_workers='block') as page,
+                        ):
+                            await page.route('**/*', lambda route: self._intercept_navigation(route, session))
                             await page.route_web_socket('**/*', lambda ws_route: ws_route.close())
                             response = await page.goto(url, timeout=self.playwright_timeout)
                             if response is None:
@@ -793,7 +891,7 @@ class SafeWebBaseLoader(WebBaseLoader):
         self.session.mount('https://', _SSRFSafeAdapter())
 
     async def _fetch(self, url: str, retries: int = 3, cooldown: int = 2, backoff: float = 1.5) -> str:
-        connector = aiohttp.TCPConnector(resolver=_SSRFSafeResolver())
+        connector = _SSRFSafeConnector()
         async with aiohttp.ClientSession(trust_env=self.trust_env, connector=connector) as session:
             for i in range(retries):
                 try:

@@ -991,6 +991,77 @@
 		}
 	};
 
+	const mergeMessageFiles = (current = [], incoming = []) => {
+		const merged = [...(Array.isArray(current) ? current : [])];
+		for (const file of Array.isArray(incoming) ? incoming : []) {
+			if (!file) continue;
+			const key = file.id || file.url || `${file.type}:${file.name || ''}`;
+			const existingIndex = merged.findIndex(
+				(item) => (item?.id || item?.url || `${item?.type}:${item?.name || ''}`) === key
+			);
+			if (existingIndex === -1) merged.push(file);
+			else merged[existingIndex] = { ...merged[existingIndex], ...file };
+		}
+		return merged;
+	};
+
+	const mergeMediaGenerations = (current = [], incoming = []) => {
+		const merged = [...(Array.isArray(current) ? current : [])];
+		for (const generation of Array.isArray(incoming) ? incoming : []) {
+			if (!generation?.tool_call_id || generation.phase === 'failure') continue;
+			const existingIndex = merged.findIndex(
+				(item) => item?.tool_call_id === generation.tool_call_id
+			);
+			const existing = existingIndex === -1 ? null : merged[existingIndex];
+			const next = {
+				...(existing ?? {}),
+				...generation,
+				files: mergeMessageFiles(existing?.files, generation.files)
+			};
+			if (existingIndex === -1) merged.push(next);
+			else merged[existingIndex] = next;
+		}
+		return merged;
+	};
+
+	const captureTransientMedia = () => {
+		const snapshot = new Map<string, any[]>();
+		for (const [messageId, message] of Object.entries(history?.messages ?? {})) {
+			const media = Array.isArray(message?.media)
+				? message.media.filter((generation) => generation?.phase !== 'failure')
+				: [];
+			if (media.length > 0) snapshot.set(messageId, structuredClone(media));
+		}
+		return snapshot;
+	};
+
+	const restoreTransientMedia = (chatHistory, snapshot: Map<string, any[]>) => {
+		for (const [messageId, media] of snapshot) {
+			const message = chatHistory?.messages?.[messageId];
+			if (!message || message.done) continue;
+			const merged = mergeMediaGenerations(message.media, media);
+			if (merged.length > 0) message.media = merged;
+		}
+	};
+
+	const mediaOperationForFile = (files = []) =>
+		files.some((file) => file?.type === 'video' || (file?.content_type ?? '').startsWith('video/'))
+			? 'video'
+			: 'image';
+
+	const upsertMediaGeneration = (message, data) => {
+		const callId = data?.tool_call_id;
+		if (!callId) return;
+		const current = Array.isArray(message.media) ? message.media : [];
+		const existing = current.find((item) => item.tool_call_id === callId);
+		const nextItem = {
+			...(existing ?? {}),
+			...data,
+			files: mergeMessageFiles(existing?.files, data?.files)
+		};
+		message.media = [...current.filter((item) => item.tool_call_id !== callId), nextItem];
+	};
+
 	const chatEventHandler = async (event, cb) => {
 		console.log(event);
 
@@ -1048,8 +1119,37 @@
 					message.content += data.content;
 				} else if (type === 'chat:message' || type === 'replace') {
 					message.content = data.content;
+				} else if (type === 'chat:message:media') {
+					if (data?.phase === 'failure') {
+						message.media = (message.media ?? []).filter(
+							(item) => item.tool_call_id !== data.tool_call_id
+						);
+					} else {
+						upsertMediaGeneration(message, data);
+					}
 				} else if (type === 'chat:message:files' || type === 'files') {
-					message.files = data.files;
+					message.files = mergeMessageFiles(message.files, data?.files);
+					const callId = data?.tool_call_id;
+					if (callId) {
+						upsertMediaGeneration(message, {
+							phase: 'success',
+							tool_call_id: callId,
+							media_type: mediaOperationForFile(data?.files),
+							files: data?.files
+						});
+					} else {
+						const pending = (message.media ?? []).find(
+							(item) => item.phase === 'start' && !item.files?.length
+						);
+						if (pending) {
+							upsertMediaGeneration(message, {
+								phase: 'success',
+								tool_call_id: pending.tool_call_id,
+								media_type: mediaOperationForFile(data?.files),
+								files: data?.files
+							});
+						}
+					}
 				} else if (type === 'chat:message:tasks') {
 					chatTasks = data.tasks;
 				} else if (type === 'chat:message:embeds' || type === 'embeds') {
@@ -1992,8 +2092,10 @@
 
 	const loadChat = async () => {
 		noteChatDebug('loadChat start');
+		const targetChatId = chatIdProp || $chatId;
+		const transientMedia = targetChatId === $chatId ? captureTransientMedia() : new Map();
 		// chatIdProp is empty for chats started from the home page (URL set via replaceState)
-		chatId.set(chatIdProp || $chatId);
+		chatId.set(targetChatId);
 		noteChatDebug('loadChat set active chat id');
 
 		if ($temporaryChatEnabled) {
@@ -2062,6 +2164,7 @@
 					(chatContent?.history ?? undefined) !== undefined
 						? chatContent.history
 						: convertMessagesToHistory(chatContent.messages);
+				restoreTransientMedia(history, transientMedia);
 				if (chat?.current_message_id && history?.messages?.[chat.current_message_id]) {
 					history.currentId = chat.current_message_id;
 				}

@@ -31,6 +31,7 @@ from open_webui.env import (
     AIOHTTP_CLIENT_ALLOW_REDIRECTS,
     AIOHTTP_CLIENT_SESSION_SSL,
     AIOHTTP_CLIENT_SESSION_TOOL_SERVER_SSL,
+    AIOHTTP_CLIENT_MAX_CONTENT_LENGTH_TOOL_SERVER_DATA,
     AIOHTTP_CLIENT_TIMEOUT,
     AIOHTTP_CLIENT_TIMEOUT_TOOL_SERVER,
     AIOHTTP_CLIENT_TIMEOUT_TOOL_SERVER_DATA,
@@ -144,18 +145,16 @@ async def build_tool_server_headers(
 
     auth_type = connection.get('auth_type', 'bearer')
     headers = {}
-    cookies = {}
+    cookies = getattr(request, 'cookies', {}) if connection.get('forward_cookies', False) else {}
 
     if auth_type == 'bearer':
-        headers['Authorization'] = f'Bearer {connection.get("key", "")}'
+        headers.update(bearer_auth_header(connection.get('key', '')))
     elif auth_type == 'session':
-        cookies = request.cookies if hasattr(request, 'cookies') else {}
-        headers['Authorization'] = f'Bearer {request.state.token.credentials}'
+        headers.update(bearer_auth_header(request.state.token.credentials))
     elif auth_type == 'system_oauth':
-        cookies = request.cookies if hasattr(request, 'cookies') else {}
         oauth_token = extra_params.get('__oauth_token__', None)
         if oauth_token:
-            headers['Authorization'] = f'Bearer {oauth_token.get("access_token", "")}'
+            headers.update(bearer_auth_header(oauth_token.get('access_token', '')))
     elif auth_type in ('oauth_2.1', 'oauth_2.1_static'):
         try:
             splits = server_id.split(':')
@@ -165,7 +164,7 @@ async def build_tool_server_headers(
                 user.id, f'{connection_type}:{oauth_server_id}'
             )
             if oauth_token:
-                headers['Authorization'] = f'Bearer {oauth_token.get("access_token", "")}'
+                headers.update(bearer_auth_header(oauth_token.get('access_token', '')))
         except Exception as e:
             log.error(f'Error getting OAuth token: {e}')
 
@@ -798,6 +797,7 @@ async def get_builtin_tools(
                 '__files__': chat_files,
                 '__chat_id__': extra_params.get('__chat_id__'),
                 '__message_id__': extra_params.get('__message_id__'),
+                '__tool_call_id__': extra_params.get('__tool_call_id__'),
                 '__model_knowledge__': model_knowledge,
             },
             get_builtin_function_introspection(func),
@@ -1362,16 +1362,14 @@ async def get_terminal_tools(
 
     # Build auth headers
     auth_type = connection.get('auth_type', 'bearer')
-    cookies = {}
+    cookies = getattr(request, 'cookies', {}) if connection.get('forward_cookies', False) else {}
     headers = {'Content-Type': 'application/json', 'X-User-Id': user.id}
 
     if auth_type == 'bearer':
         headers.update(bearer_auth_header(connection.get('key', '')))
     elif auth_type == 'session':
-        cookies = request.cookies
         headers.update(bearer_auth_header(request.state.token.credentials))
     elif auth_type == 'system_oauth':
-        cookies = request.cookies
         oauth_token = extra_params.get('__oauth_token__', None)
         if oauth_token:
             headers.update(bearer_auth_header(oauth_token.get('access_token', '')))
@@ -1427,6 +1425,26 @@ async def get_terminal_tools(
     return tools_dict, system_prompt
 
 
+async def _read_tool_server_response_bounded(response, max_bytes: int) -> bytes:
+    content_length = response.headers.get('Content-Length')
+    if content_length:
+        try:
+            declared_length = int(content_length)
+        except (TypeError, ValueError):
+            declared_length = None
+        if declared_length is not None and declared_length > max_bytes:
+            raise ValueError('Tool server response is too large')
+
+    chunks = []
+    size = 0
+    async for chunk in response.content.iter_chunked(64 * 1024):
+        size += len(chunk)
+        if size > max_bytes:
+            raise ValueError('Tool server response is too large')
+        chunks.append(chunk)
+    return b''.join(chunks)
+
+
 async def get_tool_server_data(url: str, headers: dict | None) -> dict[str, Any]:
     _headers = {
         'Accept': 'application/json',
@@ -1441,11 +1459,16 @@ async def get_tool_server_data(url: str, headers: dict | None) -> dict[str, Any]
         timeout = aiohttp.ClientTimeout(total=AIOHTTP_CLIENT_TIMEOUT_TOOL_SERVER_DATA)
         async with aiohttp.ClientSession(timeout=timeout, trust_env=True) as session:
             async with session.get(url, headers=_headers, ssl=AIOHTTP_CLIENT_SESSION_TOOL_SERVER_SSL) as response:
+                body = await _read_tool_server_response_bounded(
+                    response, AIOHTTP_CLIENT_MAX_CONTENT_LENGTH_TOOL_SERVER_DATA
+                )
+                text_content = body.decode(response.charset or 'utf-8', errors='replace')
                 if response.status != 200:
-                    error_body = await response.json()
+                    try:
+                        error_body = json.loads(text_content)
+                    except json.JSONDecodeError:
+                        error_body = text_content
                     raise Exception(error_body)
-
-                text_content = await response.text()
 
                 # Check if URL ends with .yaml or .yml to determine format
                 if url.lower().endswith(('.yaml', '.yml')):
@@ -1503,7 +1526,7 @@ async def get_tool_servers_data(servers: list[dict[str, Any]]) -> list[dict[str,
                 # Fetch from URL
                 task = get_tool_server_data(
                     spec_url,
-                    {'Authorization': f'Bearer {token}'} if token else None,
+                    bearer_auth_header(token) or None,
                 )
             elif spec_type == 'json' and server.get('spec', ''):
                 # Use provided JSON spec

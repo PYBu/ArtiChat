@@ -59,6 +59,8 @@ ARG USE_RERANKING_MODEL
 ARG USE_AUXILIARY_EMBEDDING_MODEL
 ARG UID
 ARG GID
+ARG DEBIAN_MIRROR=https://deb.debian.org/debian
+ARG DEBIAN_SECURITY_MIRROR=https://deb.debian.org/debian-security
 
 # Python settings
 ENV PYTHONUNBUFFERED=1
@@ -129,8 +131,10 @@ RUN chown -R $UID:$GID /app $HOME
 # Install common system dependencies
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     rm -f /etc/apt/apt.conf.d/docker-clean && \
-    apt-get -o Acquire::Retries=5 -o Acquire::http::Pipeline-Depth=0 update && \
-    apt-get -o Acquire::Retries=5 -o Acquire::http::Pipeline-Depth=0 install -y --no-install-recommends \
+    sed -i -e "s|http://deb.debian.org/debian-security|${DEBIAN_SECURITY_MIRROR}|g" \
+        -e "s|http://deb.debian.org/debian$|${DEBIAN_MIRROR}|g" /etc/apt/sources.list.d/debian.sources && \
+    apt-get -o Acquire::Retries=5 -o Acquire::http::Pipeline-Depth=0 -o Acquire::http::Timeout=60 -o Acquire::https::Timeout=60 update && \
+    apt-get -o Acquire::Retries=5 -o Acquire::http::Pipeline-Depth=0 -o Acquire::http::Timeout=60 -o Acquire::https::Timeout=60 install -y --no-install-recommends \
     git build-essential pandoc gcc netcat-openbsd curl jq ca-certificates \
     libmariadb-dev \
     python3-dev \

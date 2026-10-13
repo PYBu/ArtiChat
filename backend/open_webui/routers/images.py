@@ -8,10 +8,11 @@ import json
 import logging
 import mimetypes
 import re
+import time
 import uuid
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Optional
+from typing import Literal, Optional
 from urllib.parse import quote, urljoin, urlparse
 
 import aiohttp
@@ -117,10 +118,31 @@ IMAGE_CONFIG_KEYS = {
     'USER_PERMISSIONS': 'user.permissions',
 }
 
+IMAGE_CONFIG_SECRET_FIELDS = frozenset(
+    {
+        'IMAGES_OPENAI_API_KEY',
+        'IMAGES_EDIT_OPENAI_API_KEY',
+        'AUTOMATIC1111_API_AUTH',
+        'COMFYUI_API_KEY',
+        'IMAGES_GEMINI_API_KEY',
+        'IMAGES_EDIT_GEMINI_API_KEY',
+        'IMAGES_EDIT_COMFYUI_API_KEY',
+    }
+)
+
 
 async def get_config_values(key_map: dict[str, str]) -> dict:
     values = await Config.get_many(*key_map.values())
     return {field: values[storage_key] for field, storage_key in key_map.items() if storage_key in values}
+
+
+def mask_image_config_values(values: dict) -> dict:
+    masked = dict(values)
+    for field in IMAGE_CONFIG_SECRET_FIELDS:
+        value = masked.get(field)
+        if value:
+            masked[field] = '********'
+    return masked
 
 
 async def get_image_config() -> SimpleNamespace:
@@ -365,9 +387,237 @@ class ImagesConfig(BaseModel):
     IMAGES_EDIT_COMFYUI_WORKFLOW_NODES: list[dict]
 
 
+class ImageConfigTestForm(BaseModel):
+    """Select which saved OpenAI image configuration should be probed."""
+
+    operation: Literal['generate', 'edit']
+
+
+class ImageConfigTestResult(BaseModel):
+    ok: bool
+    status: int | None = None
+    provider: str
+    message: str
+    elapsed_ms: int
+
+
 @router.get('/config', response_model=ImagesConfig)
 async def get_config(request: Request, user=Depends(get_admin_user)):
-    return await get_config_values(IMAGE_CONFIG_KEYS)
+    return mask_image_config_values(await get_config_values(IMAGE_CONFIG_KEYS))
+
+
+def _test_image_response_has_data(payload: object) -> bool:
+    if not isinstance(payload, dict):
+        return False
+    data = payload.get('data')
+    if not isinstance(data, list) or not data:
+        return False
+    return any(
+        isinstance(item, dict) and bool(item.get('url') or item.get('b64_json'))
+        for item in data
+    )
+
+
+def _test_image_size(value: str | None) -> str | None:
+    value = (value or '').strip()
+    if not value or value == 'auto':
+        return None
+    return value if re.match(r'^\d+x\d+$', value) else None
+
+
+def _test_image_result(
+    *,
+    started_at: float,
+    ok: bool,
+    provider: str,
+    status: int | None = None,
+    message: str,
+) -> ImageConfigTestResult:
+    return ImageConfigTestResult(
+        ok=ok,
+        status=status,
+        provider=provider,
+        message=message,
+        elapsed_ms=max(0, int((time.perf_counter() - started_at) * 1000)),
+    )
+
+
+async def _test_openai_image_request(
+    image_config: SimpleNamespace,
+    *,
+    operation: Literal['generate', 'edit'],
+    started_at: float,
+) -> ImageConfigTestResult:
+    if operation == 'generate':
+        base_url = image_config.IMAGES_OPENAI_API_BASE_URL
+        api_key = image_config.IMAGES_OPENAI_API_KEY
+        api_version = image_config.IMAGES_OPENAI_API_VERSION
+        model = image_config.IMAGE_GENERATION_MODEL or 'dall-e-2'
+        size = _test_image_size(image_config.IMAGE_SIZE)
+        url_path = '/images/generations'
+    else:
+        base_url = image_config.IMAGES_EDIT_OPENAI_API_BASE_URL
+        api_key = image_config.IMAGES_EDIT_OPENAI_API_KEY
+        api_version = image_config.IMAGES_EDIT_OPENAI_API_VERSION
+        model = image_config.IMAGE_EDIT_MODEL or 'dall-e-2'
+        size = _test_image_size(image_config.IMAGE_EDIT_SIZE)
+        url_path = '/images/edits'
+
+    provider = 'openai'
+    if not str(base_url or '').strip():
+        return _test_image_result(
+            started_at=started_at,
+            ok=False,
+            provider=provider,
+            message='Image provider API Base URL is not configured.',
+        )
+    if not str(api_key or '').strip() or api_key == '********':
+        return _test_image_result(
+            started_at=started_at,
+            ok=False,
+            provider=provider,
+            message='Image provider API Key is not configured.',
+        )
+
+    url = f'{str(base_url).rstrip("/")}{url_path}'
+    if api_version:
+        url = f'{url}?api-version={quote(str(api_version), safe="")}'
+
+    headers = {'Authorization': f'Bearer {api_key}'}
+    try:
+        session = await get_session()
+        if operation == 'generate':
+            payload = {
+                'model': model,
+                'prompt': 'ArtiChat connection test: a simple blue square',
+                'n': 1,
+            }
+            if size:
+                payload['size'] = size
+            if not re.match(IMAGE_URL_RESPONSE_MODELS_REGEX_PATTERN, model):
+                payload['response_format'] = 'b64_json'
+            headers['Content-Type'] = 'application/json'
+            async with session.post(
+                url=url,
+                json=payload,
+                headers=headers,
+                ssl=AIOHTTP_CLIENT_SESSION_SSL,
+                timeout=aiohttp.ClientTimeout(total=60),
+            ) as response:
+                status = response.status
+                response.raise_for_status()
+                result = await response.json(content_type=None)
+        else:
+            payload = {
+                'model': model,
+                'prompt': 'ArtiChat connection test: make no visible changes',
+                'n': 1,
+            }
+            if size:
+                payload['size'] = size
+            if not re.match(IMAGE_URL_RESPONSE_MODELS_REGEX_PATTERN, model):
+                payload['response_format'] = 'b64_json'
+            test_image = io.BytesIO()
+            Image.new('RGBA', (1, 1), (0, 0, 0, 0)).save(test_image, format='PNG')
+            test_image.seek(0)
+            form = aiohttp.FormData()
+            for key, value in payload.items():
+                form.add_field(key, str(value))
+            form.add_field(
+                'image',
+                test_image,
+                filename='artichat-connection-test.png',
+                content_type='image/png',
+            )
+            async with session.post(
+                url=url,
+                data=form,
+                headers=headers,
+                ssl=AIOHTTP_CLIENT_SESSION_SSL,
+                timeout=aiohttp.ClientTimeout(total=60),
+            ) as response:
+                status = response.status
+                response.raise_for_status()
+                result = await response.json(content_type=None)
+    except aiohttp.ClientResponseError as exc:
+        status = exc.status if exc.status else None
+        message = 'Image provider rejected the connection test.'
+        if status in (401, 403):
+            message = 'Image provider authentication failed.'
+        elif status:
+            message = f'Image provider returned HTTP {status}.'
+        return _test_image_result(
+            started_at=started_at,
+            ok=False,
+            provider=provider,
+            status=status,
+            message=message,
+        )
+    except (aiohttp.ClientError, asyncio.TimeoutError):
+        return _test_image_result(
+            started_at=started_at,
+            ok=False,
+            provider=provider,
+            message='Unable to connect to the image provider.',
+        )
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return _test_image_result(
+            started_at=started_at,
+            ok=False,
+            provider=provider,
+            status=locals().get('status'),
+            message='Image provider returned an invalid response.',
+        )
+    except Exception as exc:
+        log.warning('Image provider connection test failed (%s)', type(exc).__name__)
+        return _test_image_result(
+            started_at=started_at,
+            ok=False,
+            provider=provider,
+            status=locals().get('status'),
+            message='Image provider connection test failed.',
+        )
+
+    if not _test_image_response_has_data(result):
+        return _test_image_result(
+            started_at=started_at,
+            ok=False,
+            provider=provider,
+            status=status,
+            message='Image provider returned no image data.',
+        )
+    return _test_image_result(
+        started_at=started_at,
+        ok=True,
+        provider=provider,
+        status=status,
+        message='Image provider connection test succeeded.',
+    )
+
+
+@router.post('/config/test', response_model=ImageConfigTestResult)
+async def test_config(
+    request: Request,
+    form_data: ImageConfigTestForm,
+    user=Depends(get_admin_user),
+):
+    """Probe the saved OpenAI image settings without billing or persisting output."""
+
+    started_at = time.perf_counter()
+    image_config = await get_image_config()
+    engine = image_config.IMAGE_GENERATION_ENGINE if form_data.operation == 'generate' else image_config.IMAGE_EDIT_ENGINE
+    if engine != 'openai':
+        return _test_image_result(
+            started_at=started_at,
+            ok=False,
+            provider=engine or 'unknown',
+            message='Connection tests currently support the OpenAI-compatible image endpoint only.',
+        )
+    return await _test_openai_image_request(
+        image_config,
+        operation=form_data.operation,
+        started_at=started_at,
+    )
 
 
 @router.get('/estimate', response_model=dict)
@@ -431,12 +681,17 @@ async def update_config(request: Request, form_data: ImagesConfig, user=Depends(
             detail=ERROR_MESSAGES.INCORRECT_FORMAT('  (e.g., 50).'),
         )
 
-    updates = config_updates(form_data.model_dump(), IMAGE_CONFIG_KEYS)
+    data = form_data.model_dump()
+    for field in IMAGE_CONFIG_SECRET_FIELDS:
+        if data.get(field) == '********':
+            data.pop(field, None)
+
+    updates = config_updates(data, IMAGE_CONFIG_KEYS)
     updates['image_generation.comfyui.base_url'] = form_data.COMFYUI_BASE_URL.strip('/')
     updates['images.edit.comfyui.base_url'] = form_data.IMAGES_EDIT_COMFYUI_BASE_URL.strip('/')
     await Config.upsert(updates)
     await set_image_model(request, form_data.IMAGE_GENERATION_MODEL)
-    values = await get_config_values(IMAGE_CONFIG_KEYS)
+    values = mask_image_config_values(await get_config_values(IMAGE_CONFIG_KEYS))
     await publish_event(
         request,
         EVENTS.CONFIG_UPDATED,

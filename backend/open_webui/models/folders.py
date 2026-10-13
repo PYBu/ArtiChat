@@ -77,6 +77,31 @@ class SharedFolderResponse(BaseModel):
     updated_at: int
 
 
+def collect_folder_subtree_ids(root_id: str, folders: list[tuple[str, Optional[str]]]) -> list[str]:
+    """Collect a user's folder subtree without issuing one query per level."""
+    children_by_parent: dict[Optional[str], list[str]] = {}
+    folder_ids = set()
+    for folder_id, parent_id in folders:
+        folder_ids.add(folder_id)
+        children_by_parent.setdefault(parent_id, []).append(folder_id)
+
+    if root_id not in folder_ids:
+        return []
+
+    folder_ids_in_subtree = [root_id]
+    pending = [root_id]
+    visited = {root_id}
+    while pending:
+        folder_id = pending.pop()
+        for child_id in children_by_parent.get(folder_id, []):
+            if child_id not in visited:
+                visited.add(child_id)
+                folder_ids_in_subtree.append(child_id)
+                pending.append(child_id)
+
+    return folder_ids_in_subtree
+
+
 ####################
 # Forms
 ####################
@@ -253,20 +278,8 @@ class FolderTable:
         self, id: str, user_id: str, db: Optional[AsyncSession] = None
     ) -> list[str]:
         async with get_async_db_context(db) as db:
-            result = await db.execute(select(Folder).filter_by(id=id, user_id=user_id))
-            folder = result.scalars().first()
-            if not folder:
-                return []
-
-            folder_ids = [folder.id]
-            folders = [FolderModel.model_validate(folder)]
-            while folders:
-                current_folder = folders.pop()
-                children = await self.get_folders_by_parent_id_and_user_id(current_folder.id, user_id, db=db)
-                folder_ids.extend(child.id for child in children)
-                folders.extend(children)
-
-            return folder_ids
+            result = await db.execute(select(Folder.id, Folder.parent_id).filter_by(user_id=user_id))
+            return collect_folder_subtree_ids(id, result.all())
 
     async def update_folder_parent_id_by_id_and_user_id(
         self,

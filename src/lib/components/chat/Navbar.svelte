@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { getContext } from 'svelte';
+	import { getContext, onMount } from 'svelte';
 	import { toast } from 'svelte-sonner';
 
 	import {
@@ -10,6 +10,7 @@
 		mobile,
 		settings,
 		showControls,
+		showSettings,
 		showSidebar,
 		temporaryChatEnabled,
 		user
@@ -35,7 +36,13 @@
 	import ChatPlus from '../icons/ChatPlus.svelte';
 	import ChatCheck from '../icons/ChatCheck.svelte';
 	import Knobs from '../icons/Knobs.svelte';
+	import ArrowUpCircle from '../icons/ArrowUpCircle.svelte';
 	import { isTemporaryChatId } from '$lib/utils/chatId';
+	import {
+		refreshSubscription,
+		subscription,
+		subscriptionLoadError
+	} from '$lib/stores/subscriptions';
 
 	const i18n = getContext('i18n');
 
@@ -65,6 +72,22 @@
 
 	let showShareChatModal = false;
 	let showDownloadChatModal = false;
+	let subscriptionCheckedForUser: string | null = null;
+
+	onMount(async () => {
+		if ($page.url.pathname !== '/' || !$user?.id) return;
+		const userId = $user.id;
+		await refreshSubscription();
+		if ($user?.id === userId) subscriptionCheckedForUser = userId;
+	});
+
+	$: showUpgrade =
+		$page.url.pathname === '/' &&
+		!!$user?.id &&
+		subscriptionCheckedForUser === $user.id &&
+		!$subscriptionLoadError &&
+		$subscription?.user_id === $user.id &&
+		$subscription.tier === 'free';
 </script>
 
 <ShareChatModal bind:show={showShareChatModal} chatId={$chatId} />
@@ -163,6 +186,18 @@
 
 				<div class="mr-1 flex flex-none items-center gap-2 self-center">
 					<!-- <div class="md:hidden flex self-center w-[1px] h-5 mx-2 bg-gray-300 dark:bg-stone-700" /> -->
+
+					{#if showUpgrade}
+						<button
+							type="button"
+							class="ml-1 inline-flex h-7 shrink-0 items-center justify-center gap-1 rounded-lg px-1.5 text-xs font-medium text-violet-700 transition hover:bg-violet-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 dark:text-violet-300 dark:hover:bg-violet-950/30 dark:focus-visible:ring-offset-gray-900"
+							on:click={() => showSettings.set('subscription')}
+							aria-label={$i18n.t('Upgrade')}
+						>
+							<ArrowUpCircle className="size-3.5" strokeWidth="1.75" />
+							<span>{$i18n.t('Upgrade')}</span>
+						</button>
+					{/if}
 
 					{#if $user?.role === 'user' ? ($user?.permissions?.chat?.temporary ?? true) && !($user?.permissions?.chat?.temporary_enforced ?? false) : true}
 						{#if !chat?.id}

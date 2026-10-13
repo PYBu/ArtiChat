@@ -21,6 +21,8 @@
 	import OllamaConnection from './Connections/OllamaConnection.svelte';
 	import AdminSettingRow from './AdminSettingRow.svelte';
 	import AdminSettingSection from './AdminSettingSection.svelte';
+	import ArtiAPIConnection from './ArtiAPIConnectionDemo.svelte';
+	import { isArtiAPIUrl } from './artiAPIConnections';
 
 	const i18n: any = getContext('i18n');
 
@@ -255,28 +257,30 @@
 
 						<div class="flex flex-col gap-1.5">
 							{#each OPENAI_API_BASE_URLS as url, idx}
-								<OpenAIConnection
-									bind:url={OPENAI_API_BASE_URLS[idx]}
-									bind:key={OPENAI_API_KEYS[idx]}
-									bind:config={OPENAI_API_CONFIGS[idx]}
-									pipeline={pipelineUrls[url] ? true : false}
-									onSubmit={() => {
-										updateOpenAIHandler();
-									}}
-									onDelete={() => {
-										OPENAI_API_BASE_URLS = OPENAI_API_BASE_URLS.filter(
-											(url, urlIdx) => idx !== urlIdx
-										);
-										OPENAI_API_KEYS = OPENAI_API_KEYS.filter((key, keyIdx) => idx !== keyIdx);
+								{#if !isArtiAPIUrl(url)}
+									<OpenAIConnection
+										bind:url={OPENAI_API_BASE_URLS[idx]}
+										bind:key={OPENAI_API_KEYS[idx]}
+										bind:config={OPENAI_API_CONFIGS[idx]}
+										pipeline={pipelineUrls[url] ? true : false}
+										onSubmit={() => {
+											updateOpenAIHandler();
+										}}
+										onDelete={() => {
+											OPENAI_API_BASE_URLS = OPENAI_API_BASE_URLS.filter(
+												(url, urlIdx) => idx !== urlIdx
+											);
+											OPENAI_API_KEYS = OPENAI_API_KEYS.filter((key, keyIdx) => idx !== keyIdx);
 
-										let newConfig: any = {};
-										OPENAI_API_BASE_URLS.forEach((url, newIdx) => {
-											newConfig[newIdx] = OPENAI_API_CONFIGS[newIdx < idx ? newIdx : newIdx + 1];
-										});
-										OPENAI_API_CONFIGS = newConfig;
-										updateOpenAIHandler();
-									}}
-								/>
+											let newConfig: any = {};
+											OPENAI_API_BASE_URLS.forEach((url, newIdx) => {
+												newConfig[newIdx] = OPENAI_API_CONFIGS[newIdx < idx ? newIdx : newIdx + 1];
+											});
+											OPENAI_API_CONFIGS = newConfig;
+											updateOpenAIHandler();
+										}}
+									/>
+								{/if}
 							{/each}
 						</div>
 					</div>
@@ -382,6 +386,19 @@
 					/>
 				</AdminSettingRow>
 			</AdminSettingSection>
+
+			<div class="mt-4 w-full">
+				<ArtiAPIConnection
+					embedded
+					compact
+					on:saved={({ detail }) => {
+						ENABLE_OPENAI_API = detail.ENABLE_OPENAI_API;
+						OPENAI_API_BASE_URLS = detail.OPENAI_API_BASE_URLS;
+						OPENAI_API_KEYS = detail.OPENAI_API_KEYS;
+						OPENAI_API_CONFIGS = detail.OPENAI_API_CONFIGS;
+					}}
+				/>
+			</div>
 		{:else}
 			<div class="flex h-full justify-center">
 				<div class="my-auto">

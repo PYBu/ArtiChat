@@ -1108,6 +1108,19 @@ DEFAULT_WEB_FETCH_FILTER_LIST = [
     '!metadata.google.internal',
     '!metadata.azure.com',
     '!100.100.100.200',
+    '!168.63.129.16',
+    '!192.88.99.0/24',
+    '!224.0.0.0/4',
+    '!::ffff:0:0:0/96',
+    '!64:ff9b:1::/48',
+    '!100:0:0:1::/64',
+    '!2001:1::1',
+    '!2001:1::2',
+    '!2001:20::/28',
+    '!2001:30::/28',
+    '!5f00::/16',
+    '!fec0::/10',
+    '!ff00::/8',
 ]
 
 web_fetch_filter_list = os.getenv('WEB_FETCH_FILTER_LIST', '')

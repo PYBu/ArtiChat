@@ -61,6 +61,11 @@ export type OutputDisplayItem =
 			tokens: OutputDetailToken[];
 	  };
 
+export const MEDIA_GENERATION_TOOLS = new Set(['generate_image', 'edit_image', 'generate_video']);
+
+export const isMediaGenerationTool = (name: string | null | undefined): boolean =>
+	MEDIA_GENERATION_TOOLS.has(name?.trim().toLowerCase() ?? '');
+
 const GROUPABLE_OUTPUT_TYPES = new Set([
 	'reasoning',
 	'function_call',
@@ -302,6 +307,9 @@ export function buildOutputDisplayItems(output: OutputItem[] = []): OutputDispla
 			return;
 		}
 		if (item?.type === 'function_call' && isSilentMemoryTool(item.name)) {
+			return;
+		}
+		if (item?.type === 'function_call' && isMediaGenerationTool(item.name)) {
 			return;
 		}
 

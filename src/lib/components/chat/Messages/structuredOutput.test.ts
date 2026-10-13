@@ -45,4 +45,22 @@ describe('structured output display filtering', () => {
 		expect(items).toHaveLength(1);
 		expect(items[0].type).toBe('detail_single');
 	});
+
+	it('keeps media tool calls out of generic tool details', () => {
+		const items = buildOutputDisplayItems([
+			{
+				type: 'function_call',
+				call_id: 'image-1',
+				name: 'edit_image',
+				status: 'completed'
+			},
+			{
+				type: 'function_call_output',
+				call_id: 'image-1',
+				output: [{ type: 'output_text', text: '{"status":"success"}' }]
+			}
+		]);
+
+		expect(items).toEqual([]);
+	});
 });
